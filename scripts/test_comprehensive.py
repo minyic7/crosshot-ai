@@ -110,9 +110,12 @@ def test_database_models():
         assert saved_note.likes_count == "1.2万", f"Expected '1.2万', got {saved_note.likes_count}"
         print(f"   Note.likes_count (string): '{saved_note.likes_count}'")
 
-        # Test NoteSnapshot model
+        # Test NoteSnapshot model (now requires snapshot_date)
+        from datetime import date
+        today = date.today()
         snapshot = NoteSnapshot(
             note_id="test123",
+            snapshot_date=today,
             title="Test Note",
             likes_count="1.2万",
             has_stats_change=True,
@@ -123,7 +126,8 @@ def test_database_models():
 
         saved_snapshot = session.query(NoteSnapshot).filter_by(note_id="test123").first()
         assert saved_snapshot is not None, "Snapshot should be saved"
-        print(f"   NoteSnapshot created: note_id={saved_snapshot.note_id}")
+        assert saved_snapshot.snapshot_date == today, "Snapshot date should match"
+        print(f"   NoteSnapshot created: note_id={saved_snapshot.note_id}, date={saved_snapshot.snapshot_date}")
 
         # Test User model
         user = User(

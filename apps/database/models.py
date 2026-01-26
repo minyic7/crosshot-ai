@@ -1,18 +1,27 @@
-"""SQLite database models using SQLAlchemy."""
+"""SQLite database models using SQLAlchemy.
+
+Time field conventions:
+- created_at: Record creation time (immutable)
+- updated_at: Last modification time (auto-updated)
+- scraped_at: When data was scraped from source (for snapshots)
+- snapshot_date: Date of snapshot (for daily dedup, format: YYYY-MM-DD)
+"""
 
 import json
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
@@ -45,8 +54,9 @@ class User(Base):
     fans_count = Column(String(32), default="0")
     interaction_count = Column(String(32), default="0")
 
-    first_seen_at = Column(DateTime, default=datetime.utcnow)
-    last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Unified time fields
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     notes = relationship("Note", back_populates="author")
@@ -83,8 +93,10 @@ class Note(Base):
     note_url = Column(Text)
 
     publish_time = Column(DateTime)
-    first_seen_at = Column(DateTime, default=datetime.utcnow)
-    last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unified time fields
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     author = relationship("User", back_populates="notes")
@@ -109,17 +121,27 @@ class Note(Base):
 
 
 class NoteSnapshot(Base):
-    """Historical snapshot of a note for tracking changes over time.
+    """Daily snapshot of a note for tracking changes over time.
 
-    When a note is re-scraped and has changes (title, stats, etc.),
-    we create a snapshot of the previous state before updating.
-    This preserves history and allows tracking changes.
+    IMPORTANT: Only ONE snapshot per note per day is stored.
+    This prevents data explosion from frequent scraping.
+
+    Strategy:
+    - First scrape of the day: Create new snapshot
+    - Subsequent scrapes same day: Update existing snapshot (upsert)
+    - Unique constraint on (note_id, snapshot_date) enforces this
+
+    This limits growth to: max_notes × days_tracked
+    e.g., 1000 notes × 365 days = 365,000 rows/year (manageable)
     """
 
     __tablename__ = "note_snapshots"
 
     id = Column(Integer, primary_key=True)
     note_id = Column(String(64), ForeignKey("notes.note_id"), nullable=False, index=True)
+
+    # Date of this snapshot (YYYY-MM-DD) - used for daily dedup
+    snapshot_date = Column(Date, nullable=False, index=True)
 
     # Snapshot of note data at this point in time
     title = Column(String(512))
@@ -132,13 +154,21 @@ class NoteSnapshot(Base):
     image_urls = Column(Text)
 
     # Metadata
-    scraped_at = Column(DateTime, default=datetime.utcnow, index=True)
     source = Column(String(32))  # "search", "user_profile", "direct"
 
-    # Change tracking flags
+    # Change tracking flags (compared to previous day's snapshot)
     has_title_change = Column(Boolean, default=False)
     has_content_change = Column(Boolean, default=False)
     has_stats_change = Column(Boolean, default=False)
+
+    # Time fields
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint: only one snapshot per note per day
+    __table_args__ = (
+        UniqueConstraint("note_id", "snapshot_date", name="uq_note_snapshot_daily"),
+    )
 
     # Relationship
     note = relationship("Note", back_populates="snapshots")
@@ -156,13 +186,15 @@ class Comment(Base):
     parent_comment_id = Column(String(64), ForeignKey("comments.comment_id"), index=True)
 
     content = Column(Text, nullable=False)
-    likes_count = Column(String(32), default="0")  # Changed to string
+    likes_count = Column(String(32), default="0")
     ip_location = Column(String(32))
     sub_comment_count = Column(Integer, default=0)
 
-    create_time = Column(Integer)  # Original timestamp (ms)
-    created_at = Column(DateTime)  # Converted datetime
-    first_seen_at = Column(DateTime, default=datetime.utcnow)
+    # Original timestamp from XHS (milliseconds)
+    source_created_at = Column(Integer)
+
+    # Time fields
+    created_at = Column(DateTime, default=datetime.utcnow)  # When we first saw this comment
 
     # Relationships
     note = relationship("Note", back_populates="comments")
@@ -183,10 +215,12 @@ class SearchTask(Base):
     comments_scraped = Column(Integer, default=0)
     users_discovered = Column(Integer, default=0)
 
+    error_message = Column(Text)
+
+    # Time fields
+    created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    error_message = Column(Text)
 
 
 class SearchTaskNote(Base):
@@ -199,9 +233,14 @@ class SearchTaskNote(Base):
     note_id = Column(String(64), ForeignKey("notes.note_id"), nullable=False)
     rank_position = Column(Integer)  # Position in search results
 
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class UserNoteSnapshot(Base):
-    """Snapshot of user's notes from their profile page."""
+    """Daily snapshot of user's notes from their profile page.
+
+    Same daily dedup strategy as NoteSnapshot.
+    """
 
     __tablename__ = "user_note_snapshots"
 
@@ -209,13 +248,22 @@ class UserNoteSnapshot(Base):
     user_id = Column(String(64), ForeignKey("users.user_id"), nullable=False, index=True)
     note_id = Column(String(64), nullable=False)
 
+    # Date of this snapshot
+    snapshot_date = Column(Date, nullable=False, index=True)
+
     title = Column(String(512))
     note_type = Column(String(16))
     likes_count = Column(String(32))
     cover_url = Column(Text)
     xsec_token = Column(String(256))
 
-    scraped_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint: only one snapshot per user-note pair per day
+    __table_args__ = (
+        UniqueConstraint("user_id", "note_id", "snapshot_date", name="uq_user_note_snapshot_daily"),
+    )
 
 
 class ScrapeLog(Base):

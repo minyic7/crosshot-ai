@@ -2,10 +2,11 @@
 
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, Generator, Optional, Set
 
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from apps.config import get_settings
 from apps.crawler.base import CommentItem, NoteItem, UserInfo
@@ -50,21 +51,21 @@ class DataService:
             return {n.note_url for n in notes if n.note_url}
 
     def get_note_urls_with_timestamps(self) -> Dict[str, datetime]:
-        """Get all note URLs with their last_updated_at timestamps.
+        """Get all note URLs with their updated_at timestamps.
 
         This is used for smart deduplication:
         - Notes scraped within 24 hours: skip (same-day dedup)
         - Notes scraped before 24 hours: re-scrape for updates
 
         Returns:
-            Dict mapping note_url to last_updated_at datetime
+            Dict mapping note_url to updated_at datetime
         """
         with self.transaction() as session:
-            notes = session.query(Note.note_url, Note.last_updated_at).all()
+            notes = session.query(Note.note_url, Note.updated_at).all()
             return {
-                n.note_url: n.last_updated_at
+                n.note_url: n.updated_at
                 for n in notes
-                if n.note_url and n.last_updated_at
+                if n.note_url and n.updated_at
             }
 
     def get_recent_note_ids(self, hours: Optional[int] = None) -> Set[str]:
@@ -80,7 +81,7 @@ class DataService:
         with self.transaction() as session:
             notes = (
                 session.query(Note.note_id)
-                .filter(Note.last_updated_at >= cutoff)
+                .filter(Note.updated_at >= cutoff)
                 .all()
             )
             return {n.note_id for n in notes}
@@ -129,7 +130,7 @@ class DataService:
                 user.follows_count = user_info.follows or user.follows_count
                 user.fans_count = user_info.fans or user.fans_count
                 user.interaction_count = user_info.interaction or user.interaction_count
-                user.last_updated_at = datetime.utcnow()
+                # updated_at will auto-update via onupdate
             else:
                 # Create new user
                 user = User(
@@ -147,24 +148,20 @@ class DataService:
                 )
                 session.add(user)
 
-            # Save user's notes as snapshots
+            # Save user's notes as daily snapshots (upsert)
+            today = date.today()
             for note_item in user_info.notes:
-                snapshot = session.query(UserNoteSnapshot).filter_by(
+                self._upsert_user_note_snapshot(
+                    session,
                     user_id=user_info.user_id,
                     note_id=note_item.note_id,
-                ).first()
-
-                if not snapshot:
-                    snapshot = UserNoteSnapshot(
-                        user_id=user_info.user_id,
-                        note_id=note_item.note_id,
-                        title=note_item.title,
-                        note_type=note_item.type,
-                        likes_count=note_item.likes,
-                        cover_url=note_item.cover_url,
-                        xsec_token=note_item.xsec_token,
-                    )
-                    session.add(snapshot)
+                    snapshot_date=today,
+                    title=note_item.title,
+                    note_type=note_item.type,
+                    likes_count=note_item.likes,
+                    cover_url=note_item.cover_url,
+                    xsec_token=note_item.xsec_token,
+                )
 
             if own_session:
                 session.commit()
@@ -182,6 +179,39 @@ class DataService:
             if own_session:
                 session.close()
 
+    def _upsert_user_note_snapshot(
+        self,
+        session: Session,
+        user_id: str,
+        note_id: str,
+        snapshot_date: date,
+        **kwargs,
+    ):
+        """Upsert a user note snapshot (one per user-note-day).
+
+        If snapshot exists for today, update it. Otherwise create new.
+        """
+        existing = session.query(UserNoteSnapshot).filter_by(
+            user_id=user_id,
+            note_id=note_id,
+            snapshot_date=snapshot_date,
+        ).first()
+
+        if existing:
+            # Update existing snapshot
+            for key, value in kwargs.items():
+                if value is not None:
+                    setattr(existing, key, value)
+        else:
+            # Create new snapshot
+            snapshot = UserNoteSnapshot(
+                user_id=user_id,
+                note_id=note_id,
+                snapshot_date=snapshot_date,
+                **kwargs,
+            )
+            session.add(snapshot)
+
     async def save_note(
         self,
         note_item: NoteItem,
@@ -190,7 +220,7 @@ class DataService:
         session: Optional[Session] = None,
         source: str = "search",
     ) -> Note:
-        """Save note to database with smart caching and history tracking.
+        """Save note to database with smart caching and daily snapshot tracking.
 
         Args:
             note_item: Note info from scraper
@@ -229,25 +259,43 @@ class DataService:
                         note_id, note_item.image_urls
                     )
 
-            if note:
-                # Check for changes and create snapshot if needed
-                if self._has_note_changes(note, note_item):
-                    if self.settings.cache.always_append_on_change:
-                        self._create_note_snapshot(session, note, source)
+            # Get previous snapshot for change detection
+            today = date.today()
+            prev_snapshot = self._get_previous_snapshot(session, note_id, today)
 
-                    # Update existing note
-                    note.title = note_item.title or note.title
-                    note.likes_count = note_item.likes if note_item.likes else note.likes_count
-                    note.collects_count = note_item.collects if note_item.collects else note.collects_count
-                    note.comments_count = note_item.comments if note_item.comments else note.comments_count
-                    if cover_path:
-                        note.cover_path = cover_path
-                        note.cover_url = note_item.image_urls[0] if note_item.image_urls else note.cover_url
-                    if image_paths:
-                        note.set_image_paths(image_paths)
-                        note.set_image_urls(note_item.image_urls)
-                    note.note_url = note_item.note_url or note.note_url
-                    note.last_updated_at = datetime.utcnow()
+            if note:
+                # Check for changes and create/update daily snapshot
+                has_changes = self._has_note_changes(note, note_item)
+
+                if has_changes or self.settings.cache.always_append_on_change:
+                    self._upsert_note_snapshot(
+                        session,
+                        note_id=note_id,
+                        snapshot_date=today,
+                        title=note_item.title or note.title,
+                        content=note.content,
+                        likes_count=note_item.likes or note.likes_count,
+                        collects_count=note_item.collects or note.collects_count,
+                        comments_count=note_item.comments or note.comments_count,
+                        image_urls=note.image_urls,
+                        source=source,
+                        has_stats_change=has_changes,
+                        prev_snapshot=prev_snapshot,
+                    )
+
+                # Update existing note
+                note.title = note_item.title or note.title
+                note.likes_count = note_item.likes if note_item.likes else note.likes_count
+                note.collects_count = note_item.collects if note_item.collects else note.collects_count
+                note.comments_count = note_item.comments if note_item.comments else note.comments_count
+                if cover_path:
+                    note.cover_path = cover_path
+                    note.cover_url = note_item.image_urls[0] if note_item.image_urls else note.cover_url
+                if image_paths:
+                    note.set_image_paths(image_paths)
+                    note.set_image_urls(note_item.image_urls)
+                note.note_url = note_item.note_url or note.note_url
+                # updated_at will auto-update via onupdate
             else:
                 # Create new note
                 note = Note(
@@ -265,6 +313,18 @@ class DataService:
                 note.set_image_paths(image_paths)
                 session.add(note)
 
+                # Create first snapshot for new note
+                self._upsert_note_snapshot(
+                    session,
+                    note_id=note_id,
+                    snapshot_date=today,
+                    title=note_item.title,
+                    likes_count=note_item.likes,
+                    collects_count=note_item.collects,
+                    comments_count=note_item.comments,
+                    source=source,
+                )
+
             if own_session:
                 session.commit()
                 session.refresh(note)
@@ -280,6 +340,72 @@ class DataService:
             if own_session:
                 session.close()
 
+    def _get_previous_snapshot(
+        self,
+        session: Session,
+        note_id: str,
+        today: date,
+    ) -> Optional[NoteSnapshot]:
+        """Get the most recent snapshot before today for change comparison."""
+        return (
+            session.query(NoteSnapshot)
+            .filter(
+                NoteSnapshot.note_id == note_id,
+                NoteSnapshot.snapshot_date < today,
+            )
+            .order_by(NoteSnapshot.snapshot_date.desc())
+            .first()
+        )
+
+    def _upsert_note_snapshot(
+        self,
+        session: Session,
+        note_id: str,
+        snapshot_date: date,
+        prev_snapshot: Optional[NoteSnapshot] = None,
+        **kwargs,
+    ):
+        """Upsert a note snapshot (one per note per day).
+
+        If snapshot exists for today, update it. Otherwise create new.
+        This prevents data explosion from multiple scrapes per day.
+        """
+        existing = session.query(NoteSnapshot).filter_by(
+            note_id=note_id,
+            snapshot_date=snapshot_date,
+        ).first()
+
+        # Detect changes compared to previous day
+        has_title_change = False
+        has_content_change = False
+        has_stats_change = kwargs.pop("has_stats_change", False)
+
+        if prev_snapshot:
+            if kwargs.get("title") and prev_snapshot.title != kwargs.get("title"):
+                has_title_change = True
+            if kwargs.get("content") and prev_snapshot.content != kwargs.get("content"):
+                has_content_change = True
+
+        if existing:
+            # Update existing snapshot (same day)
+            for key, value in kwargs.items():
+                if value is not None:
+                    setattr(existing, key, value)
+            existing.has_title_change = has_title_change
+            existing.has_content_change = has_content_change
+            existing.has_stats_change = has_stats_change
+        else:
+            # Create new snapshot
+            snapshot = NoteSnapshot(
+                note_id=note_id,
+                snapshot_date=snapshot_date,
+                has_title_change=has_title_change,
+                has_content_change=has_content_change,
+                has_stats_change=has_stats_change,
+                **kwargs,
+            )
+            session.add(snapshot)
+
     def _has_note_changes(self, existing: Note, new: NoteItem) -> bool:
         """Check if note has meaningful changes worth recording."""
         if not self.settings.cache.enable_version_compare:
@@ -293,40 +419,20 @@ class DataService:
             (new.image_urls and len(new.image_urls) != len(existing.get_image_urls()))
         )
 
-    def _create_note_snapshot(
-        self,
-        session: Session,
-        note: Note,
-        source: str,
-    ) -> NoteSnapshot:
-        """Create a historical snapshot of the note before updating."""
-        snapshot = NoteSnapshot(
-            note_id=note.note_id,
-            title=note.title,
-            content=note.content,
-            likes_count=note.likes_count,
-            collects_count=note.collects_count,
-            comments_count=note.comments_count,
-            image_urls=note.image_urls,
-            source=source,
-            has_stats_change=True,
-        )
-        session.add(snapshot)
-        return snapshot
-
     async def batch_save_notes(
         self,
         notes: list[NoteItem],
         source: str = "search",
         download_images: bool = True,
     ) -> tuple[int, int]:
-        """Batch save notes with deduplication and history tracking.
+        """Batch save notes with deduplication and daily snapshot tracking.
 
         Returns:
             Tuple of (new_count, updated_count)
         """
         new_count = 0
         updated_count = 0
+        today = date.today()
 
         with self.transaction() as session:
             for note_item in notes:
@@ -349,12 +455,27 @@ class DataService:
                         )
 
                     if existing:
-                        # Check for changes and create snapshot if needed
-                        if self._has_note_changes(existing, note_item):
-                            if self.settings.cache.always_append_on_change:
-                                self._create_note_snapshot(session, existing, source)
+                        # Check for changes and create/update daily snapshot
+                        has_changes = self._has_note_changes(existing, note_item)
 
-                            # Update
+                        if has_changes:
+                            prev_snapshot = self._get_previous_snapshot(session, note_id, today)
+                            self._upsert_note_snapshot(
+                                session,
+                                note_id=note_id,
+                                snapshot_date=today,
+                                title=note_item.title or existing.title,
+                                content=existing.content,
+                                likes_count=note_item.likes or existing.likes_count,
+                                collects_count=note_item.collects or existing.collects_count,
+                                comments_count=note_item.comments or existing.comments_count,
+                                image_urls=existing.image_urls,
+                                source=source,
+                                has_stats_change=has_changes,
+                                prev_snapshot=prev_snapshot,
+                            )
+
+                            # Update note
                             existing.title = note_item.title or existing.title
                             existing.likes_count = note_item.likes or existing.likes_count
                             existing.collects_count = note_item.collects or existing.collects_count
@@ -363,10 +484,9 @@ class DataService:
                                 existing.cover_path = cover_path
                             if image_paths:
                                 existing.set_image_paths(image_paths)
-                            existing.last_updated_at = datetime.utcnow()
                             updated_count += 1
                     else:
-                        # Create new
+                        # Create new note
                         note = Note(
                             note_id=note_id,
                             title=note_item.title,
@@ -380,6 +500,18 @@ class DataService:
                         note.set_image_urls(note_item.image_urls)
                         note.set_image_paths(image_paths)
                         session.add(note)
+
+                        # Create first snapshot
+                        self._upsert_note_snapshot(
+                            session,
+                            note_id=note_id,
+                            snapshot_date=today,
+                            title=note_item.title,
+                            likes_count=note_item.likes,
+                            collects_count=note_item.collects,
+                            comments_count=note_item.comments,
+                            source=source,
+                        )
                         new_count += 1
 
                 except Exception as e:
@@ -446,9 +578,7 @@ class DataService:
                         likes_count=comment_item.likes,
                         ip_location=comment_item.ip_location,
                         sub_comment_count=comment_item.sub_comment_count,
-                        create_time=comment_item.create_time,
-                        created_at=datetime.fromtimestamp(comment_item.create_time / 1000)
-                        if comment_item.create_time else None,
+                        source_created_at=comment_item.create_time,
                     )
                     session.add(comment)
                     saved_comments.append(comment)
@@ -485,9 +615,7 @@ class DataService:
                             content=sub_item.content,
                             likes_count=sub_item.likes,
                             ip_location=sub_item.ip_location,
-                            create_time=sub_item.create_time,
-                            created_at=datetime.fromtimestamp(sub_item.create_time / 1000)
-                            if sub_item.create_time else None,
+                            source_created_at=sub_item.create_time,
                         )
                         session.add(sub_comment)
                         saved_comments.append(sub_comment)

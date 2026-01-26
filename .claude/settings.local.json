@@ -23,7 +23,9 @@
       "Bash(playwright install:*)",
       "Bash(python scripts/test_crawler_full.py:*)",
       "Bash(git fetch:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
