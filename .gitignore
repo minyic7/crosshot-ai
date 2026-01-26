@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# Data
+data/
+*.db
+
+# Screenshots and test images
+*.png
+
+# UV
+.uv/
+
+# OS
+.DS_Store
+Thumbs.db
