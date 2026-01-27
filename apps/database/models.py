@@ -96,7 +96,7 @@ class Note(Base):
 
     # Unified time fields
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
 
     # Relationships
     author = relationship("User", back_populates="notes")

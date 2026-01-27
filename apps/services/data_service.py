@@ -41,32 +41,61 @@ class DataService:
         finally:
             session.close()
 
-    def get_existing_note_urls(self) -> Set[str]:
-        """Get all existing note URLs for deduplication.
+    def get_existing_note_urls(self, hours: Optional[int] = None) -> Set[str]:
+        """Get note URLs updated within the specified time window.
 
-        DEPRECATED: Use get_note_urls_with_timestamps() for smart dedup instead.
+        Only returns URLs that were updated within the time window,
+        since older URLs don't need to be checked for deduplication.
+
+        Args:
+            hours: Time window in hours (default: 24 from config)
+
+        Returns:
+            Set of note URLs updated within the window
         """
-        with self.transaction() as session:
-            notes = session.query(Note.note_url).all()
-            return {n.note_url for n in notes if n.note_url}
+        if hours is None:
+            hours = self.settings.cache.note_ttl_hours
 
-    def get_note_urls_with_timestamps(self) -> Dict[str, datetime]:
-        """Get all note URLs with their updated_at timestamps.
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+        with self.transaction() as session:
+            notes = (
+                session.query(Note.note_url)
+                .filter(Note.updated_at >= cutoff)
+                .filter(Note.note_url.isnot(None))
+                .all()
+            )
+            return {n.note_url for n in notes}
+
+    def get_note_urls_with_timestamps(self, hours: Optional[int] = None) -> Dict[str, datetime]:
+        """Get note URLs with their updated_at timestamps within time window.
 
         This is used for smart deduplication:
-        - Notes scraped within 24 hours: skip (same-day dedup)
-        - Notes scraped before 24 hours: re-scrape for updates
+        - Notes scraped within the window: skip (same-day dedup)
+        - Notes not in result (older or new): will be scraped
+
+        Only queries the time window needed for dedup decisions.
+        For 100K notes with 24h window, typically returns ~1-5K rows instead of 100K.
+
+        Args:
+            hours: Time window in hours (default: 24 from config)
 
         Returns:
             Dict mapping note_url to updated_at datetime
         """
+        if hours is None:
+            hours = self.settings.cache.note_ttl_hours
+
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+
         with self.transaction() as session:
-            notes = session.query(Note.note_url, Note.updated_at).all()
-            return {
-                n.note_url: n.updated_at
-                for n in notes
-                if n.note_url and n.updated_at
-            }
+            notes = (
+                session.query(Note.note_url, Note.updated_at)
+                .filter(Note.updated_at >= cutoff)
+                .filter(Note.note_url.isnot(None))
+                .all()
+            )
+            return {n.note_url: n.updated_at for n in notes}
 
     def get_recent_note_ids(self, hours: Optional[int] = None) -> Set[str]:
         """Get note IDs that were updated within the TTL window.
