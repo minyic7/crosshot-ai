@@ -9,6 +9,7 @@ from typing import Optional, Self, Set, Dict
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
 from apps.config import get_settings
+from apps.utils.lru_cache import LRUCache
 from apps.crawler.base import (
     BaseCrawler,
     CommentItem,
@@ -96,14 +97,24 @@ JS_EXTRACT_COMMENTS = """() => {
 
 
 class XhsCrawler(BaseCrawler):
-    """XHS (Xiaohongshu) crawler with configurable settings."""
+    """XHS (Xiaohongshu) crawler with configurable settings.
+
+    Memory Management:
+        Uses LRU cache for URL deduplication instead of unbounded Set.
+        - Max 10,000 URLs cached (oldest evicted when full)
+        - Optional TTL to expire old entries
+        - Memory usage capped at ~1-2 MB regardless of runtime duration
+    """
+
+    # Class-level LRU cache shared across instances for long-running processes
+    # This persists across scrape sessions while still having bounded memory
+    _url_cache = LRUCache(max_size=10000, ttl_seconds=86400)  # 24h TTL
 
     def __init__(self):
         self.settings = get_settings()
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
         self._playwright = None
-        self._seen_note_urls: Set[str] = set()  # Memory dedup
 
     async def __aenter__(self) -> Self:
         """Initialize browser on context enter."""
@@ -133,6 +144,24 @@ class XhsCrawler(BaseCrawler):
             await self._browser.close()
         if self._playwright:
             await self._playwright.stop()
+
+    @classmethod
+    def get_cache_stats(cls) -> dict:
+        """Get URL cache statistics for monitoring.
+
+        Returns:
+            dict with size, max_size, ttl_seconds, expired_count
+        """
+        return cls._url_cache.stats
+
+    @classmethod
+    def cleanup_cache(cls) -> int:
+        """Remove expired entries from URL cache.
+
+        Returns:
+            Number of entries removed
+        """
+        return cls._url_cache.cleanup_expired()
 
     async def _get_page(self) -> Page:
         """Get a new page with configured settings."""
@@ -402,16 +431,16 @@ class XhsCrawler(BaseCrawler):
                 for item in raw_items:
                     note_url = item.get("noteUrl", "")
 
-                    # Skip if already seen in this session (memory dedup)
-                    if note_url in self._seen_note_urls:
+                    # Skip if already seen in LRU cache (bounded memory dedup)
+                    if note_url in self._url_cache:
                         continue
 
-                    # Skip if scraped within dedup window
+                    # Skip if scraped within dedup window (from database)
                     if note_url in skip_urls:
-                        self._seen_note_urls.add(note_url)  # Mark as seen
+                        self._url_cache.add(note_url)  # Mark as seen
                         continue
 
-                    self._seen_note_urls.add(note_url)
+                    self._url_cache.add(note_url)
 
                     items.append(
                         NoteItem(
