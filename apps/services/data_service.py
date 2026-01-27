@@ -17,13 +17,39 @@ logger = logging.getLogger(__name__)
 
 
 class DataService:
-    """Service for saving scraped data to database with smart caching."""
+    """Service for saving scraped data to database with smart caching.
+
+    Supports context manager for efficient resource usage:
+
+        async with DataService() as service:
+            await service.save_note(...)
+            await service.save_user(...)
+        # aiohttp session automatically closed
+
+    Or standalone usage (less efficient for batch operations):
+
+        service = DataService()
+        await service.save_note(...)  # Creates session per download
+    """
 
     def __init__(self, db_path: str = "data/xhs.db"):
         self.settings = get_settings()
         self.db = Database(db_path)
         self.db.init_db()
         self.downloader = ImageDownloader()
+        self._downloader_context_entered = False
+
+    async def __aenter__(self):
+        """Initialize resources for batch operations."""
+        await self.downloader.__aenter__()
+        self._downloader_context_entered = True
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Clean up resources."""
+        if self._downloader_context_entered:
+            await self.downloader.__aexit__(exc_type, exc_val, exc_tb)
+            self._downloader_context_entered = False
 
     def get_session(self) -> Session:
         return self.db.get_session()

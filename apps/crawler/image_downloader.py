@@ -4,7 +4,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Self
 from urllib.parse import urlparse
 
 import aiohttp
@@ -26,7 +26,20 @@ class DownloadResult:
 
 
 class ImageDownloader:
-    """Download and save images to local filesystem with retry support."""
+    """Download and save images to local filesystem with retry support.
+
+    Supports two usage patterns:
+
+    1. Context manager (recommended for batch downloads):
+        async with ImageDownloader() as downloader:
+            await downloader.download_avatar(...)
+            await downloader.download_note_images(...)
+        # Session automatically closed
+
+    2. Standalone calls (for single downloads):
+        downloader = ImageDownloader()
+        await downloader.download_avatar(...)  # Creates/closes session per call
+    """
 
     HEADERS = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -41,10 +54,27 @@ class ImageDownloader:
         self.avatars_dir = self.base_dir / "avatars"
         self.covers_dir = self.base_dir / "covers"
         self.notes_dir = self.base_dir / "notes"
+        self._session: Optional[aiohttp.ClientSession] = None
 
         # Create directories
         for d in [self.avatars_dir, self.covers_dir, self.notes_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+    async def __aenter__(self) -> Self:
+        """Initialize shared aiohttp session."""
+        self._session = aiohttp.ClientSession(headers=self.HEADERS)
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """Close shared aiohttp session."""
+        if self._session:
+            await self._session.close()
+            self._session = None
 
     def _get_extension(self, url: str, content_type: str | None = None) -> str:
         """Get file extension from URL or content type."""
@@ -74,24 +104,42 @@ class ImageDownloader:
         save_path: Path,
         timeout: int = 30,
     ) -> Path:
-        """Internal download method that can raise exceptions."""
-        async with aiohttp.ClientSession(headers=self.HEADERS) as session:
-            async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as resp:
-                if resp.status != 200:
-                    raise aiohttp.ClientError(f"HTTP {resp.status}")
+        """Internal download method that can raise exceptions.
 
-                content = await resp.read()
-                if not content:
-                    raise aiohttp.ClientError("Empty response body")
+        Uses shared session if available, otherwise creates a temporary one.
+        """
+        # Use shared session or create temporary one
+        if self._session:
+            return await self._download_with_session(self._session, url, save_path, timeout)
+        else:
+            # Standalone usage: create temporary session
+            async with aiohttp.ClientSession(headers=self.HEADERS) as session:
+                return await self._download_with_session(session, url, save_path, timeout)
 
-                # Get extension from content type
-                ext = self._get_extension(url, resp.content_type)
-                actual_path = save_path.with_suffix(ext)
+    async def _download_with_session(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        save_path: Path,
+        timeout: int,
+    ) -> Path:
+        """Download using provided session."""
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as resp:
+            if resp.status != 200:
+                raise aiohttp.ClientError(f"HTTP {resp.status}")
 
-                actual_path.write_bytes(content)
-                return actual_path
+            content = await resp.read()
+            if not content:
+                raise aiohttp.ClientError("Empty response body")
+
+            # Get extension from content type
+            ext = self._get_extension(url, resp.content_type)
+            actual_path = save_path.with_suffix(ext)
+
+            actual_path.write_bytes(content)
+            return actual_path
 
     async def download_image(
         self,
