@@ -103,8 +103,8 @@ class SimulationConfig:
 
     # Behavior probabilities
     prob_view_content: float = 0.8  # 80% chance to view a content from search
-    prob_view_comments: float = 0.5  # 50% chance to view comments when viewing content
-    prob_view_author: float = 0.15  # 15% chance to view author profile
+    prob_view_comments: float = 1.0  # Always view comments to get stats
+    prob_view_author: float = 1.0  # Always view author profile
     prob_expand_sub_comments: float = 0.3  # 30% chance to expand sub-comments
 
     # Delays (seconds) - target: 2-3 contents per minute
@@ -256,12 +256,11 @@ async def simulate_search_session(
     category = random.choice(config.keyword_categories)
     keyword = random.choice(KEYWORD_POOLS.get(category, ["melbourne"]))
 
-    # Pick random sort order
-    sort_by = random.choice([SortBy.GENERAL, SortBy.NEWEST, SortBy.MOST_LIKED])
-    sort_names = {SortBy.GENERAL: "综合", SortBy.NEWEST: "最新", SortBy.MOST_LIKED: "最热"}
+    # Always use GENERAL sort (XHS default algorithm) - no filter panel needed
+    sort_by = SortBy.GENERAL
 
     log(f"\n{'='*60}")
-    log(f"🔍 Searching: '{keyword}' (sort: {sort_names.get(sort_by, '综合')})")
+    log(f"🔍 Searching: '{keyword}' (sort: 综合)")
     log(f"{'='*60}")
 
     try:
