@@ -88,10 +88,29 @@ JS_EXTRACT_CONTENT_STATS = """() => {
     };
 
     // Extract video URL if this is a video post
+    // XHS stores video URLs in: note.video.media.stream.h264[0].masterUrl or h265[0].masterUrl
     const extractVideoUrl = (video) => {
         if (!video) return null;
-        // Try different video URL fields
-        return video.url || video.urlDefault || video.originUrl || null;
+
+        // Try direct URL fields first (legacy format)
+        if (video.url) return video.url;
+        if (video.urlDefault) return video.urlDefault;
+        if (video.originUrl) return video.originUrl;
+
+        // New format: video.media.stream contains different codec streams
+        if (video.media && video.media.stream) {
+            const stream = video.media.stream;
+            // Prefer h264 for better compatibility, fallback to h265
+            const streams = stream.h264 || stream.h265 || stream.av1 || [];
+            if (streams.length > 0) {
+                // Get the first stream's masterUrl or backupUrls
+                const s = streams[0];
+                if (s.masterUrl) return s.masterUrl;
+                if (s.backupUrls && s.backupUrls.length > 0) return s.backupUrls[0];
+            }
+        }
+
+        return null;
     };
 
     // Get image URLs
