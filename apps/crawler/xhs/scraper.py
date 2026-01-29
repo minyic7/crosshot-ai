@@ -13,10 +13,11 @@ from apps.utils.lru_cache import LRUCache
 from apps.crawler.base import (
     BaseCrawler,
     CommentItem,
-    NoteItem,
+    ContentItem,
+    ContentStats,
     SubCommentItem,
     UserInfo,
-    UserNoteItem,
+    UserContentItem,
 )
 from apps.utils.retry import retry_async
 
@@ -57,6 +58,36 @@ class NoteType(int, Enum):
     VIDEO = 2  # 视频
 
 
+# JS to extract content stats (likes, collects, comments, shares) from __INITIAL_STATE__
+JS_EXTRACT_CONTENT_STATS = """() => {
+    const state = window.__INITIAL_STATE__;
+    if (!state || !state.note || !state.note.noteDetailMap) return null;
+
+    const noteId = Object.keys(state.note.noteDetailMap)[0];
+    if (!noteId) return null;
+
+    const detail = state.note.noteDetailMap[noteId];
+    if (!detail || !detail.note) return null;
+
+    const note = detail.note;
+    const interactInfo = note.interactInfo || {};
+
+    // Format count - handles Chinese numerals like "1.2万"
+    const formatCount = (count) => {
+        if (count === undefined || count === null) return "0";
+        return String(count);
+    };
+
+    return {
+        noteId: noteId,
+        likes: formatCount(interactInfo.likedCount),
+        collects: formatCount(interactInfo.collectedCount),
+        comments: formatCount(interactInfo.commentCount),
+        shares: formatCount(interactInfo.shareCount || 0),
+    };
+}"""
+
+
 # JS to extract comments from __INITIAL_STATE__
 JS_EXTRACT_COMMENTS = """() => {
     const state = window.__INITIAL_STATE__;
@@ -67,6 +98,12 @@ JS_EXTRACT_COMMENTS = """() => {
 
     const detail = state.note.noteDetailMap[noteId];
     if (!detail || !detail.comments) return null;
+
+    // Helper to extract image URLs from pictures array
+    const extractImages = (pictures) => {
+        if (!pictures || !Array.isArray(pictures)) return [];
+        return pictures.map(p => p.urlDefault || p.url || '').filter(url => url);
+    };
 
     // comments is an object with list array
     const commentList = detail.comments.list || [];
@@ -80,6 +117,7 @@ JS_EXTRACT_COMMENTS = """() => {
         likes: String(c.likeCount || 0),
         createTime: c.createTime || 0,
         ipLocation: c.ipLocation || '',
+        imageUrls: extractImages(c.pictures),
         subCommentCount: parseInt(c.subCommentCount) || 0,
         // Include sub comments if available
         subComments: (c.subComments || []).map(sc => ({
@@ -91,6 +129,7 @@ JS_EXTRACT_COMMENTS = """() => {
             likes: String(sc.likeCount || 0),
             createTime: sc.createTime || 0,
             ipLocation: sc.ipLocation || '',
+            imageUrls: extractImages(sc.pictures),
         })),
     }));
 }"""
@@ -106,12 +145,21 @@ class XhsCrawler(BaseCrawler):
         - Memory usage capped at ~1-2 MB regardless of runtime duration
     """
 
+    platform = "xhs"  # Platform identifier for cross-platform support
+
     # Class-level LRU cache shared across instances for long-running processes
     # This persists across scrape sessions while still having bounded memory
     _url_cache = LRUCache(max_size=10000, ttl_seconds=86400)  # 24h TTL
 
-    def __init__(self):
+    def __init__(self, headless: Optional[bool] = None):
+        """Initialize XHS crawler.
+
+        Args:
+            headless: Override headless mode. If None, uses config setting.
+                      Set to False to show browser window (useful for manual verification).
+        """
         self.settings = get_settings()
+        self._headless = headless if headless is not None else self.settings.crawler.headless
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
         self._playwright = None
@@ -120,7 +168,7 @@ class XhsCrawler(BaseCrawler):
         """Initialize browser on context enter."""
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
-            headless=self.settings.crawler.headless
+            headless=self._headless
         )
         self._context = await self._browser.new_context()
 
@@ -163,6 +211,20 @@ class XhsCrawler(BaseCrawler):
         """
         return cls._url_cache.cleanup_expired()
 
+    @staticmethod
+    def _extract_content_id(content_url: str) -> Optional[str]:
+        """Extract content ID from XHS URL.
+
+        URL formats:
+        - https://www.xiaohongshu.com/explore/{content_id}?...
+        - https://www.xiaohongshu.com/search_result/{content_id}?...
+        """
+        if not content_url:
+            return None
+        import re
+        match = re.search(r'/(?:explore|search_result)/([a-f0-9]+)', content_url)
+        return match.group(1) if match else None
+
     async def _get_page(self) -> Page:
         """Get a new page with configured settings."""
         if not self._context:
@@ -177,9 +239,35 @@ class XhsCrawler(BaseCrawler):
         """Navigate to URL with retry."""
         await page.goto(url, wait_until="domcontentloaded")
 
+    async def _safe_evaluate(self, page: Page, script: str, max_retries: int = 3):
+        """Safely evaluate JavaScript with retry on navigation errors.
+
+        Handles "Execution context was destroyed" errors that occur when
+        the page navigates during evaluation.
+        """
+        for attempt in range(max_retries):
+            try:
+                # Wait for page to be in a stable state
+                await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                result = await page.evaluate(script)
+                return result
+            except Exception as e:
+                error_msg = str(e)
+                if "Execution context was destroyed" in error_msg or "navigation" in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        logger.debug(f"Page navigation during evaluate, retrying ({attempt + 1}/{max_retries})")
+                        await asyncio.sleep(2)  # Wait for page to stabilize
+                        continue
+                    else:
+                        logger.warning(f"Evaluate failed after {max_retries} attempts: {e}")
+                        raise
+                else:
+                    raise
+        return None
+
     async def _scroll_page(self, page: Page) -> None:
         """Scroll page to load more content."""
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await self._safe_evaluate(page, "window.scrollTo(0, document.body.scrollHeight)")
 
     async def _open_filter_panel(self, page: Page) -> bool:
         """Open the filter panel by clicking the '筛选' button.
@@ -188,7 +276,7 @@ class XhsCrawler(BaseCrawler):
         """
         try:
             # Click the filter button using JavaScript to avoid modal interception
-            clicked = await page.evaluate("""() => {
+            clicked = await self._safe_evaluate(page, """() => {
                 const elements = document.querySelectorAll('*');
                 for (const el of elements) {
                     const text = el.innerText?.trim();
@@ -222,7 +310,7 @@ class XhsCrawler(BaseCrawler):
                 return
 
             # Fallback: click outside the panel
-            await page.evaluate("""() => {
+            await self._safe_evaluate(page, """() => {
                 const mask = document.querySelector('.filter-mask');
                 if (mask) mask.click();
             }""")
@@ -319,9 +407,10 @@ class XhsCrawler(BaseCrawler):
             logger.warning(f"Failed to apply note type filter: {e}")
             return False
 
-    async def _extract_notes_from_page(self, page: Page) -> list[dict]:
-        """Extract note data from current page."""
-        return await page.evaluate(
+    async def _extract_contents_from_page(self, page: Page) -> list[dict]:
+        """Extract content data from current page."""
+        result = await self._safe_evaluate(
+            page,
             r"""() => {
             const cards = document.querySelectorAll('section.note-item');
             return Array.from(cards).map(card => {
@@ -335,18 +424,40 @@ class XhsCrawler(BaseCrawler):
                 }
 
                 const linkEl = card.querySelector('a.cover');
-                let noteUrl = '';
+                let contentUrl = '';
                 if (linkEl && linkEl.href) {
-                    noteUrl = linkEl.href;
+                    contentUrl = linkEl.href;
                 }
 
                 const imgEl = card.querySelector('img');
-                const imageUrls = imgEl && imgEl.src ? [imgEl.src] : [];
+                const mediaUrls = imgEl && imgEl.src ? [imgEl.src] : [];
 
-                return { title, likes, noteUrl, imageUrls };
+                // Extract author info from footer
+                const authorLink = card.querySelector('.footer .author-wrapper a, .footer a[href*="/user/profile/"]');
+                let userId = '';
+                let nickname = '';
+                let avatar = '';
+
+                if (authorLink) {
+                    const href = authorLink.href || '';
+                    const userIdMatch = href.match(/\/user\/profile\/([a-f0-9]+)/);
+                    if (userIdMatch) {
+                        userId = userIdMatch[1];
+                    }
+                    const nicknameEl = authorLink.querySelector('.name, span');
+                    nickname = nicknameEl ? nicknameEl.textContent.trim() : '';
+                    const avatarEl = authorLink.querySelector('img') || card.querySelector('.author-wrapper img');
+                    avatar = avatarEl ? avatarEl.src : '';
+                }
+
+                // Check if video content
+                const isVideo = !!(card.querySelector('[class*="video"], .play-icon, .duration, video'));
+
+                return { title, likes, contentUrl, mediaUrls, userId, nickname, avatar, isVideo };
             });
         }"""
         )
+        return result if result else []
 
     async def scrape(
         self,
@@ -356,24 +467,24 @@ class XhsCrawler(BaseCrawler):
         note_type: NoteType = NoteType.ALL,
         max_notes: Optional[int] = None,
         max_scroll: int = 100,
-        recent_note_urls: Optional[Dict[str, datetime]] = None,
+        recent_content_urls: Optional[Dict[str, datetime]] = None,
         dedup_window_hours: int = 24,
-    ) -> list[NoteItem]:
-        """Scrape notes for a keyword.
+    ) -> list[ContentItem]:
+        """Scrape contents for a keyword.
 
         Args:
             keyword: Search keyword
             sort_by: Sort order (GENERAL/NEWEST/MOST_LIKED/MOST_COMMENTS/MOST_COLLECTED)
             note_type: Note type filter (ALL/IMAGE/VIDEO)
-            max_notes: Maximum notes to return (default from config)
+            max_notes: Maximum contents to return (default from config)
             max_scroll: Maximum scroll attempts before giving up (default 100)
-            recent_note_urls: Dict of {note_url: last_scraped_time} for smart dedup
+            recent_content_urls: Dict of {content_url: last_scraped_time} for smart dedup
                 - URLs scraped within dedup_window_hours will be SKIPPED (same-day dedup)
                 - URLs scraped before dedup_window_hours will be INCLUDED (for update)
-            dedup_window_hours: Hours within which to skip already-scraped notes (default 24)
+            dedup_window_hours: Hours within which to skip already-scraped contents (default 24)
 
         Returns:
-            List of unique NoteItem objects
+            List of unique ContentItem objects
         """
         if max_notes is None:
             max_notes = self.settings.crawler.default_max_notes
@@ -383,8 +494,8 @@ class XhsCrawler(BaseCrawler):
 
         # Build set of URLs to skip (only those scraped within the dedup window)
         skip_urls: Set[str] = set()
-        if recent_note_urls:
-            for url, scraped_time in recent_note_urls.items():
+        if recent_content_urls:
+            for url, scraped_time in recent_content_urls.items():
                 if scraped_time > dedup_cutoff:
                     # Scraped within window - skip it
                     skip_urls.add(url)
@@ -415,13 +526,13 @@ class XhsCrawler(BaseCrawler):
                 await self._apply_note_type_filter(page, note_type)
                 await asyncio.sleep(2)
 
-            items: list[NoteItem] = []
+            items: list[ContentItem] = []
             no_new_content_count = 0
             max_no_new_content = 3  # Stop after 3 consecutive scrolls with no new content
 
             for scroll_idx in range(max_scroll):
-                # Extract current visible notes
-                raw_items = await self._extract_notes_from_page(page)
+                # Extract current visible contents
+                raw_items = await self._extract_contents_from_page(page)
 
                 if not raw_items:
                     raw_items = []
@@ -429,28 +540,47 @@ class XhsCrawler(BaseCrawler):
                 items_before = len(items)
 
                 for item in raw_items:
-                    note_url = item.get("noteUrl", "")
+                    content_url = item.get("contentUrl", "")
 
                     # Skip if already seen in LRU cache (bounded memory dedup)
-                    if note_url in self._url_cache:
+                    if content_url in self._url_cache:
                         continue
 
                     # Skip if scraped within dedup window (from database)
-                    if note_url in skip_urls:
-                        self._url_cache.add(note_url)  # Mark as seen
+                    if content_url in skip_urls:
+                        self._url_cache.add(content_url)  # Mark as seen
                         continue
 
-                    self._url_cache.add(note_url)
+                    self._url_cache.add(content_url)
+
+                    # Extract content_id from URL
+                    content_id = self._extract_content_id(content_url)
+
+                    # Build platform_data with author info
+                    platform_data = {}
+                    if item.get("userId"):
+                        platform_data["user_id"] = item.get("userId")
+                    if item.get("nickname"):
+                        platform_data["nickname"] = item.get("nickname")
+                    if item.get("avatar"):
+                        platform_data["avatar"] = item.get("avatar")
+
+                    # Determine content type
+                    content_type = "video" if item.get("isVideo") else "normal"
 
                     items.append(
-                        NoteItem(
+                        ContentItem(
+                            platform=self.platform,
+                            platform_content_id=content_id or "",
                             title=item.get("title", "N/A"),
                             likes=item.get("likes", "0"),
                             collects="0",
                             comments="0",
                             publish_time="",
-                            note_url=note_url,
-                            image_urls=item.get("imageUrls", []),
+                            content_url=content_url,
+                            media_urls=item.get("mediaUrls", []),
+                            content_type=content_type,
+                            platform_data=platform_data,
                         )
                     )
 
@@ -459,7 +589,7 @@ class XhsCrawler(BaseCrawler):
 
                 # Check if we reached target
                 if len(items) >= max_notes:
-                    logger.info(f"Reached target of {max_notes} notes")
+                    logger.info(f"Reached target of {max_notes} contents")
                     break
 
                 # Check if we got new items this scroll
@@ -479,7 +609,7 @@ class XhsCrawler(BaseCrawler):
 
             await page.close()
 
-            logger.info(f"Scraped {len(items)} unique notes for keyword: {keyword} (scrolled {scroll_idx + 1} times)")
+            logger.info(f"Scraped {len(items)} unique contents for keyword: {keyword} (scrolled {scroll_idx + 1} times)")
             return items
 
         finally:
@@ -488,18 +618,24 @@ class XhsCrawler(BaseCrawler):
 
     async def scrape_comments(
         self,
-        note_url: str,
+        content_url: str,
         load_all: bool = False,
         expand_sub_comments: bool = False,
         max_scroll: int = 20,
-    ) -> list[CommentItem]:
-        """Scrape comments from a note.
+        return_stats: bool = False,
+    ) -> list[CommentItem] | tuple[list[CommentItem], ContentStats | None]:
+        """Scrape comments from a content.
 
         Args:
-            note_url: Full URL of the note (must include xsec_token)
+            content_url: Full URL of the content (must include xsec_token)
             load_all: If True, scroll to load all comments
             expand_sub_comments: If True, click to expand all sub-comments
             max_scroll: Maximum number of scroll attempts when load_all=True
+            return_stats: If True, also return content stats (likes, collects, comments count)
+
+        Returns:
+            If return_stats=False: list of CommentItem
+            If return_stats=True: tuple of (list[CommentItem], ContentStats | None)
         """
         # Use context manager pattern for standalone usage
         should_close = False
@@ -510,7 +646,7 @@ class XhsCrawler(BaseCrawler):
         try:
             page = await self._get_page()
 
-            await self._navigate_with_retry(page, note_url)
+            await self._navigate_with_retry(page, content_url)
             await asyncio.sleep(5)
 
             # Wait for __INITIAL_STATE__ to be available
@@ -528,65 +664,107 @@ class XhsCrawler(BaseCrawler):
                 if await scroller.count() > 0:
                     for _ in range(max_scroll):
                         # Check if there are more comments
-                        has_more = await page.evaluate(
-                            """() => {
-                            const state = window.__INITIAL_STATE__;
-                            if (!state?.note?.noteDetailMap) return false;
-                            const noteId = Object.keys(state.note.noteDetailMap)[0];
-                            return state.note.noteDetailMap[noteId]?.comments?.hasMore || false;
-                        }"""
-                        )
+                        try:
+                            has_more = await self._safe_evaluate(
+                                page,
+                                """() => {
+                                const state = window.__INITIAL_STATE__;
+                                if (!state?.note?.noteDetailMap) return false;
+                                const noteId = Object.keys(state.note.noteDetailMap)[0];
+                                return state.note.noteDetailMap[noteId]?.comments?.hasMore || false;
+                            }"""
+                            )
+                        except Exception:
+                            has_more = False
 
                         if not has_more:
                             break
 
                         # Scroll to bottom
-                        await scroller.evaluate(
-                            """el => {
-                            el.scrollTop = el.scrollHeight;
-                            el.dispatchEvent(new Event('scroll', { bubbles: true }));
-                        }"""
-                        )
+                        try:
+                            await scroller.evaluate(
+                                """el => {
+                                el.scrollTop = el.scrollHeight;
+                                el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                            }"""
+                            )
+                        except Exception as e:
+                            logger.debug(f"Scroll error (will retry): {e}")
+                            await asyncio.sleep(1)
+                            continue
                         await asyncio.sleep(1.5)
 
             if expand_sub_comments:
                 # Click all "展开 X 条回复" buttons to load sub-comments
                 for _ in range(max_scroll):
                     # Find and click expand buttons
-                    clicked = await page.evaluate(
-                        """() => {
-                        const btns = document.querySelectorAll('.show-more');
-                        let clicked = 0;
-                        for (const btn of btns) {
-                            if (btn.textContent.includes('展开') && btn.textContent.includes('回复')) {
-                                btn.click();
-                                clicked++;
+                    try:
+                        clicked = await self._safe_evaluate(
+                            page,
+                            """() => {
+                            const btns = document.querySelectorAll('.show-more');
+                            let clicked = 0;
+                            for (const btn of btns) {
+                                if (btn.textContent.includes('展开') && btn.textContent.includes('回复')) {
+                                    btn.click();
+                                    clicked++;
+                                }
                             }
-                        }
-                        return clicked;
-                    }"""
-                    )
+                            return clicked;
+                        }"""
+                        )
+                    except Exception:
+                        clicked = 0
 
-                    if clicked == 0:
+                    if not clicked:
                         break
 
                     await asyncio.sleep(1.5)
 
                     # Also check for "查看更多回复" inside expanded comments
-                    await page.evaluate(
-                        """() => {
-                        const moreLinks = document.querySelectorAll('[class*="more-reply"], [class*="load-more"]');
-                        for (const link of moreLinks) {
-                            if (link.textContent.includes('更多') || link.textContent.includes('查看')) {
-                                link.click();
+                    try:
+                        await self._safe_evaluate(
+                            page,
+                            """() => {
+                            const moreLinks = document.querySelectorAll('[class*="more-reply"], [class*="load-more"]');
+                            for (const link of moreLinks) {
+                                if (link.textContent.includes('更多') || link.textContent.includes('查看')) {
+                                    link.click();
+                                }
                             }
-                        }
-                    }"""
-                    )
+                        }"""
+                        )
+                    except Exception:
+                        pass
                     await asyncio.sleep(1)
 
             # Extract comments from __INITIAL_STATE__
-            raw_comments = await page.evaluate(JS_EXTRACT_COMMENTS)
+            try:
+                raw_comments = await self._safe_evaluate(page, JS_EXTRACT_COMMENTS)
+            except Exception as e:
+                logger.warning(f"Failed to extract comments: {e}")
+                raw_comments = None
+
+            # Extract content stats if requested
+            content_stats = None
+            if return_stats:
+                try:
+                    raw_stats = await self._safe_evaluate(page, JS_EXTRACT_CONTENT_STATS)
+                    if raw_stats:
+                        content_stats = ContentStats(
+                            platform=self.platform,
+                            platform_content_id=raw_stats.get("noteId", ""),
+                            likes=raw_stats.get("likes", "0"),
+                            collects=raw_stats.get("collects", "0"),
+                            comments=raw_stats.get("comments", "0"),
+                            shares=raw_stats.get("shares", "0"),
+                        )
+                        logger.debug(f"Content stats: likes={content_stats.likes}, collects={content_stats.collects}, comments={content_stats.comments}")
+                except Exception as e:
+                    logger.warning(f"Failed to extract content stats: {e}")
+
+            # Extract content_id from URL for reference
+            content_id = self._extract_content_id(content_url) or ""
 
             comments = []
             if raw_comments:
@@ -596,33 +774,41 @@ class XhsCrawler(BaseCrawler):
                     for sc in c.get("subComments", []):
                         sub_comments.append(
                             SubCommentItem(
-                                comment_id=sc.get("id", ""),
+                                platform=self.platform,
+                                platform_comment_id=sc.get("id", ""),
+                                platform_user_id=sc.get("userId", ""),
                                 content=sc.get("content", ""),
-                                user_id=sc.get("userId", ""),
                                 nickname=sc.get("nickname", ""),
                                 avatar=sc.get("avatar", ""),
                                 likes=sc.get("likes", "0"),
                                 create_time=sc.get("createTime", 0),
                                 ip_location=sc.get("ipLocation", ""),
+                                image_urls=sc.get("imageUrls", []),
                             )
                         )
 
                     comments.append(
                         CommentItem(
-                            comment_id=c.get("id", ""),
+                            platform=self.platform,
+                            platform_comment_id=c.get("id", ""),
+                            platform_content_id=content_id,
+                            platform_user_id=c.get("userId", ""),
                             content=c.get("content", ""),
-                            user_id=c.get("userId", ""),
                             nickname=c.get("nickname", ""),
                             avatar=c.get("avatar", ""),
                             likes=c.get("likes", "0"),
                             create_time=c.get("createTime", 0),
                             ip_location=c.get("ipLocation", ""),
+                            image_urls=c.get("imageUrls", []),
                             sub_comment_count=c.get("subCommentCount", 0),
                             sub_comments=sub_comments,
                         )
                     )
 
             await page.close()
+
+            if return_stats:
+                return comments, content_stats
             return comments
 
         finally:
@@ -632,15 +818,15 @@ class XhsCrawler(BaseCrawler):
     async def scrape_user(
         self,
         user_id: str,
-        load_all_notes: bool = False,
+        load_all_contents: bool = False,
         max_scroll: int = 20,
     ) -> UserInfo:
         """Scrape user profile information.
 
         Args:
-            user_id: User ID (can be obtained from note author info)
-            load_all_notes: If True, scroll to load all user notes
-            max_scroll: Maximum number of scroll attempts when load_all_notes=True
+            user_id: User ID (can be obtained from content author info)
+            load_all_contents: If True, scroll to load all user contents
+            max_scroll: Maximum number of scroll attempts when load_all_contents=True
         """
         # Use context manager pattern for standalone usage
         should_close = False
@@ -655,114 +841,139 @@ class XhsCrawler(BaseCrawler):
             await self._navigate_with_retry(page, user_url)
             await asyncio.sleep(5)
 
-            if load_all_notes:
-                # Scroll page to load more notes (notes load via DOM, not state)
+            if load_all_contents:
+                # Scroll page to load more contents (contents load via DOM, not state)
                 for _ in range(max_scroll):
-                    prev_count = await page.evaluate(
-                        "document.querySelectorAll('section.note-item').length"
-                    )
+                    try:
+                        prev_count = await self._safe_evaluate(
+                            page, "document.querySelectorAll('section.note-item').length"
+                        ) or 0
 
-                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    await asyncio.sleep(1.5)
+                        await self._safe_evaluate(page, "window.scrollTo(0, document.body.scrollHeight)")
+                        await asyncio.sleep(1.5)
 
-                    new_count = await page.evaluate(
-                        "document.querySelectorAll('section.note-item').length"
-                    )
+                        new_count = await self._safe_evaluate(
+                            page, "document.querySelectorAll('section.note-item').length"
+                        ) or 0
+                    except Exception:
+                        break
 
                     if new_count == prev_count:
                         break
 
             # Extract user info from __INITIAL_STATE__
-            raw_user_info = await page.evaluate(
-                """() => {
-                const state = window.__INITIAL_STATE__;
-                if (!state?.user) return null;
+            try:
+                raw_user_info = await self._safe_evaluate(
+                    page,
+                    """() => {
+                    const state = window.__INITIAL_STATE__;
+                    if (!state?.user) return null;
 
-                // Handle Vue reactivity - access _value or _rawValue
-                const pageData = state.user.userPageData?._value
-                    || state.user.userPageData?._rawValue
-                    || state.user.userPageData;
+                    // Handle Vue reactivity - access _value or _rawValue
+                    const pageData = state.user.userPageData?._value
+                        || state.user.userPageData?._rawValue
+                        || state.user.userPageData;
 
-                if (!pageData) return null;
+                    if (!pageData) return null;
 
-                const basic = pageData.basicInfo || {};
-                const interactions = pageData.interactions || [];
-
-                return {
-                    userId: basic.userId || '',
-                    nickname: basic.nickname || '',
-                    avatar: basic.imageb || basic.image || '',
-                    desc: basic.desc || '',
-                    gender: basic.gender || 0,
-                    ipLocation: basic.ipLocation || '',
-                    redId: basic.redId || '',
-                    follows: interactions[0]?.count || '0',
-                    fans: interactions[1]?.count || '0',
-                    interaction: interactions[2]?.count || '0',
-                };
-            }"""
-            )
-
-            # Extract notes from DOM (more reliable than state for pagination)
-            raw_notes = await page.evaluate(
-                """() => {
-                const cards = document.querySelectorAll('section.note-item');
-                return Array.from(cards).map(card => {
-                    const linkEl = card.querySelector('a');
-                    const titleEl = card.querySelector('.title span, .footer .title');
-                    const imgEl = card.querySelector('img');
-                    const likeEl = card.querySelector('.like-wrapper .count');
-
-                    // Get note URL which contains note ID and xsec_token
-                    const href = linkEl?.href || '';
-                    const noteIdMatch = href.match(/explore\\/([a-f0-9]+)/);
-                    const xsecMatch = href.match(/xsec_token=([^&]+)/);
-
-                    // Check if video (has video icon or duration)
-                    const isVideo = !!card.querySelector('[class*="video"], .play-icon, .duration');
+                    const basic = pageData.basicInfo || {};
+                    const interactions = pageData.interactions || [];
 
                     return {
-                        noteId: noteIdMatch ? noteIdMatch[1] : '',
-                        title: titleEl?.textContent?.trim() || '',
-                        type: isVideo ? 'video' : 'normal',
-                        likes: likeEl?.textContent?.trim() || '0',
-                        coverUrl: imgEl?.src || '',
-                        xsecToken: xsecMatch ? decodeURIComponent(xsecMatch[1]) : '',
+                        userId: basic.userId || '',
+                        nickname: basic.nickname || '',
+                        avatar: basic.imageb || basic.image || '',
+                        desc: basic.desc || '',
+                        gender: basic.gender || 0,
+                        ipLocation: basic.ipLocation || '',
+                        redId: basic.redId || '',
+                        follows: interactions[0]?.count || '0',
+                        fans: interactions[1]?.count || '0',
+                        interaction: interactions[2]?.count || '0',
                     };
-                });
-            }"""
-            )
+                }"""
+                )
+            except Exception as e:
+                logger.warning(f"Failed to extract user info: {e}")
+                raw_user_info = None
+
+            # Extract contents from DOM (more reliable than state for pagination)
+            try:
+                raw_contents = await self._safe_evaluate(
+                    page,
+                    """() => {
+                    const cards = document.querySelectorAll('section.note-item');
+                    return Array.from(cards).map(card => {
+                        const linkEl = card.querySelector('a');
+                        const titleEl = card.querySelector('.title span, .footer .title');
+                        const imgEl = card.querySelector('img');
+                        const likeEl = card.querySelector('.like-wrapper .count');
+
+                        // Get content URL which contains content ID and xsec_token
+                        const href = linkEl?.href || '';
+                        const contentIdMatch = href.match(/explore\\/([a-f0-9]+)/);
+                        const xsecMatch = href.match(/xsec_token=([^&]+)/);
+
+                        // Check if video (has video icon or duration)
+                        const isVideo = !!card.querySelector('[class*="video"], .play-icon, .duration');
+
+                        return {
+                            contentId: contentIdMatch ? contentIdMatch[1] : '',
+                            title: titleEl?.textContent?.trim() || '',
+                            type: isVideo ? 'video' : 'normal',
+                            likes: likeEl?.textContent?.trim() || '0',
+                            coverUrl: imgEl?.src || '',
+                            xsecToken: xsecMatch ? decodeURIComponent(xsecMatch[1]) : '',
+                        };
+                    });
+                }"""
+                )
+            except Exception as e:
+                logger.warning(f"Failed to extract user contents: {e}")
+                raw_contents = None
 
             await page.close()
 
             if not raw_user_info:
-                return UserInfo(user_id=user_id, nickname="", avatar="")
-
-            # Build UserInfo object
-            user_notes = [
-                UserNoteItem(
-                    note_id=n.get("noteId", ""),
-                    title=n.get("title", ""),
-                    type=n.get("type", "normal"),
-                    likes=n.get("likes", "0"),
-                    cover_url=n.get("coverUrl", ""),
-                    xsec_token=n.get("xsecToken", ""),
+                return UserInfo(
+                    platform=self.platform,
+                    platform_user_id=user_id,
+                    nickname="",
+                    avatar="",
                 )
-                for n in (raw_notes or [])
+
+            # Build UserInfo object with platform-specific data in platform_data
+            user_contents = [
+                UserContentItem(
+                    platform=self.platform,
+                    platform_content_id=c.get("contentId", ""),
+                    title=c.get("title", ""),
+                    content_type=c.get("type", "normal"),
+                    likes=c.get("likes", "0"),
+                    cover_url=c.get("coverUrl", ""),
+                    platform_data={"xsec_token": c.get("xsecToken", "")} if c.get("xsecToken") else {},
+                )
+                for c in (raw_contents or [])
             ]
 
+            # Store XHS-specific red_id in platform_data
+            platform_data = {}
+            if raw_user_info.get("redId"):
+                platform_data["red_id"] = raw_user_info.get("redId")
+
             return UserInfo(
-                user_id=raw_user_info.get("userId") or user_id,
+                platform=self.platform,
+                platform_user_id=raw_user_info.get("userId") or user_id,
                 nickname=raw_user_info.get("nickname", ""),
                 avatar=raw_user_info.get("avatar", ""),
-                desc=raw_user_info.get("desc", ""),
+                description=raw_user_info.get("desc", ""),
                 gender=raw_user_info.get("gender", 0),
                 ip_location=raw_user_info.get("ipLocation", ""),
-                red_id=raw_user_info.get("redId", ""),
                 follows=raw_user_info.get("follows", "0"),
                 fans=raw_user_info.get("fans", "0"),
                 interaction=raw_user_info.get("interaction", "0"),
-                notes=user_notes,
+                contents=user_contents,
+                platform_data=platform_data,
             )
 
         finally:

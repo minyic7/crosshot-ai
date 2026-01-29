@@ -1,27 +1,35 @@
 from apps.database.models import (
     Base,
     Comment,
+    Content,
+    ContentHistory,
     Database,
     ImageDownloadLog,
-    Note,
-    NoteSnapshot,
     ScrapeLog,
     SearchTask,
-    SearchTaskNote,
+    SearchTaskContent,
     User,
-    UserNoteSnapshot,
+    parse_count,
+    # Backward compatibility aliases
+    Note,
+    NoteHistory,
+    SearchTaskNote,
 )
 
 __all__ = [
     "Base",
     "Comment",
+    "Content",
+    "ContentHistory",
     "Database",
     "ImageDownloadLog",
-    "Note",
-    "NoteSnapshot",
     "ScrapeLog",
     "SearchTask",
-    "SearchTaskNote",
+    "SearchTaskContent",
     "User",
-    "UserNoteSnapshot",
+    "parse_count",
+    # Backward compatibility aliases
+    "Note",
+    "NoteHistory",
+    "SearchTaskNote",
 ]

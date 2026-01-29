@@ -24,6 +24,9 @@ RUN apt-get update && apt-get install -y \
 # Install uv
 RUN pip install --no-cache-dir uv
 
+# Tell uv to use copy mode instead of hardlinks (avoids warnings in Docker)
+ENV UV_LINK_MODE=copy
+
 # Sync dependencies
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen

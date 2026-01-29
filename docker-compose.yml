@@ -5,14 +5,32 @@ services:
       - '8001:8000'
     volumes:
       - .:/app
+      - ./data:/app/data
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
     command: uv run uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
 
-  crawler:
+  # Human simulation job - runs for specified duration
+  human-simulation:
     build: .
     volumes:
       - .:/app
+      - ./data:/app/data
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
-    command: uv run python -m apps.crawler.tasks.scheduler
+      - SIMULATION_DURATION=${SIMULATION_DURATION:-20}
+    command: >
+      uv run python -m apps.jobs.human_simulation_job
+      --duration ${SIMULATION_DURATION:-300}
+      --categories fashion sexy beauty body style
+    # Auto-restart on failure (but not on manual stop)
+    restart: on-failure
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
