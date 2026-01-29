@@ -158,6 +158,36 @@ class DataService:
     def get_note_urls_with_timestamps(self, platform: str, hours: Optional[int] = None) -> Dict[str, datetime]:
         return self.get_content_urls_with_timestamps(platform, hours)
 
+    def get_content_by_url(
+        self,
+        content_url: str,
+        hours: Optional[int] = None,
+    ) -> Optional[Content]:
+        """Check if a specific content URL was scraped within the time window.
+
+        Used for real-time dedup checking during continuous scraping.
+
+        Args:
+            content_url: The content URL to check
+            hours: Time window in hours (default: 24 from config)
+
+        Returns:
+            Content object if found within window, None otherwise
+        """
+        if hours is None:
+            hours = self.settings.cache.note_ttl_hours
+
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+        with self.transaction() as session:
+            content = (
+                session.query(Content)
+                .filter(Content.content_url == content_url)
+                .filter(Content.updated_at >= cutoff)
+                .first()
+            )
+            return content
+
     def get_recent_content_ids(
         self,
         platform: str,

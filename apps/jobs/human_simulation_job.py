@@ -1,27 +1,58 @@
 """Human simulation job for long-running scraping sessions.
 
-Simulates real user behavior to avoid detection:
-- Random delays between actions
-- Varies keywords and sort orders
-- Random browsing patterns (some contents viewed, some skipped)
-- Occasional comment viewing and user profile visits
-- Rest periods between search sessions
+CONTINUOUS PROCESSING VERSION (2025-2026) - Ultra Conservative for 24/7 Operation:
+- **Continuous scroll-and-process**: Processes contents as they're found during scrolling
+- **Work/Rest Cycle**: 30-40 min work (randomized) + 20-30 min rest (randomized) per hour
+- Real-time 24h dedup: Checks DB per content before processing
+- Time-aware: Stops immediately when time limit reached
+- Dynamic stopping: Stops when yield drops below threshold
+- Keyword rotation: 15min cooldown between same keyword
+- Cookie expiry detection: Consecutive empty searches trigger warning
+- **Ultra-safe delays**: 7-18s scroll + 3-8s pause + 10-20s reading + 30-60s between searches
+- Comment loading: Randomized 8-15 clicks (capped to avoid 403)
 
-This job runs the complete content scraping flow:
-1. Search -> Get content list
-2. For each selected content:
-   - Save content (images, videos)
-   - Get author info
-   - Get comments (with sub-comments)
-   - Save all users
+WORK/REST CYCLE (Simulates Real Human Behavior):
+- Work: 30-40 minutes per cycle (randomized each cycle)
+- Rest: 20-30 minutes per cycle (randomized each cycle)
+- Effective work time: ~50% (12 hours/day active)
+- Expected: 300-360 contents/day at ~12-15/hour effective rate
+
+ULTRA CONSERVATIVE DELAYS (All increased for maximum safety):
+- Between searches: 30-60s (was 22-45s)
+- Reading content: 10-20s (was 7-13s)
+- Reading comments: 8-15s (was 5-9s)
+- Before action: 3-6s (was 2-4s)
+- Scroll: 7-18s (was 5-14s)
+- Extra pause: 3-8s (was 2-5s)
+
+Architecture Benefits (流式处理 vs 批处理):
+- Better time control: Can stop mid-search when time runs out
+- More natural behavior: Scrolls and reads like a real user with long pauses
+- Real-time dedup: Checks DB per content, skips recently-scraped items immediately
+- Work/rest cycle: Mimics human attention span and breaks
+
+Complete content scraping flow:
+1. Work for 30-40 minutes (randomized):
+   a. Search with keyword rotation -> Continuous scrolling
+   b. For each content found:
+      - Check time limit (stop if exceeded)
+      - Check DB for 24h dedup (skip if scraped recently)
+      - Save content with media (images, videos)
+      - Get author profile info
+      - Load comments with randomized depth (8-15 clicks)
+      - Save all users from comments
+   c. Stop when: work time up OR consecutive 3 scrolls yield <3 items
+2. Rest for 20-30 minutes (randomized)
+3. Repeat cycle indefinitely
 """
 
 import asyncio
+import itertools
 import logging
 import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from apps.config import get_settings, reload_settings
 from apps.crawler.base import ContentItem
@@ -36,49 +67,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Keyword pools for different categories
-KEYWORD_POOLS = {
-    "fashion": [
-        "穿搭", "时尚穿搭", "日常穿搭", "约会穿搭",
-        "韩系穿搭", "日系穿搭", "小众穿搭", "显瘦穿搭",
-        "氛围感穿搭", "法式穿搭", "复古穿搭", "温柔穿搭",
-        "甜美穿搭", "通勤穿搭", "休闲穿搭", "气质穿搭",
-    ],
-    "sexy": [
-        "战袍", "sexy穿搭", "辣妹穿搭", "性感穿搭",
-        "夜店穿搭", "约会战袍", "纯欲穿搭", "热辣穿搭",
-        "御姐穿搭", "女团穿搭", "露背装", "吊带裙",
-    ],
-    "beauty": [
-        "美女写真", "女生头像", "女生照片", "小姐姐",
-        "女神", "甜妹", "清纯", "氛围美女",
-        "自拍", "拍照姿势", "拍照技巧", "人像摄影",
-    ],
-    "body": [
-        "身材管理", "好身材", "马甲线", "蜜桃臀",
-        "健身女孩", "瑜伽", "普拉提", "舞蹈",
-    ],
-    "style": [
-        "妆容", "日常妆", "约会妆", "氛围感妆容",
-        "发型", "卷发", "直发", "编发",
-        "美甲", "穿戴甲", "指甲款式",
-    ],
-    "travel": [
-        "melbourne", "澳洲旅行", "墨尔本攻略", "悉尼",
-        "旅行vlog", "海外生活", "留学生活",
-    ],
-    "food": [
-        "美食探店", "咖啡店", "网红餐厅", "烘焙",
-        "下午茶", "brunch",
-    ],
-    "lifestyle": [
-        "生活分享", "日常vlog", "开箱", "好物分享",
-    ],
-    "cosplay": [
-        "女cosplay", "cosplay女", "coser小姐姐", "动漫cosplay",
-        "游戏cosplay", "二次元coser", "cosplay写真",
-    ],
-}
+# Keywords are now provided as command-line arguments
+# No more hardcoded keyword pools
 
 
 @dataclass
@@ -103,34 +93,39 @@ class SimulationConfig:
     duration_minutes: int = 20
 
     # Keywords
-    keyword_categories: List[str] = field(default_factory=lambda: ["travel", "lifestyle"])
+    keywords: List[str] = field(default_factory=list)  # Empty = browse homepage
 
     # Behavior probabilities
-    prob_view_content: float = 0.8  # 80% chance to view a content from search
     prob_view_comments: float = 1.0  # Always view comments to get stats
     prob_view_author: float = 1.0  # Always view author profile
     prob_expand_sub_comments: float = 0.3  # 30% chance to expand sub-comments
 
-    # Delays (seconds) - target: 2-3 contents per minute
-    delay_between_searches: tuple = (10, 20)  # 10-20 seconds between searches
-    delay_reading_content: tuple = (3, 8)  # 3-8 seconds reading content
-    delay_reading_comments: tuple = (2, 5)  # 2-5 seconds reading comments
-    delay_before_action: tuple = (1, 2)  # 1-2 seconds before any action
-    delay_scroll: tuple = (0.5, 1)  # 0.5-1 seconds between scrolls
+    # Delays (seconds) - INCREASED for more natural behavior
+    delay_between_searches: tuple = (30, 60)  # 30-60s (increased from 22-45)
+    delay_reading_content: tuple = (10, 20)  # 10-20 seconds reading content (increased from 7-13)
+    delay_reading_comments: tuple = (8, 15)  # 8-15 seconds reading comments (increased from 5-9)
+    delay_before_action: tuple = (3, 6)  # 3-6 seconds before action (increased from 2-4)
+    delay_scroll: tuple = (7, 18)  # 7-18s (increased from 5-14)
+    delay_scroll_extra: tuple = (3, 8)  # Extra pause for natural browsing (increased from 2-5)
 
-    # Long break settings (for extended runs)
-    enable_hourly_breaks: bool = True  # Enable breaks for runs > 30 min
-    break_interval_minutes: int = 60  # Take a break every hour
-    break_duration: tuple = (300, 600)  # 5-10 minutes break
+    # Long break settings - HOURLY WORK/REST CYCLE
+    enable_hourly_breaks: bool = True  # Enable hourly work/rest cycle
+    break_interval_minutes: int = 60  # Work duration per cycle (will be randomized 30-40)
+    break_duration: tuple = (1200, 1800)  # 20-30 minutes rest (1200s=20min, 1800s=30min)
 
-    # Limits per search session
-    max_contents_per_search: int = 30  # At least 30 per keyword
-    max_contents_to_view: int = 20  # View more contents
-    max_scroll_count: int = 15  # More scrolls to get 30+ contents
+    # Limits per search session - CONSERVATIVE for long-term safety
+    # Target: 500+ contents/day with SAFE parameters
+    max_contents_per_search_min: int = 25  # Minimum contents per search
+    max_contents_per_search_max: int = 60  # Maximum contents per search
+    max_scroll_count: int = 30  # Maximum scroll attempts
+    min_new_contents_per_scroll: int = 3  # Dynamic stop: consecutive 3 scrolls add <3 → stop
 
-    # Comment loading settings
+    # Comment loading settings - CAPPED at 15 per content (403 risk mitigation)
+    # XHS comment section is highly sensitive - >15 clicks triggers 403
     load_all_comments: bool = True  # Load all comments (not just first page)
-    max_comment_load_more: int = 50  # Maximum "load more" clicks for comments
+    max_comment_load_more_min: int = 8  # Minimum comment load clicks (conservative)
+    max_comment_load_more_max: int = 15  # Maximum 15 clicks (hard cap for safety)
+    comment_load_interval: tuple = (8, 15)  # Delay between comment loads
 
     # Download settings
     download_images: bool = True
@@ -202,12 +197,19 @@ async def simulate_view_content(
             await human_delay(config.delay_before_action, "Loading comments...", config.verbose)
             try:
                 expand_sub = random.random() < config.prob_expand_sub_comments
+
+                # Randomize comment load attempts (25-50) - simulates normal user behavior
+                max_comment_loads = random.randint(
+                    config.max_comment_load_more_min,
+                    config.max_comment_load_more_max
+                )
+
                 # Use return_stats=True to get content stats from detail page
                 comments, content_stats = await crawler.scrape_comments(
                     content.content_url,
                     load_all=config.load_all_comments,  # Load all comments
                     expand_sub_comments=expand_sub,
-                    max_scroll=config.max_comment_load_more,  # Max 50 load more clicks
+                    max_scroll=max_comment_loads,  # Random 25-50 clicks
                     return_stats=True,  # Get likes, collects, comments count from detail page
                 )
 
@@ -237,6 +239,8 @@ async def simulate_view_content(
                     if content_stats:
                         stats_info = f" | stats: likes={content_stats.likes}, collects={content_stats.collects}"
                     log(f"    ✓ Saved {len(comments)} comments + {sub_count} sub-comments{stats_info}")
+                else:
+                    log(f"    ⚠ No comments found for this content", "warning")
 
                 # Simulate reading comments
                 await human_delay(config.delay_reading_comments, "Reading comments...", config.verbose)
@@ -249,18 +253,98 @@ async def simulate_view_content(
         stats.errors.append(f"View content: {e}")
 
 
+async def simulate_browse_homepage_session(
+    crawler: XhsCrawler,
+    service: DataService,
+    config: SimulationConfig,
+    stats: SimulationStats,
+    end_time: datetime,
+):
+    """Simulate browsing homepage/explore feed (no search) with time limit.
+
+    Args:
+        crawler: XHS crawler instance
+        service: Data service instance
+        config: Simulation configuration
+        stats: Statistics tracker
+        end_time: When to stop the simulation
+    """
+    log(f"\n{'='*60}")
+    log(f"📱 Browsing homepage feed (no search)")
+    log(f"{'='*60}")
+
+    try:
+        # Get recent content URLs for deduplication (24 hour window)
+        recent_urls = service.get_content_urls_with_timestamps("xhs", hours=24)
+
+        # Randomize target content count for this browsing session (anti-detection)
+        target_contents = random.randint(
+            config.max_contents_per_search_min,
+            config.max_contents_per_search_max
+        )
+        log(f"Target: {target_contents} contents (randomized)")
+
+        # Browse homepage/explore with dynamic stopping
+        contents = await crawler.scrape_homepage(
+            max_notes=target_contents,
+            max_scroll=config.max_scroll_count,
+            recent_content_urls=recent_urls,
+            min_new_per_scroll=config.min_new_contents_per_scroll,
+        )
+
+        log(f"Found {len(contents)} contents from feed")
+
+        if not contents:
+            log("No contents found in feed, skipping")
+            return
+
+        # View contents sequentially with time checking
+        log(f"Will view contents (time permitting)")
+
+        for i, content in enumerate(contents, 1):
+            # Check time before processing each content
+            if datetime.now() >= end_time:
+                log(f"⏰ Time limit reached, stopping homepage browsing (processed {i-1}/{len(contents)} contents)")
+                break
+
+            await human_delay(config.delay_before_action, f"Selecting content {i}/{len(contents)}...", config.verbose)
+            await simulate_view_content(crawler, service, content, config, stats)
+
+            # Check time again after processing
+            if datetime.now() >= end_time:
+                log(f"⏰ Time limit reached after processing content {i}")
+                break
+
+    except Exception as e:
+        log(f"✗ Homepage browsing error: {e}", "error")
+        stats.errors.append(f"Homepage browsing: {e}")
+
+
 async def simulate_search_session(
     crawler: XhsCrawler,
     service: DataService,
     config: SimulationConfig,
     stats: SimulationStats,
-):
-    """Simulate a single search session."""
-    # Pick random keyword from configured categories
-    category = random.choice(config.keyword_categories)
-    keyword = random.choice(KEYWORD_POOLS.get(category, ["melbourne"]))
+    keyword: str,
+    end_time: datetime,
+) -> int:
+    """Simulate a single search session with a specific keyword using continuous processing.
 
-    # Always use GENERAL sort (XHS default algorithm) - no filter panel needed
+    This version processes contents as they are discovered during scrolling, rather than
+    collecting all contents first. This provides better time control and more natural behavior.
+
+    Args:
+        crawler: XHS crawler instance
+        service: Data service instance
+        config: Simulation configuration
+        stats: Statistics tracker
+        keyword: Search keyword
+        end_time: When to stop the simulation
+
+    Returns:
+        Number of contents found (0 if none, for cookie expiry detection)
+    """
+    # Always use GENERAL sort (XHS default algorithm)
     sort_by = SortBy.GENERAL
 
     log(f"\n{'='*60}")
@@ -268,42 +352,55 @@ async def simulate_search_session(
     log(f"{'='*60}")
 
     try:
-        # Search for contents - use more scrolls to get 30+ contents
-        contents = await crawler.scrape(
-            keyword,
-            sort_by=sort_by,
-            max_notes=config.max_contents_per_search,
-            max_scroll=config.max_scroll_count,
-        )
+        # Get recent content URLs for deduplication (24 hour window)
+        recent_urls = service.get_content_urls_with_timestamps("xhs", hours=24)
 
         stats.searches_completed += 1
-        log(f"Found {len(contents)} contents")
+        contents_found = 0
 
-        if not contents:
-            log("No contents found, skipping this search")
-            return
+        # Use continuous scraping - process each content as it's found
+        async for content in crawler.scrape_continuous(
+            keyword,
+            sort_by=sort_by,
+            max_scroll=config.max_scroll_count,
+            recent_content_urls=recent_urls,
+            min_new_per_scroll=config.min_new_contents_per_scroll,
+        ):
+            contents_found += 1
 
-        # Randomly select some contents to view (simulates human selection)
-        num_to_view = min(
-            random.randint(1, config.max_contents_to_view),
-            len(contents)
-        )
-        contents_to_view = random.sample(contents, num_to_view)
+            # Check if we have time to process this content
+            if datetime.now() >= end_time:
+                log(f"⏰ Time limit reached, stopping search (found {contents_found} contents)")
+                break
 
-        log(f"Will view {num_to_view}/{len(contents)} contents")
-
-        for i, content in enumerate(contents_to_view, 1):
-            # Random chance to skip (simulates user losing interest)
-            if random.random() > config.prob_view_content:
-                log(f"\n  ⏭️ Skipping content {i}/{num_to_view}")
+            # Real-time 24h dedup check - query DB for this specific content
+            existing_content = service.get_content_by_url(content.content_url, hours=24)
+            if existing_content:
+                last_scraped = existing_content.scraped_at
+                hours_ago = (datetime.utcnow() - last_scraped).total_seconds() / 3600
+                log(f"  ⏭️  Skipping (scraped {hours_ago:.1f}h ago): {content.title[:40]}")
                 continue
 
-            await human_delay(config.delay_before_action, f"Selecting content {i}/{num_to_view}...", config.verbose)
+            # Process content immediately
+            await human_delay(config.delay_before_action, f"Selecting content {contents_found}...", config.verbose)
             await simulate_view_content(crawler, service, content, config, stats)
+
+            # Check time again after processing
+            if datetime.now() >= end_time:
+                log(f"⏰ Time limit reached after processing content {contents_found}")
+                break
+
+        log(f"Found {contents_found} contents total")
+
+        if contents_found == 0:
+            log("No contents found, skipping this search")
+
+        return contents_found  # Return number found for cookie expiry detection
 
     except Exception as e:
         log(f"✗ Search session error: {e}", "error")
         stats.errors.append(f"Search session: {e}")
+        return 0  # Return 0 on error
 
 
 async def run_human_simulation(config: Optional[SimulationConfig] = None) -> SimulationStats:
@@ -327,8 +424,10 @@ async def run_human_simulation(config: Optional[SimulationConfig] = None) -> Sim
     log("=" * 70)
     log(f"Duration: {config.duration_minutes} minutes")
     log(f"End time: {end_time.strftime('%H:%M:%S')}")
-    log(f"Categories: {config.keyword_categories}")
-    log(f"View content prob: {config.prob_view_content*100:.0f}%")
+    if config.keywords:
+        log(f"Keywords: {config.keywords}")
+    else:
+        log("Mode: Browse homepage feed (no search)")
     log(f"View comments prob: {config.prob_view_comments*100:.0f}%")
     log(f"View author prob: {config.prob_view_author*100:.0f}%")
     if config.enable_hourly_breaks and config.duration_minutes > 30:
@@ -355,6 +454,15 @@ async def run_human_simulation(config: Optional[SimulationConfig] = None) -> Sim
             session_count = 0
             last_break_time = datetime.now()  # Track when we last took a break
 
+            # Randomize work period: 30-40 minutes per cycle
+            current_work_duration_minutes = random.randint(30, 40)
+            log(f"Work cycle: {current_work_duration_minutes} minutes, then rest {config.break_duration[0]//60}-{config.break_duration[1]//60} minutes")
+
+            # Keyword rotation to avoid searching same keyword repeatedly
+            keywords_cycle = itertools.cycle(config.keywords) if config.keywords else None
+            last_searched: Dict[str, datetime] = {}  # Track when each keyword was last searched
+            consecutive_empty_searches = 0  # Track consecutive empty results (cookie expiry detection)
+
             while datetime.now() < end_time:
                 session_count += 1
                 remaining = (end_time - datetime.now()).total_seconds() / 60
@@ -365,39 +473,70 @@ async def run_human_simulation(config: Optional[SimulationConfig] = None) -> Sim
                     f"users={stats.users_saved}, comments={stats.comments_saved}")
                 log(f"{'#'*70}")
 
-                # Run a search session
-                await simulate_search_session(crawler, service, config, stats)
+                # Run either search or homepage browsing session
+                if config.keywords:
+                    # Rotate keywords to avoid short-term repetition
+                    keyword = next(keywords_cycle)
+
+                    # Check if this keyword was searched recently (within 15 min)
+                    min_interval_minutes = 15
+                    if keyword in last_searched:
+                        time_since_last = (datetime.now() - last_searched[keyword]).total_seconds() / 60
+                        if time_since_last < min_interval_minutes:
+                            log(f"⏭️  Skipping '{keyword}' (searched {time_since_last:.1f}min ago, min interval: {min_interval_minutes}min)")
+                            # Try next keyword
+                            keyword = next(keywords_cycle)
+
+                    last_searched[keyword] = datetime.now()
+                    num_contents = await simulate_search_session(crawler, service, config, stats, keyword, end_time)
+
+                    # Cookie expiry detection: track consecutive empty searches
+                    if num_contents == 0:
+                        consecutive_empty_searches += 1
+                        if consecutive_empty_searches >= 3:
+                            log(f"⚠️  WARNING: {consecutive_empty_searches} consecutive empty searches - cookies may be expired!", "warning")
+                    else:
+                        consecutive_empty_searches = 0  # Reset on success
+
+                else:
+                    # Browse homepage feed (no search)
+                    await simulate_browse_homepage_session(crawler, service, config, stats, end_time)
 
                 # Check if we should continue
                 if datetime.now() >= end_time:
                     break
 
-                # Check if it's time for an hourly break
-                if (config.enable_hourly_breaks and
-                    config.duration_minutes > 30 and
-                    (datetime.now() - last_break_time).total_seconds() >= config.break_interval_minutes * 60):
+                # Check if it's time for hourly work/rest cycle
+                if config.enable_hourly_breaks:
+                    time_since_last_break = (datetime.now() - last_break_time).total_seconds() / 60
 
-                    break_duration = random.uniform(config.break_duration[0], config.break_duration[1])
-                    break_minutes = break_duration / 60
+                    if time_since_last_break >= current_work_duration_minutes:
+                        break_duration = random.uniform(config.break_duration[0], config.break_duration[1])
+                        break_minutes = break_duration / 60
 
-                    log(f"\n{'🛏️'*20}")
-                    log(f"☕ Taking a {break_minutes:.1f} minute break (simulating user away)...")
-                    log(f"  Break started at: {datetime.now().strftime('%H:%M:%S')}")
-                    log(f"  Will resume at: {(datetime.now() + timedelta(seconds=break_duration)).strftime('%H:%M:%S')}")
-                    log(f"{'🛏️'*20}\n")
+                        log(f"\n{'🛏️'*20}")
+                        log(f"☕ Work cycle complete! Worked for {current_work_duration_minutes} minutes")
+                        log(f"   Taking a {break_minutes:.1f} minute break (simulating user away)...")
+                        log(f"   Break started at: {datetime.now().strftime('%H:%M:%S')}")
+                        log(f"   Will resume at: {(datetime.now() + timedelta(seconds=break_duration)).strftime('%H:%M:%S')}")
+                        log(f"{'🛏️'*20}\n")
 
-                    await asyncio.sleep(break_duration)
-                    last_break_time = datetime.now()
-                    stats.breaks_taken += 1
-                    stats.total_break_minutes += break_minutes
+                        await asyncio.sleep(break_duration)
+                        last_break_time = datetime.now()
+                        stats.breaks_taken += 1
+                        stats.total_break_minutes += break_minutes
 
-                    log(f"\n{'🚀'*20}")
-                    log(f"✨ Break finished! Resuming simulation...")
-                    log(f"{'🚀'*20}\n")
+                        # Randomize next work period: 30-40 minutes
+                        current_work_duration_minutes = random.randint(30, 40)
 
-                    # Check again if we should continue after break
-                    if datetime.now() >= end_time:
-                        break
+                        log(f"\n{'🚀'*20}")
+                        log(f"✨ Break finished! Resuming simulation...")
+                        log(f"   Next work cycle: {current_work_duration_minutes} minutes")
+                        log(f"{'🚀'*20}\n")
+
+                        # Check again if we should continue after break
+                        if datetime.now() >= end_time:
+                            break
 
                 # Rest between sessions (simulates user taking a break)
                 await human_delay(
@@ -453,8 +592,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run human simulation job")
     parser.add_argument("--duration", type=int, default=20, help="Duration in minutes")
-    parser.add_argument("--categories", nargs="+", default=["travel", "lifestyle"],
-                        help="Keyword categories to use")
+    parser.add_argument("--keywords", type=str, default="",
+                        help="Comma-separated keywords to search (empty = browse homepage)")
     parser.add_argument("--no-images", action="store_true", help="Skip image downloads")
     parser.add_argument("--no-videos", action="store_true", help="Skip video downloads")
     parser.add_argument("--no-avatars", action="store_true", help="Skip avatar downloads")
@@ -462,9 +601,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Parse keywords from comma-separated string
+    keywords = [k.strip() for k in args.keywords.split(",") if k.strip()] if args.keywords else []
+
     config = SimulationConfig(
         duration_minutes=args.duration,
-        keyword_categories=args.categories,
+        keywords=keywords,
         download_images=not args.no_images,
         download_videos=not args.no_videos,
         download_avatars=not args.no_avatars,

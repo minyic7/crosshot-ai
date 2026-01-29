@@ -12,7 +12,7 @@ services:
       - PYTHONUNBUFFERED=1
     command: uv run uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # Human simulation job - runs for specified duration
+  # Human simulation job - runs for specified duration (24/7 continuous operation)
   human-simulation:
     build: .
     volumes:
@@ -22,11 +22,12 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-      - SIMULATION_DURATION=${SIMULATION_DURATION:-20}
+      - SIMULATION_DURATION=${SIMULATION_DURATION:-10080}  # Default 7 days (10080 minutes)
+      - SIMULATION_KEYWORDS=${SIMULATION_KEYWORDS:-正常穿搭海边}
     command: >
       uv run python -m apps.jobs.human_simulation_job
-      --duration ${SIMULATION_DURATION:-300}
-      --categories fashion sexy beauty body style
+      --duration ${SIMULATION_DURATION:-10080}
+      --keywords "${SIMULATION_KEYWORDS:-正常穿搭海边}"
     # Auto-restart on failure (but not on manual stop)
     restart: on-failure
     # Resource limits

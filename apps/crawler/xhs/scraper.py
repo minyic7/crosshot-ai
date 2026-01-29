@@ -211,10 +211,65 @@ class XhsCrawler(BaseCrawler):
     async def __aenter__(self) -> Self:
         """Initialize browser on context enter."""
         self._playwright = await async_playwright().start()
+
+        # Enhanced anti-detection launch args
         self._browser = await self._playwright.chromium.launch(
-            headless=self._headless
+            headless=self._headless,
+            args=[
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+            ]
         )
-        self._context = await self._browser.new_context()
+
+        # Enhanced anti-detection context settings
+        self._context = await self._browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            locale='zh-CN',
+            timezone_id='Asia/Shanghai',
+            extra_http_headers={
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"macOS"',
+            }
+        )
+
+        # Hide webdriver property
+        await self._context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+
+            // Override permissions API
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+
+            // Add chrome object
+            window.chrome = {
+                runtime: {}
+            };
+
+            // Mock plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+
+            // Mock languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['zh-CN', 'zh', 'en']
+            });
+        """)
 
         # Add cookies from config
         cookies = self.settings.xhs.get_cookies()
@@ -309,9 +364,34 @@ class XhsCrawler(BaseCrawler):
                     raise
         return None
 
-    async def _scroll_page(self, page: Page) -> None:
-        """Scroll page to load more content."""
+    async def _scroll_page(self, page: Page) -> bool:
+        """Scroll page to load more content.
+
+        Returns True if scroll was successful (page actually scrolled).
+        Uses multiple smaller scrolls to better trigger lazy loading.
+        """
+        # Get current scroll position
+        before_scroll = await self._safe_evaluate(page, "window.scrollY") or 0
+
+        # Scroll in chunks to better trigger lazy loading
+        # Some sites need gradual scrolling to trigger content loading
+        await self._safe_evaluate(page, """() => {
+            const viewportHeight = window.innerHeight;
+            const currentScroll = window.scrollY;
+            const targetScroll = currentScroll + viewportHeight * 2;  // Scroll 2 viewport heights
+            window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+        }""")
+
+        # Wait for smooth scroll to complete
+        await asyncio.sleep(0.5)
+
+        # Then scroll to absolute bottom to ensure we're at the end
         await self._safe_evaluate(page, "window.scrollTo(0, document.body.scrollHeight)")
+
+        # Get new scroll position to verify scroll happened
+        after_scroll = await self._safe_evaluate(page, "window.scrollY") or 0
+
+        return after_scroll > before_scroll
 
     async def _open_filter_panel(self, page: Page) -> bool:
         """Open the filter panel by clicking the '筛选' button.
@@ -503,6 +583,208 @@ class XhsCrawler(BaseCrawler):
         )
         return result if result else []
 
+    async def scrape_continuous(
+        self,
+        keyword: str,
+        *,
+        sort_by: SortBy = SortBy.GENERAL,
+        note_type: NoteType = NoteType.ALL,
+        max_scroll: int = 100,
+        recent_content_urls: Optional[Dict[str, datetime]] = None,
+        dedup_window_hours: int = 24,
+        min_new_per_scroll: int = 3,
+    ):
+        """Scrape contents continuously, yielding items one-by-one as found.
+
+        This generator yields ContentItem objects incrementally during scrolling,
+        allowing the caller to process each item immediately rather than waiting
+        for all items to be collected.
+
+        Args:
+            keyword: Search keyword
+            sort_by: Sort order (GENERAL/NEWEST/MOST_LIKED/MOST_COMMENTS/MOST_COLLECTED)
+            note_type: Note type filter (ALL/IMAGE/VIDEO)
+            max_scroll: Maximum scroll attempts before giving up (default 100)
+            recent_content_urls: Dict of {content_url: last_scraped_time} for smart dedup
+            dedup_window_hours: Hours within which to skip already-scraped contents (default 24)
+            min_new_per_scroll: Dynamic stop threshold - if consecutive 3 scrolls add < this, stop (default 3)
+
+        Yields:
+            ContentItem objects as they are discovered during scrolling
+        """
+        # Calculate dedup cutoff time
+        dedup_cutoff = datetime.utcnow() - timedelta(hours=dedup_window_hours)
+
+        # Build set of URLs to skip (only those scraped within the dedup window)
+        skip_urls: Set[str] = set()
+        if recent_content_urls:
+            for url, scraped_time in recent_content_urls.items():
+                if scraped_time > dedup_cutoff:
+                    skip_urls.add(url)
+
+        # Use context manager pattern for standalone usage
+        should_close = False
+        if not self._context:
+            await self.__aenter__()
+            should_close = True
+
+        try:
+            page = await self._get_page()
+
+            # Build search URL
+            search_url = f"https://www.xiaohongshu.com/search_result?keyword={keyword}"
+
+            await self._navigate_with_retry(page, search_url)
+            await asyncio.sleep(5)
+
+            # Debug: take screenshot
+            import os
+            screenshot_dir = "/app/data/debug_screenshots"
+            os.makedirs(screenshot_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshot_dir, f"search_{keyword[:20]}.png")
+            await page.screenshot(path=screenshot_path, full_page=False)
+            logger.info(f"Debug screenshot saved: {screenshot_path}")
+
+            # Check for redirect to error/login
+            current_url = page.url
+            logger.info(f"Current URL after navigation: {current_url}")
+
+            if "error" in current_url or "login" in current_url:
+                error_msg = f"Redirected to error/login page: {current_url}"
+                logger.error(error_msg)
+                raise Exception(f"XHS anti-scraping detected: {error_msg}")
+
+            # Apply sort filter if not default
+            if sort_by != SortBy.GENERAL:
+                await self._apply_sort_filter(page, sort_by)
+                await asyncio.sleep(2)
+
+            # Apply note type filter if not ALL
+            if note_type != NoteType.ALL:
+                await self._apply_note_type_filter(page, note_type)
+                await asyncio.sleep(2)
+
+            items_yielded = 0
+            no_new_content_count = 0
+            max_no_new_content = 3
+
+            for scroll_idx in range(max_scroll):
+                # Extract current visible contents
+                raw_items = await self._extract_contents_from_page(page)
+
+                if not raw_items:
+                    raw_items = []
+
+                new_items_this_scroll = 0
+
+                for item in raw_items:
+                    content_url = item.get("contentUrl", "")
+
+                    # Skip if no content URL
+                    if not content_url:
+                        logger.debug("Skip reason: no content URL")
+                        continue
+
+                    # Skip if already seen in LRU cache
+                    if content_url in self._url_cache:
+                        logger.debug(f"Skip reason: already in cache - {content_url[:60]}")
+                        continue
+
+                    # Skip if scraped within dedup window (from database)
+                    if content_url in skip_urls:
+                        self._url_cache.add(content_url)
+                        logger.debug(f"Skip reason: scraped within 24h - {content_url[:60]}")
+                        continue
+
+                    self._url_cache.add(content_url)
+
+                    # Extract content_id from URL
+                    content_id = self._extract_content_id(content_url)
+
+                    # Skip if no content_id extracted
+                    if not content_id:
+                        logger.debug(f"Skip reason: no content_id extracted from {content_url[:60]}")
+                        continue
+
+                    # Enhanced validation
+                    title = item.get("title", "").strip()
+                    media_urls = item.get("mediaUrls", [])
+
+                    # Only skip if BOTH no title AND no media
+                    if (not title or title == "N/A") and not media_urls:
+                        logger.debug(f"Skip reason: empty content (no title + no media) - {content_url[:60]}")
+                        continue
+
+                    # Build platform_data with author info
+                    platform_data = {}
+                    if item.get("userId"):
+                        platform_data["user_id"] = item.get("userId")
+                    if item.get("nickname"):
+                        platform_data["nickname"] = item.get("nickname")
+                    if item.get("avatar"):
+                        platform_data["avatar"] = item.get("avatar")
+
+                    # Flag suspicious content
+                    if not title or title == "N/A":
+                        platform_data["flag"] = "no_title"
+                    if not media_urls:
+                        platform_data["flag"] = platform_data.get("flag", "") + ",no_media"
+
+                    # Determine content type
+                    content_type = "video" if item.get("isVideo") else "normal"
+
+                    content_item = ContentItem(
+                        platform=self.platform,
+                        platform_content_id=content_id or "",
+                        title=item.get("title", "N/A"),
+                        likes=item.get("likes", "0"),
+                        collects="0",
+                        comments="0",
+                        publish_time="",
+                        content_url=content_url,
+                        media_urls=item.get("mediaUrls", []),
+                        content_type=content_type,
+                        platform_data=platform_data,
+                    )
+
+                    # Yield item immediately
+                    yield content_item
+                    items_yielded += 1
+                    new_items_this_scroll += 1
+
+                # Check dynamic stopping condition
+                if new_items_this_scroll < min_new_per_scroll:
+                    no_new_content_count += 1
+                    logger.debug(f"Low yield: only {new_items_this_scroll} new items after scroll {scroll_idx + 1} (threshold={min_new_per_scroll}), count={no_new_content_count}")
+                    if no_new_content_count >= max_no_new_content:
+                        logger.info(f"Dynamic stop: {max_no_new_content} consecutive scrolls with <{min_new_per_scroll} new items")
+                        break
+                else:
+                    no_new_content_count = 0
+                    logger.debug(f"Good yield: {new_items_this_scroll} new items (>={min_new_per_scroll})")
+
+                # Scroll to load more
+                scrolled = await self._scroll_page(page)
+
+                # SAFE: Avoid <5s extremes - raised from 3-9 to 5-14
+                import random
+                scroll_wait = random.uniform(5, 14)
+                await asyncio.sleep(scroll_wait)
+
+                # Extra pause for "browsing feel"
+                extra_pause = random.uniform(2, 5)
+                await asyncio.sleep(extra_pause)
+
+                logger.debug(f"Scroll wait: {scroll_wait:.1f}s + extra {extra_pause:.1f}s")
+
+            await page.close()
+
+            logger.info(f"Scraped {items_yielded} unique contents for keyword: {keyword} (scrolled {scroll_idx + 1} times)")
+
+        finally:
+            if should_close:
+                await self.__aexit__(None, None, None)
+
     async def scrape(
         self,
         keyword: str,
@@ -513,6 +795,7 @@ class XhsCrawler(BaseCrawler):
         max_scroll: int = 100,
         recent_content_urls: Optional[Dict[str, datetime]] = None,
         dedup_window_hours: int = 24,
+        min_new_per_scroll: int = 3,
     ) -> list[ContentItem]:
         """Scrape contents for a keyword.
 
@@ -526,6 +809,7 @@ class XhsCrawler(BaseCrawler):
                 - URLs scraped within dedup_window_hours will be SKIPPED (same-day dedup)
                 - URLs scraped before dedup_window_hours will be INCLUDED (for update)
             dedup_window_hours: Hours within which to skip already-scraped contents (default 24)
+            min_new_per_scroll: Dynamic stop threshold - if consecutive 3 scrolls add < this, stop (default 3)
 
         Returns:
             List of unique ContentItem objects
@@ -560,6 +844,24 @@ class XhsCrawler(BaseCrawler):
             await self._navigate_with_retry(page, search_url)
             await asyncio.sleep(5)
 
+            # Debug: take screenshot to verify search results
+            import os
+            screenshot_dir = "/app/data/debug_screenshots"
+            os.makedirs(screenshot_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshot_dir, f"search_{keyword[:20]}.png")
+            await page.screenshot(path=screenshot_path, full_page=False)
+            logger.info(f"Debug screenshot saved: {screenshot_path}")
+
+            # Also log the current URL to verify we're on search page
+            current_url = page.url
+            logger.info(f"Current URL after navigation: {current_url}")
+
+            # Check if we got redirected to error or login page
+            if "error" in current_url or "login" in current_url:
+                error_msg = f"Redirected to error/login page: {current_url}"
+                logger.error(error_msg)
+                raise Exception(f"XHS anti-scraping detected: {error_msg}")
+
             # Apply sort filter if not default
             if sort_by != SortBy.GENERAL:
                 await self._apply_sort_filter(page, sort_by)
@@ -586,19 +888,42 @@ class XhsCrawler(BaseCrawler):
                 for item in raw_items:
                     content_url = item.get("contentUrl", "")
 
+                    # Skip if no content URL (invalid item)
+                    if not content_url:
+                        logger.debug("Skip reason: no content URL")
+                        continue
+
                     # Skip if already seen in LRU cache (bounded memory dedup)
                     if content_url in self._url_cache:
+                        logger.debug(f"Skip reason: already in cache - {content_url[:60]}")
                         continue
 
                     # Skip if scraped within dedup window (from database)
                     if content_url in skip_urls:
                         self._url_cache.add(content_url)  # Mark as seen
+                        logger.debug(f"Skip reason: scraped within 24h - {content_url[:60]}")
                         continue
 
                     self._url_cache.add(content_url)
 
                     # Extract content_id from URL
                     content_id = self._extract_content_id(content_url)
+
+                    # Skip if no content_id extracted (invalid item)
+                    if not content_id:
+                        logger.debug(f"Skip reason: no content_id extracted from {content_url[:60]}")
+                        continue
+
+                    # Enhanced validation: skip truly empty content (minimal intervention)
+                    title = item.get("title", "").strip()
+                    media_urls = item.get("mediaUrls", [])
+
+                    # Only skip if BOTH conditions met (likely ad/placeholder):
+                    # 1. No meaningful title (empty or "N/A")
+                    # 2. No media content
+                    if (not title or title == "N/A") and not media_urls:
+                        logger.debug(f"Skip reason: empty content (no title + no media) - {content_url[:60]}")
+                        continue
 
                     # Build platform_data with author info
                     platform_data = {}
@@ -608,6 +933,12 @@ class XhsCrawler(BaseCrawler):
                         platform_data["nickname"] = item.get("nickname")
                     if item.get("avatar"):
                         platform_data["avatar"] = item.get("avatar")
+
+                    # Flag suspicious content for later filtering/analysis
+                    if not title or title == "N/A":
+                        platform_data["flag"] = "no_title"
+                    if not media_urls:
+                        platform_data["flag"] = platform_data.get("flag", "") + ",no_media"
 
                     # Determine content type
                     content_type = "video" if item.get("isVideo") else "normal"
@@ -636,24 +967,167 @@ class XhsCrawler(BaseCrawler):
                     logger.info(f"Reached target of {max_notes} contents")
                     break
 
-                # Check if we got new items this scroll
+                # Check if we got new items this scroll - DYNAMIC STOPPING
                 items_added = len(items) - items_before
-                if items_added == 0:
+                if items_added < min_new_per_scroll:
+                    # Less than threshold → count as "low yield"
                     no_new_content_count += 1
-                    logger.debug(f"No new items after scroll {scroll_idx + 1}, count={no_new_content_count}")
+                    logger.debug(f"Low yield: only {items_added} new items after scroll {scroll_idx + 1} (threshold={min_new_per_scroll}), count={no_new_content_count}")
                     if no_new_content_count >= max_no_new_content:
-                        logger.info(f"No new content after {max_no_new_content} scrolls, stopping")
+                        logger.info(f"Dynamic stop: {max_no_new_content} consecutive scrolls with <{min_new_per_scroll} new items")
                         break
                 else:
-                    no_new_content_count = 0  # Reset counter
+                    # Good yield → reset counter
+                    no_new_content_count = 0
+                    logger.debug(f"Good yield: {items_added} new items (>={min_new_per_scroll})")
 
                 # Scroll to load more
-                await self._scroll_page(page)
-                await asyncio.sleep(1.5)
+                scrolled = await self._scroll_page(page)
+
+                # SAFE: Avoid <5s extremes - raised from 3-9 to 5-14
+                import random
+                scroll_wait = random.uniform(5, 14)
+                await asyncio.sleep(scroll_wait)
+
+                # Extra pause for "browsing feel" (2-5 seconds)
+                extra_pause = random.uniform(2, 5)
+                await asyncio.sleep(extra_pause)
+
+                logger.debug(f"Scroll wait: {scroll_wait:.1f}s + extra {extra_pause:.1f}s")
 
             await page.close()
 
             logger.info(f"Scraped {len(items)} unique contents for keyword: {keyword} (scrolled {scroll_idx + 1} times)")
+            return items
+
+        finally:
+            if should_close:
+                await self.__aexit__(None, None, None)
+
+    async def scrape_homepage(
+        self,
+        *,
+        max_notes: Optional[int] = None,
+        max_scroll: int = 100,
+        recent_content_urls: Optional[Dict[str, datetime]] = None,
+        dedup_window_hours: int = 24,
+        min_new_per_scroll: int = 3,
+    ) -> list[ContentItem]:
+        """Scrape contents from homepage/explore feed (no search).
+
+        Args:
+            max_notes: Maximum contents to return (default from config)
+            max_scroll: Maximum scroll attempts before giving up (default 100)
+            recent_content_urls: Dict of {content_url: last_scraped_time} for smart dedup
+            dedup_window_hours: Hours within which to skip already-scraped contents (default 24)
+            min_new_per_scroll: Dynamic stop threshold - if consecutive 3 scrolls add < this, stop (default 3)
+
+        Returns:
+            List of unique ContentItem objects
+        """
+        if max_notes is None:
+            max_notes = self.settings.crawler.default_max_notes
+
+        # Calculate dedup cutoff time
+        dedup_cutoff = datetime.utcnow() - timedelta(hours=dedup_window_hours)
+
+        # Build set of URLs to skip
+        skip_urls: Set[str] = set()
+        if recent_content_urls:
+            for url, scraped_time in recent_content_urls.items():
+                if scraped_time > dedup_cutoff:
+                    skip_urls.add(url)
+
+        # Use context manager pattern
+        should_close = False
+        if not self._context:
+            await self.__aenter__()
+            should_close = True
+
+        try:
+            page = await self._get_page()
+
+            # Navigate to homepage/explore
+            homepage_url = "https://www.xiaohongshu.com/explore"
+            await self._navigate_with_retry(page, homepage_url)
+            await asyncio.sleep(5)
+
+            items: list[ContentItem] = []
+            no_new_content_count = 0
+            max_no_new_content = 3
+
+            for scroll_idx in range(max_scroll):
+                # Extract current visible contents
+                raw_items = await self._extract_contents_from_page(page)
+
+                if not raw_items:
+                    raw_items = []
+
+                items_before = len(items)
+
+                for item in raw_items:
+                    content_url = item.get("contentUrl", "")
+
+                    # Skip if already seen
+                    if content_url in self._url_cache:
+                        continue
+
+                    # Skip if scraped within dedup window
+                    if content_url in skip_urls:
+                        self._url_cache.add(content_url)
+                        continue
+
+                    self._url_cache.add(content_url)
+
+                    # Extract content_id from URL
+                    content_id = self._extract_content_id(content_url)
+
+                    # Build platform_data with author info
+                    platform_data = {}
+                    if item.get("userId"):
+                        platform_data["author"] = {
+                            "user_id": item.get("userId"),
+                            "nickname": item.get("nickname", ""),
+                            "avatar": item.get("avatar", "")
+                        }
+
+                    items.append(ContentItem(
+                        platform="xhs",
+                        platform_content_id=content_id,
+                        content_url=content_url,
+                        title=item.get("title", ""),
+                        content_type=item.get("type", "normal"),
+                        cover_url=item.get("imageUrl", ""),
+                        likes_count=item.get("likes", 0),
+                        platform_data=platform_data,
+                    ))
+
+                    if len(items) >= max_notes:
+                        break
+
+                # Check if we reached target
+                if len(items) >= max_notes:
+                    logger.info(f"Reached target of {max_notes} contents")
+                    break
+
+                # Check if we got new items
+                items_added = len(items) - items_before
+                if items_added == 0:
+                    no_new_content_count += 1
+                    logger.debug(f"No new items after scroll {scroll_idx + 1}")
+                    if no_new_content_count >= max_no_new_content:
+                        logger.info(f"No new content after {max_no_new_content} scrolls, stopping")
+                        break
+                else:
+                    no_new_content_count = 0
+
+                # Scroll to load more
+                scrolled = await self._scroll_page(page)
+                await asyncio.sleep(2.5 if scrolled else 1.0)
+
+            await page.close()
+
+            logger.info(f"Scraped {len(items)} unique contents from homepage (scrolled {scroll_idx + 1} times)")
             return items
 
         finally:
@@ -692,6 +1166,19 @@ class XhsCrawler(BaseCrawler):
 
             await self._navigate_with_retry(page, content_url)
             await asyncio.sleep(5)
+
+            # Debug: screenshot and log URL for detail page
+            import os
+            import hashlib
+            screenshot_dir = "/app/data/debug_screenshots"
+            os.makedirs(screenshot_dir, exist_ok=True)
+            url_hash = hashlib.md5(content_url.encode()).hexdigest()[:8]
+            screenshot_path = os.path.join(screenshot_dir, f"detail_{url_hash}.png")
+            await page.screenshot(path=screenshot_path, full_page=False)
+            current_url = page.url
+            logger.info(f"Detail page URL: {current_url}")
+            if "error" in current_url or "login" in current_url:
+                logger.warning(f"Detail page redirected to error/login page")
 
             # Wait for __INITIAL_STATE__ to be available
             try:
