@@ -1,15 +1,35 @@
-"""Complete content scraping job.
+"""Complete content scraping job - TESTING & DEVELOPMENT TOOL
 
-This job performs a full scrape of a single content:
-1. Search for content by keyword
-2. Save content info (title, stats, cover, images, videos)
-3. Get author info and save (full user profile)
-4. Get all comments (scroll down for more)
-5. For each comment:
-   - Save comment
-   - Save commenter user (basic info from comment)
-   - If has sub-comments, expand and save them
-   - Save sub-commenter users
+PURPOSE:
+  This is a simplified testing tool for validating core scraping functionality.
+  Use this to quickly test cookies, debug features, and verify data flow.
+  For production 24/7 operation, use human_simulation_job.py instead.
+
+CORE FUNCTIONALITY TESTED (cross-checked with human_simulation_job.py):
+  1. ✅ Search contents (crawler.scrape)
+  2. ✅ Save content with media (service.save_content)
+  3. ✅ Get author info (crawler.scrape_user, service.save_user)
+  4. ✅ Load comments (crawler.scrape_comments, all + sub-comments)
+  5. ✅ Save comments and commenter users (service.save_comments)
+  6. ✅ Download images, videos, avatars
+  7. ✅ Database persistence (all tables: contents, users, comments, history)
+
+NOT TESTED (production-specific features):
+  - scrape_continuous() method (24/7 operation only)
+  - 24h deduplication (production optimization)
+  - Work/rest cycle (human simulation only)
+  - Cookie expiry detection (long-term monitoring)
+  - Keyword rotation (production safety)
+
+USAGE:
+  # Quick test with default settings (1 content)
+  uv run python -m apps.jobs.scrape_content_job
+
+  # Test with specific keyword and multiple contents
+  uv run python -m apps.jobs.scrape_content_job --keyword "穿搭" --max-contents 3
+
+  # Test without downloads (faster)
+  uv run python -m apps.jobs.scrape_content_job --no-images --no-videos
 
 Database tables involved:
 - contents: The content/post
@@ -22,7 +42,7 @@ import asyncio
 import logging
 import random
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from apps.config import get_settings
@@ -30,6 +50,32 @@ from apps.crawler.base import ContentItem
 from apps.crawler.xhs.scraper import XhsCrawler
 from apps.services.data_service import DataService
 
+
+# Custom formatter to display times in Asia/Shanghai timezone (UTC+8)
+# Keep consistent with human_simulation_job.py
+class ShanghaiFormatter(logging.Formatter):
+    """Formats log timestamps in Asia/Shanghai timezone for better readability."""
+
+    def formatTime(self, record, datefmt=None):
+        # Convert UTC timestamp to Shanghai time (UTC+8)
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        shanghai_time = dt + timedelta(hours=8)
+        if datefmt:
+            return shanghai_time.strftime(datefmt)
+        return shanghai_time.strftime('%Y-%m-%d %H:%M:%S')
+
+
+# Configure logging with Shanghai timezone display
+handler = logging.StreamHandler()
+handler.setFormatter(ShanghaiFormatter(
+    fmt='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+))
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[handler]
+)
 logger = logging.getLogger(__name__)
 
 
@@ -78,7 +124,9 @@ async def human_delay(config: JobConfig, action: str = ""):
     """Add random delay to simulate human behavior."""
     delay = random.uniform(config.min_delay, config.max_delay)
     if config.verbose and action:
-        print(f"  [{datetime.now().strftime('%H:%M:%S')}] {action} (wait {delay:.1f}s)")
+        # Use Shanghai time for display (consistent with logger)
+        shanghai_time = datetime.now(timezone.utc) + timedelta(hours=8)
+        print(f"  [{shanghai_time.strftime('%H:%M:%S')}] {action} (wait {delay:.1f}s)")
     await asyncio.sleep(delay)
 
 
