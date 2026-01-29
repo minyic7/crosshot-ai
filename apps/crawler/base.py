@@ -111,9 +111,9 @@ class CommentItem(BaseModel):
 
 
 class ContentStats(BaseModel):
-    """Statistics for a content from detail page - cross-platform.
+    """Statistics and media for a content from detail page - cross-platform.
 
-    This is returned when scraping comments to update content stats.
+    This is returned when scraping comments to update content stats and media.
 
     Attributes:
         platform: Platform identifier
@@ -122,6 +122,9 @@ class ContentStats(BaseModel):
         collects: Collects count as string
         comments: Comments count as string
         shares: Shares count as string
+        image_urls: All image URLs from the content (from detail page)
+        video_url: Video URL if this is a video post
+        content_type: Content type (normal/video)
     """
 
     platform: str
@@ -130,6 +133,9 @@ class ContentStats(BaseModel):
     collects: str = "0"
     comments: str = "0"
     shares: str = "0"
+    image_urls: list[str] = []  # All images from detail page
+    video_url: str = ""  # Video URL for video posts
+    content_type: str = "normal"  # normal/video
 
 
 class UserContentItem(BaseModel):

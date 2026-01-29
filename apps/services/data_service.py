@@ -731,10 +731,36 @@ class DataService:
                     content.collects_count_num = parse_count(content_stats.collects)
                     content.comments_count_display = content_stats.comments
                     content.comments_count_num = parse_count(content_stats.comments)
+
+                    # Download all images from detail page (not just cover)
+                    content_id_for_media = f"{platform}_{platform_content_id}"
+                    if content_stats.image_urls:
+                        image_paths, _ = await self.downloader.download_content_images(
+                            content_id_for_media, content_stats.image_urls
+                        )
+                        if image_paths:
+                            content.set_image_paths(image_paths)
+                            content.set_image_urls(content_stats.image_urls)
+                            # Also update legacy media fields
+                            content.set_media_paths(image_paths)
+                            content.set_media_urls(content_stats.image_urls)
+                        logger.debug(f"Downloaded {len(image_paths)} images for {platform_content_id}")
+
+                    # Download video if this is a video post
+                    if content_stats.video_url:
+                        video_paths, _ = await self.downloader.download_content_videos(
+                            content_id_for_media, [content_stats.video_url]
+                        )
+                        if video_paths:
+                            content.set_video_paths(video_paths)
+                            content.set_video_urls([content_stats.video_url])
+                            content.content_type = "video"
+                        logger.debug(f"Downloaded video for {platform_content_id}")
+
                     logger.debug(
                         f"Updated content stats for {platform_content_id}: "
                         f"likes={content_stats.likes}, collects={content_stats.collects}, "
-                        f"comments={content_stats.comments}"
+                        f"comments={content_stats.comments}, images={len(content_stats.image_urls)}"
                     )
 
             saved_comments = []

@@ -74,6 +74,10 @@ KEYWORD_POOLS = {
     "lifestyle": [
         "生活分享", "日常vlog", "开箱", "好物分享",
     ],
+    "cosplay": [
+        "女cosplay", "cosplay女", "coser小姐姐", "动漫cosplay",
+        "游戏cosplay", "二次元coser", "cosplay写真",
+    ],
 }
 
 

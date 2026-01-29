@@ -78,12 +78,37 @@ JS_EXTRACT_CONTENT_STATS = """() => {
         return String(count);
     };
 
+    // Extract all image URLs from imageList
+    const extractImageUrls = (imageList) => {
+        if (!imageList || !Array.isArray(imageList)) return [];
+        return imageList.map(img => {
+            // Try different URL fields in order of preference
+            return img.urlDefault || img.url || img.original || '';
+        }).filter(url => url);
+    };
+
+    // Extract video URL if this is a video post
+    const extractVideoUrl = (video) => {
+        if (!video) return null;
+        // Try different video URL fields
+        return video.url || video.urlDefault || video.originUrl || null;
+    };
+
+    // Get image URLs
+    const imageUrls = extractImageUrls(note.imageList);
+
+    // Get video info (for video posts)
+    const videoUrl = extractVideoUrl(note.video);
+
     return {
         noteId: noteId,
         likes: formatCount(interactInfo.likedCount),
         collects: formatCount(interactInfo.collectedCount),
         comments: formatCount(interactInfo.commentCount),
         shares: formatCount(interactInfo.shareCount || 0),
+        imageUrls: imageUrls,
+        videoUrl: videoUrl,
+        type: note.type || 'normal',  // 'normal' for image, 'video' for video
     };
 }"""
 
@@ -751,6 +776,10 @@ class XhsCrawler(BaseCrawler):
                 try:
                     raw_stats = await self._safe_evaluate(page, JS_EXTRACT_CONTENT_STATS)
                     if raw_stats:
+                        image_urls = raw_stats.get("imageUrls", [])
+                        video_url = raw_stats.get("videoUrl") or ""
+                        content_type = raw_stats.get("type", "normal")
+
                         content_stats = ContentStats(
                             platform=self.platform,
                             platform_content_id=raw_stats.get("noteId", ""),
@@ -758,8 +787,14 @@ class XhsCrawler(BaseCrawler):
                             collects=raw_stats.get("collects", "0"),
                             comments=raw_stats.get("comments", "0"),
                             shares=raw_stats.get("shares", "0"),
+                            image_urls=image_urls,
+                            video_url=video_url,
+                            content_type=content_type,
                         )
-                        logger.debug(f"Content stats: likes={content_stats.likes}, collects={content_stats.collects}, comments={content_stats.comments}")
+                        logger.debug(
+                            f"Content stats: likes={content_stats.likes}, collects={content_stats.collects}, "
+                            f"comments={content_stats.comments}, images={len(image_urls)}, video={'yes' if video_url else 'no'}"
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to extract content stats: {e}")
 
