@@ -51,7 +51,7 @@ import itertools
 import logging
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 
 from apps.config import get_settings, reload_settings
@@ -59,10 +59,30 @@ from apps.crawler.base import ContentItem
 from apps.crawler.xhs.scraper import XhsCrawler, SortBy
 from apps.services.data_service import DataService
 
+
+# Custom formatter to display times in Asia/Shanghai timezone (UTC+8)
+class ShanghaiFormatter(logging.Formatter):
+    """Formats log timestamps in Asia/Shanghai timezone for better readability."""
+
+    def formatTime(self, record, datefmt=None):
+        # Convert UTC timestamp to Shanghai time (UTC+8)
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        shanghai_time = dt + timedelta(hours=8)
+        if datefmt:
+            return shanghai_time.strftime(datefmt)
+        return shanghai_time.strftime('%Y-%m-%d %H:%M:%S')
+
+
+# Configure logging with Shanghai timezone display
+handler = logging.StreamHandler()
+handler.setFormatter(ShanghaiFormatter(
+    fmt='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+))
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
+    handlers=[handler]
 )
 logger = logging.getLogger(__name__)
 
