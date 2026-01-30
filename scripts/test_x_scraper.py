@@ -152,23 +152,27 @@ async def scrape_following_timeline():
         print("[4/6] Navigating to X following timeline...")
         page = await context.new_page()
 
-        # Navigate to Following timeline (not For You)
+        # Navigate to home first
         await page.goto('https://x.com/home', wait_until='domcontentloaded')
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
 
         # Click on "Following" tab to switch from "For You"
         print("   Clicking 'Following' tab...")
         try:
-            # Wait for and click the "Following" tab
-            following_tab = page.locator('a[role="tab"]:has-text("Following")')
-            await following_tab.click()
-            await asyncio.sleep(3)  # Wait for timeline to load
-            print("   ✅ Switched to Following timeline")
-        except Exception as e:
-            print(f"   ⚠️  Could not click Following tab: {e}")
-            print("   Trying direct URL...")
-            await page.goto('https://x.com/following', wait_until='domcontentloaded')
-            await asyncio.sleep(3)
+            # Try different selectors for the Following tab
+            # Method 1: By exact text
+            await page.click('a[role="tab"] span:has-text("Following")', timeout=5000)
+            print("   ✅ Clicked Following tab")
+        except:
+            try:
+                # Method 2: By href
+                await page.click('a[href="/home"][role="tab"]', timeout=5000)
+                print("   ✅ Clicked Following tab (method 2)")
+            except Exception as e:
+                print(f"   ⚠️  Could not click Following tab: {e}")
+                # Just continue with home, might already be on Following
+
+        await asyncio.sleep(5)  # Wait for timeline to load
 
         # Take screenshot for debugging
         screenshot_path = "data/debug_screenshots/x_following_timeline.png"
@@ -192,8 +196,17 @@ async def scrape_following_timeline():
         # Extract posts from timeline
         print("\n[5/6] Extracting posts from timeline...")
 
-        # Wait for tweets to load
-        await page.wait_for_selector('article[data-testid="tweet"]', timeout=10000)
+        # Wait for tweets to load (longer timeout)
+        print("   Waiting for tweets to load...")
+        try:
+            await page.wait_for_selector('article[data-testid="tweet"]', timeout=15000)
+        except Exception as e:
+            print(f"   ⚠️  Timeout waiting for tweets: {e}")
+            print("   Taking screenshot for debugging...")
+            await page.screenshot(path="data/debug_screenshots/x_following_error.png", full_page=True)
+            print(f"   Error screenshot saved: data/debug_screenshots/x_following_error.png")
+            await browser.close()
+            return
 
         # Scroll to load more posts
         print("   Scrolling to load more posts...")
