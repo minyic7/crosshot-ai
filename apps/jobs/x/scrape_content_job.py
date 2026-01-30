@@ -37,12 +37,8 @@ from apps.config import get_settings
 from apps.crawler.base import ContentItem
 from apps.crawler.x.scraper import XCrawler
 from apps.services.data_service import DataService
-from apps.jobs.common import (
-    ShanghaiFormatter,
-    JobConfig,
-    JobStats,
-    human_delay,
-)
+# TODO: Define X-specific config when implementing
+# X's requirements are different from XHS
 
 
 # Configure logging with Shanghai timezone display

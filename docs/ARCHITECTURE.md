@@ -22,9 +22,6 @@ apps/
 │       └── scraper.py   # XCrawler (TODO)
 │
 ├── jobs/                 # Business workflow layer (业务层)
-│   ├── common/          # Shared job utilities
-│   │   ├── base.py      # Config, Stats, helpers (platform-agnostic)
-│   │   └── formatter.py # ShanghaiFormatter (timezone display)
 │   ├── xhs/             # XHS jobs (fully implemented)
 │   │   ├── human_simulation_job.py  # 24/7 production
 │   │   └── scrape_content_job.py    # Testing tool
@@ -61,15 +58,11 @@ apps/
 ### 2. Jobs Layer (`apps/jobs/`)
 **Purpose:** Complete business workflows (What to do)
 
-#### Common Module (`jobs/common/`)
-Platform-agnostic utilities shared by all jobs:
+**IMPORTANT:** Each platform has its own configuration tailored to its anti-scraping requirements:
 
-- **SimulationConfig** - Config for 24/7 production jobs
-- **SimulationStats** - Statistics tracking
-- **JobConfig** - Config for testing jobs
-- **JobStats** - Testing job statistics
-- **ShanghaiFormatter** - Timezone display (UTC+8)
-- **Helper functions** - `human_delay()`, `log()`
+- **XHS:** Ultra-conservative (7-60s delays, work/rest cycles required)
+- **X:** More relaxed (shorter delays, cycles optional)
+- **Future platforms:** Each defines its own optimal parameters
 
 #### Platform-Specific Jobs
 Each platform has two job types:
@@ -109,7 +102,7 @@ Each platform has two job types:
 
 ## Design Patterns
 
-### 1. Inheritance & Reuse
+### 1. Inheritance (Crawler Only)
 
 ```
 BaseCrawler (interface)
@@ -117,10 +110,11 @@ BaseCrawler (interface)
 ├── XhsCrawler (implementation)
 └── XCrawler (implementation)
 
-jobs/common/base.py (shared config & stats)
-    ↓
-├── jobs/xhs/human_simulation_job.py (XHS-specific logic)
-└── jobs/x/human_simulation_job.py (X-specific logic)
+Note: Jobs are NOT shared between platforms because:
+- Different anti-scraping mechanisms require different configs
+- XHS needs ultra-conservative delays (7-60s)
+- X can use more aggressive delays (1-3s)
+- Forcing shared config would compromise either safety or efficiency
 ```
 
 ### 2. Context Manager Pattern
@@ -245,8 +239,8 @@ To add a new platform (e.g., Instagram, TikTok):
    - Implement required methods
 
 2. **Create jobs** (`apps/jobs/instagram/`)
-   - Copy job templates from `jobs/x/`
-   - Reuse `jobs/common` utilities
+   - Copy job templates from similar platform (XHS for strict, X for relaxed)
+   - Define platform-specific config (delays, cycles, limits)
    - Implement platform-specific logic
 
 3. **Update config** (`.env` and `apps/config.py`)

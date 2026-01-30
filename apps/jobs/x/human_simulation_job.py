@@ -29,13 +29,11 @@ from apps.config import get_settings
 from apps.crawler.base import ContentItem
 from apps.crawler.x.scraper import XCrawler, SortBy
 from apps.services.data_service import DataService
-from apps.jobs.common import (
-    ShanghaiFormatter,
-    SimulationConfig,
-    SimulationStats,
-    human_delay,
-    log,
-)
+# TODO: Define X-specific config when implementing
+# X's anti-scraping is much more relaxed than XHS, so config will be different:
+# - Shorter delays (1-3s vs 7-60s)
+# - Maybe no work/rest cycles needed
+# - Different authentication (OAuth vs Cookie)
 
 
 # Configure logging with Shanghai timezone display
