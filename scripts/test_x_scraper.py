@@ -152,9 +152,23 @@ async def scrape_following_timeline():
         print("[4/6] Navigating to X following timeline...")
         page = await context.new_page()
 
-        # Try /home first (default timeline shows following)
+        # Navigate to Following timeline (not For You)
         await page.goto('https://x.com/home', wait_until='domcontentloaded')
-        await asyncio.sleep(5)  # Wait for dynamic content
+        await asyncio.sleep(3)
+
+        # Click on "Following" tab to switch from "For You"
+        print("   Clicking 'Following' tab...")
+        try:
+            # Wait for and click the "Following" tab
+            following_tab = page.locator('a[role="tab"]:has-text("Following")')
+            await following_tab.click()
+            await asyncio.sleep(3)  # Wait for timeline to load
+            print("   ✅ Switched to Following timeline")
+        except Exception as e:
+            print(f"   ⚠️  Could not click Following tab: {e}")
+            print("   Trying direct URL...")
+            await page.goto('https://x.com/following', wait_until='domcontentloaded')
+            await asyncio.sleep(3)
 
         # Take screenshot for debugging
         screenshot_path = "data/debug_screenshots/x_following_timeline.png"
