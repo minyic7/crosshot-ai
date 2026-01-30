@@ -25,7 +25,7 @@ services:
       - SIMULATION_DURATION=${SIMULATION_DURATION:-10080}  # Default 7 days (10080 minutes)
       - SIMULATION_KEYWORDS=${SIMULATION_KEYWORDS:-正常穿搭海边}
     command: >
-      uv run python -m apps.jobs.human_simulation_job
+      uv run python -m apps.jobs.xhs.human_simulation_job
       --duration ${SIMULATION_DURATION:-10080}
       --keywords "${SIMULATION_KEYWORDS:-正常穿搭海边}"
     # Auto-restart on failure (but not on manual stop)
