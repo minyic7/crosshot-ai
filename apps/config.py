@@ -58,6 +58,38 @@ class XhsSettings(BaseSettings):
         return json.loads(self.cookies_json)
 
 
+class XSettings(BaseSettings):
+    """X (Twitter) specific settings including cookies."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="X_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    cookies_json: str = Field(
+        default="[]",
+        description="X cookies as JSON array string",
+    )
+
+    @field_validator("cookies_json")
+    @classmethod
+    def validate_cookies(cls, v: str) -> str:
+        """Validate that cookies_json is valid JSON."""
+        try:
+            parsed = json.loads(v)
+            if not isinstance(parsed, list):
+                raise ValueError("cookies_json must be a JSON array")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON for cookies: {e}")
+        return v
+
+    def get_cookies(self) -> list[dict]:
+        """Parse and return cookies as list of dicts."""
+        return json.loads(self.cookies_json)
+
+
 class DatabaseSettings(BaseSettings):
     """Database settings."""
 
@@ -113,6 +145,10 @@ class Settings(BaseSettings):
     @property
     def xhs(self) -> XhsSettings:
         return XhsSettings()
+
+    @property
+    def x(self) -> XSettings:
+        return XSettings()
 
     @property
     def database(self) -> DatabaseSettings:

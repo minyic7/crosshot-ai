@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Self
@@ -136,6 +137,82 @@ class MediaDownloader:
             return True
         return False
 
+    def _is_hls_url(self, url: str) -> bool:
+        """Check if URL is an HLS playlist (.m3u8)."""
+        return '.m3u8' in url.lower()
+
+    async def _download_hls_video(
+        self,
+        url: str,
+        save_path: Path,
+    ) -> Path:
+        """Download HLS video using yt-dlp.
+
+        yt-dlp will:
+        1. Parse the .m3u8 playlist
+        2. Download all video segments
+        3. Merge them into a single .mp4 file
+        """
+        # Force .mp4 extension for output
+        output_path = save_path.with_suffix('.mp4')
+
+        # Set referer header based on domain
+        referer = None
+        if 'twimg.com' in url or 'x.com' in url or 'twitter.com' in url:
+            referer = 'https://x.com/'
+        elif 'xiaohongshu.com' in url:
+            referer = 'https://www.xiaohongshu.com/'
+
+        # Build yt-dlp command
+        cmd = [
+            'yt-dlp',
+            '--no-playlist',  # Only download single video
+            '--no-warnings',  # Suppress warnings
+            '-o', str(output_path),  # Output path
+            '--user-agent', self.HEADERS['User-Agent'],
+        ]
+
+        # Add referer if needed
+        if referer:
+            cmd.extend(['--add-header', f'Referer:{referer}'])
+
+        cmd.append(url)
+
+        logger.debug(f"Running yt-dlp for HLS video: {url}")
+
+        # Run yt-dlp with timeout protection
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            # 5 minute timeout for video download
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=300
+            )
+        except asyncio.TimeoutError:
+            # Kill the process and clean up
+            try:
+                process.kill()
+                await process.wait()
+            except:
+                pass
+            raise RuntimeError(f"yt-dlp timeout after 300s for {url[:80]}...")
+
+        if process.returncode != 0:
+            error_msg = stderr.decode('utf-8') if stderr else 'Unknown error'
+            logger.error(f"yt-dlp failed: {error_msg}")
+            raise RuntimeError(f"yt-dlp failed: {error_msg}")
+
+        if not output_path.exists():
+            raise RuntimeError(f"yt-dlp succeeded but output file not found: {output_path}")
+
+        logger.info(f"✓ Downloaded HLS video: {url[:80]}... -> {output_path.name} ({output_path.stat().st_size / 1024 / 1024:.2f} MB)")
+        return output_path
+
     async def _do_download(
         self,
         url: str,
@@ -146,7 +223,12 @@ class MediaDownloader:
         """Internal download method that can raise exceptions.
 
         Uses shared session if available, otherwise creates a temporary one.
+        For HLS videos (.m3u8), uses yt-dlp instead of direct download.
         """
+        # Check if this is an HLS video
+        if media_type == "video" and self._is_hls_url(url):
+            return await self._download_hls_video(url, save_path)
+
         # Use shared session or create temporary one
         if self._session:
             return await self._download_with_session(self._session, url, save_path, timeout, media_type)
@@ -167,8 +249,17 @@ class MediaDownloader:
         # Videos may need longer timeout
         actual_timeout = timeout * 3 if media_type == "video" else timeout
 
+        # Set appropriate referer based on domain
+        headers = {}
+        if 'twimg.com' in url or 'x.com' in url or 'twitter.com' in url:
+            headers['Referer'] = 'https://x.com/'
+        elif 'xiaohongshu.com' in url:
+            headers['Referer'] = 'https://www.xiaohongshu.com/'
+
         async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=actual_timeout)
+            url,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=actual_timeout)
         ) as resp:
             if resp.status != 200:
                 raise aiohttp.ClientError(f"HTTP {resp.status}")

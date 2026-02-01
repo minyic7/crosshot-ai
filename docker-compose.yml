@@ -12,8 +12,8 @@ services:
       - PYTHONUNBUFFERED=1
     command: uv run uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # Human simulation job - runs for specified duration (24/7 continuous operation)
-  human-simulation:
+  # Human simulation job - XHS (24/7 continuous operation)
+  human-simulation-xhs:
     build: .
     volumes:
       - .:/app
@@ -34,4 +34,37 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'      # Max 2 CPU cores
           memory: 2G
+        reservations:
+          cpus: '0.5'      # Min 0.5 CPU cores
+          memory: 1G
+
+  # Human simulation job - X/Twitter (24/7 continuous operation)
+  human-simulation-x:
+    build: .
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CRAWLER_HEADLESS=true
+      - X_SIMULATION_DURATION=${X_SIMULATION_DURATION:-10080}  # Default 7 days
+      - X_SIMULATION_KEYWORD=${X_SIMULATION_KEYWORD:-}  # Optional keyword search
+    command: >
+      sh -c "if [ -n \"${X_SIMULATION_KEYWORD}\" ]; then
+        uv run python -m apps.jobs.x.human_simulation_job --duration ${X_SIMULATION_DURATION:-10080} --keyword \"${X_SIMULATION_KEYWORD}\";
+      else
+        uv run python -m apps.jobs.x.human_simulation_job --duration ${X_SIMULATION_DURATION:-10080};
+      fi"
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # Max 2 CPU cores
+          memory: 2G
+        reservations:
+          cpus: '0.5'      # Min 0.5 CPU cores
+          memory: 1G

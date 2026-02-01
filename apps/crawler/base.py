@@ -105,6 +105,7 @@ class CommentItem(BaseModel):
     create_time: int = 0  # timestamp in ms
     ip_location: str = ""
     image_urls: list[str] = []  # Comment images
+    video_urls: list[str] = []  # Comment videos
     sub_comment_count: int = 0
     sub_comments: list[SubCommentItem] = []
     platform_data: dict[str, Any] = {}

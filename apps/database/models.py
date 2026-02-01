@@ -332,6 +332,10 @@ class Comment(Base):
     image_urls_json = Column(Text)
     image_paths_json = Column(Text)
 
+    # Comment videos
+    video_urls_json = Column(Text)
+    video_paths_json = Column(Text)
+
     # Original timestamp from platform (milliseconds)
     create_time = Column(BigInteger)
 
@@ -356,6 +360,22 @@ class Comment(Base):
 
     def set_image_paths(self, paths: list[str]):
         self.image_paths_json = json.dumps(paths) if paths else None
+
+    def get_video_urls(self) -> list[str]:
+        if not self.video_urls_json:
+            return []
+        return json.loads(self.video_urls_json)
+
+    def set_video_urls(self, urls: list[str]):
+        self.video_urls_json = json.dumps(urls) if urls else None
+
+    def get_video_paths(self) -> list[str]:
+        if not self.video_paths_json:
+            return []
+        return json.loads(self.video_paths_json)
+
+    def set_video_paths(self, paths: list[str]):
+        self.video_paths_json = json.dumps(paths) if paths else None
 
     __table_args__ = (
         UniqueConstraint("platform", "platform_comment_id", name="uq_comment_platform_id"),

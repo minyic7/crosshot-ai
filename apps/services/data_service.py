@@ -429,10 +429,16 @@ class DataService:
                 content.set_platform_data(existing_data)
                 # updated_at will auto-update via onupdate
             else:
+                # Extract author info from platform_data (for platforms like X)
+                author_platform = content_item.platform
+                author_user_id = content_item.platform_data.get("username", "").replace("@", "")
+
                 # Create new content
                 content = Content(
                     platform=content_item.platform,
                     platform_content_id=content_item.platform_content_id,
+                    author_platform=author_platform if author_user_id else None,
+                    author_platform_user_id=author_user_id if author_user_id else None,
                     title=content_item.title,
                     content_text=content_item.platform_data.get("content"),
                     content_type=content_item.content_type,
@@ -862,6 +868,20 @@ class DataService:
                         comment.set_image_urls(comment_item.image_urls)
                     if image_paths:
                         comment.set_image_paths(image_paths)
+
+                    # Download and set videos
+                    if comment_item.video_urls:
+                        comment.set_video_urls(comment_item.video_urls)
+                        # Download comment videos
+                        if download_images:  # Reuse download_images flag for videos
+                            comment_video_paths, _ = await self.downloader.download_content_videos(
+                                f"{comment_item.platform}_comment_{comment_item.platform_comment_id}",
+                                comment_item.video_urls
+                            )
+                            if comment_video_paths:
+                                comment.set_video_paths(comment_video_paths)
+                                logger.debug(f"Downloaded {len(comment_video_paths)} videos for comment {comment_item.platform_comment_id}")
+
                     session.add(comment)
                     saved_comments.append(comment)
 
@@ -932,6 +952,20 @@ class DataService:
                             sub_comment.set_image_urls(sub_item.image_urls)
                         if sub_image_paths:
                             sub_comment.set_image_paths(sub_image_paths)
+
+                        # Download and set videos
+                        if sub_item.video_urls:
+                            sub_comment.set_video_urls(sub_item.video_urls)
+                            # Download sub-comment videos
+                            if download_images:  # Reuse download_images flag for videos
+                                sub_video_paths, _ = await self.downloader.download_content_videos(
+                                    f"{sub_item.platform}_comment_{sub_item.platform_comment_id}",
+                                    sub_item.video_urls
+                                )
+                                if sub_video_paths:
+                                    sub_comment.set_video_paths(sub_video_paths)
+                                    logger.debug(f"Downloaded {len(sub_video_paths)} videos for sub-comment {sub_item.platform_comment_id}")
+
                         session.add(sub_comment)
                         saved_comments.append(sub_comment)
 
