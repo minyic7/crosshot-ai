@@ -1,11 +1,18 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { Layout } from "@/components/layout/layout"
 import { Dashboard } from "@/pages/dashboard"
+import { DatabasePage } from "@/pages/database"
 
 function App() {
   return (
-    <Layout>
-      <Dashboard />
-    </Layout>
+    <BrowserRouter>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/database" element={<DatabasePage />} />
+        </Routes>
+      </Layout>
+    </BrowserRouter>
   )
 }
 

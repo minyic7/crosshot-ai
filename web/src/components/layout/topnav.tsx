@@ -1,23 +1,33 @@
-import { LayoutDashboard, Bot, FileText, Settings, Search, Plus } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { NavLink } from "react-router-dom"
+import { LayoutDashboard, Bot, FileText, Settings, Search, Plus, Database, X } from "lucide-react"
 
 interface NavItem {
   icon: React.ReactNode
   label: string
   href: string
-  active?: boolean
 }
 
 const navItems: NavItem[] = [
-  { icon: <LayoutDashboard size={16} />, label: "Dashboard", href: "/", active: true },
+  { icon: <LayoutDashboard size={16} />, label: "Dashboard", href: "/" },
+  { icon: <Database size={16} />, label: "Database", href: "/database" },
   { icon: <Bot size={16} />, label: "Agents", href: "/agents" },
   { icon: <FileText size={16} />, label: "Content", href: "/content" },
-  { icon: <Search size={16} />, label: "Keywords", href: "/keywords" },
   { icon: <Settings size={16} />, label: "Settings", href: "/settings" },
 ]
 
 export { navItems }
 
 export function TopNav() {
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+  const mobileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (mobileSearchOpen) {
+      mobileInputRef.current?.focus()
+    }
+  }, [mobileSearchOpen])
+
   return (
     <header className="topnav">
       <div className="topnav-inner">
@@ -35,14 +45,17 @@ export function TopNav() {
         {/* Center: Nav Links (desktop only) */}
         <nav className="topnav-links">
           {navItems.map((item) => (
-            <a
+            <NavLink
               key={item.href}
-              href={item.href}
-              className={`topnav-link ${item.active ? "active" : ""}`}
+              to={item.href}
+              end={item.href === "/"}
+              className={({ isActive }) =>
+                `topnav-link ${isActive ? "active" : ""}`
+              }
             >
               {item.icon}
               {item.label}
-            </a>
+            </NavLink>
           ))}
         </nav>
 
@@ -62,11 +75,30 @@ export function TopNav() {
           </button>
         </div>
 
-        {/* Mobile: Search icon only */}
-        <button className="topnav-mobile-search-btn" aria-label="Search">
-          <Search size={18} />
+        {/* Mobile: Search icon toggle */}
+        <button
+          className="topnav-mobile-search-btn"
+          aria-label="Search"
+          onClick={() => setMobileSearchOpen((o) => !o)}
+        >
+          {mobileSearchOpen ? <X size={18} /> : <Search size={18} />}
         </button>
       </div>
+
+      {/* Mobile: Expanded search bar */}
+      {mobileSearchOpen && (
+        <div className="topnav-mobile-search-bar">
+          <Search size={14} className="topnav-search-icon" />
+          <input
+            ref={mobileInputRef}
+            type="text"
+            placeholder="Search..."
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setMobileSearchOpen(false)
+            }}
+          />
+        </div>
+      )}
     </header>
   )
 }
