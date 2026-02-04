@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from "react"
-import { Database, HardDrive, CheckCircle, XCircle, AlertCircle, RefreshCw, ArrowUpRight } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Database, HardDrive, RefreshCw, ArrowUpRight, Heart, MessageCircle, Bookmark, X, ExternalLink, MapPin, ThumbsUp, Users } from "lucide-react"
 import { useApi } from "@/hooks/use-api"
 import { useCountUp } from "@/hooks/use-count-up"
 
@@ -23,15 +23,6 @@ interface ScrapeHealth {
   avg_duration_ms: number
 }
 
-interface SearchTask {
-  id: number
-  keyword: string
-  platform: string
-  status: string
-  contents_found: number
-  created_at: string | null
-}
-
 interface StorageInfo {
   db_file_size_bytes: number
   db_file_size_mb: number
@@ -39,6 +30,76 @@ interface StorageInfo {
   data_dir_size_mb: number
   data_dir_file_count: number
   db_path: string
+}
+
+interface ContentAuthor {
+  nickname: string | null
+  avatar_url: string | null
+  platform: string
+}
+
+interface ContentCard {
+  id: number
+  title: string | null
+  content_text: string | null
+  content_type: string
+  cover_url: string | null
+  platform: string
+  likes: number
+  collects: number
+  comments: number
+  publish_time: string | null
+  created_at: string | null
+  author: ContentAuthor | null
+}
+
+interface ContentListResponse {
+  items: ContentCard[]
+  total: number
+  page: number
+  limit: number
+  has_more: boolean
+}
+
+interface ContentDetailComment {
+  id: number
+  text: string
+  likes: number
+  ip_location: string | null
+  created_at: string | null
+  user_nickname: string | null
+}
+
+interface ContentDetailAuthor {
+  nickname: string | null
+  avatar_url: string | null
+  description: string | null
+  platform: string
+  fans_count: string
+  ip_location: string | null
+}
+
+interface ContentDetail {
+  id: number
+  title: string | null
+  content_text: string | null
+  content_type: string
+  cover_url: string | null
+  content_url: string | null
+  platform: string
+  platform_content_id: string
+  likes: number
+  likes_display: string
+  collects: number
+  collects_display: string
+  comments_count: number
+  comments_display: string
+  image_urls: string[]
+  video_urls: string[]
+  publish_time: string | null
+  created_at: string | null
+  author: ContentDetailAuthor | null
+  comments: ContentDetailComment[]
 }
 
 function AnimatedCount({ value }: { value: number }) {
@@ -122,19 +183,203 @@ function DonutPopover({ data }: { data: Record<string, number> }) {
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const config: Record<string, { className: string; icon: React.ReactNode }> = {
-    running: { className: "badge-success", icon: <RefreshCw size={10} /> },
-    completed: { className: "badge-muted", icon: <CheckCircle size={10} /> },
-    failed: { className: "badge-error", icon: <XCircle size={10} /> },
-    pending: { className: "badge-muted", icon: <AlertCircle size={10} /> },
-  }
-  const c = config[status] || config.pending
+function timeAgo(isoString: string | null): string {
+  if (!isoString) return ""
+  const diff = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return `${Math.floor(days / 30)}mo ago`
+}
+
+function formatCount(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+function ContentMasonryCard({ card, index, onClick }: { card: ContentCard; index: number; onClick: () => void }) {
   return (
-    <span className={`badge ${c.className}`} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-      {c.icon}
-      {status}
-    </span>
+    <div className="masonry-card" style={{ animationDelay: `${(index % 20) * 60}ms`, cursor: "pointer" }} onClick={onClick}>
+      {/* Header */}
+      <div className="masonry-card-header">
+        <span className="code-tag" style={{ flexShrink: 0 }}>{card.platform.toUpperCase()}</span>
+        <span className="masonry-card-title">{card.title || "Untitled"}</span>
+      </div>
+
+      {/* Body: Image or Text */}
+      {card.cover_url ? (
+        <div className="masonry-card-image-wrap">
+          <img src={card.cover_url} alt={card.title || ""} className="masonry-card-image" loading="lazy" />
+        </div>
+      ) : (
+        <div className="masonry-card-text-body">
+          <p>{card.content_text || "No content available."}</p>
+        </div>
+      )}
+
+      {/* Stats row */}
+      <div className="masonry-card-stats">
+        <span className="masonry-stat"><Heart size={12} /> {formatCount(card.likes)}</span>
+        <span className="masonry-stat"><MessageCircle size={12} /> {formatCount(card.comments)}</span>
+        <span className="masonry-stat"><Bookmark size={12} /> {formatCount(card.collects)}</span>
+      </div>
+
+      {/* Footer */}
+      <div className="masonry-card-footer">
+        <span className="masonry-card-author">
+          {card.author?.nickname || "Anonymous"}
+        </span>
+        <span className="masonry-card-time">{timeAgo(card.created_at)}</span>
+      </div>
+    </div>
+  )
+}
+
+function ContentDetailModal({ contentId, onClose }: { contentId: number; onClose: () => void }) {
+  const { data: detail, loading } = useApi<ContentDetail>(`/api/stats/content/${contentId}`)
+
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [onClose])
+
+  // Prevent body scroll
+  useEffect(() => {
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = "" }
+  }, [])
+
+  return (
+    <div className="detail-overlay" onClick={onClose}>
+      <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Close button */}
+        <button className="detail-close" onClick={onClose}>
+          <X size={18} />
+        </button>
+
+        {loading ? (
+          <div className="detail-loading">
+            <div className="skeleton" style={{ width: "100%", height: 240, borderRadius: 0 }} />
+            <div style={{ padding: 24 }}>
+              <div className="skeleton skeleton-text" style={{ width: "70%" }} />
+              <div className="skeleton skeleton-text" style={{ width: "90%", marginTop: 12 }} />
+              <div className="skeleton skeleton-text" style={{ width: "50%", marginTop: 12 }} />
+            </div>
+          </div>
+        ) : detail ? (
+          <>
+            {/* Cover image */}
+            {detail.cover_url && (
+              <div className="detail-cover">
+                <img src={detail.cover_url} alt={detail.title || ""} />
+              </div>
+            )}
+
+            <div className="detail-body">
+              {/* Platform + title */}
+              <div className="detail-header">
+                <span className="code-tag">{detail.platform.toUpperCase()}</span>
+                <span className="detail-type">{detail.content_type}</span>
+                {detail.content_url && (
+                  <a href={detail.content_url} target="_blank" rel="noopener noreferrer" className="detail-link">
+                    <ExternalLink size={12} /> Source
+                  </a>
+                )}
+              </div>
+              <h2 className="detail-title">{detail.title || "Untitled"}</h2>
+
+              {/* Content text */}
+              {detail.content_text && (
+                <p className="detail-text">{detail.content_text}</p>
+              )}
+
+              {/* Stats bar */}
+              <div className="detail-stats">
+                <span className="detail-stat">
+                  <Heart size={14} /> {detail.likes_display}
+                </span>
+                <span className="detail-stat">
+                  <MessageCircle size={14} /> {detail.comments_display}
+                </span>
+                <span className="detail-stat">
+                  <Bookmark size={14} /> {detail.collects_display}
+                </span>
+              </div>
+
+              {/* Author */}
+              {detail.author && (
+                <div className="detail-author-card">
+                  <div className="detail-author-info">
+                    <span className="detail-author-name">{detail.author.nickname || "Anonymous"}</span>
+                    {detail.author.description && (
+                      <span className="detail-author-desc">{detail.author.description}</span>
+                    )}
+                  </div>
+                  <div className="detail-author-meta">
+                    {detail.author.fans_count !== "0" && (
+                      <span className="detail-meta-item"><Users size={12} /> {detail.author.fans_count} fans</span>
+                    )}
+                    {detail.author.ip_location && (
+                      <span className="detail-meta-item"><MapPin size={12} /> {detail.author.ip_location}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata */}
+              <div className="detail-metadata">
+                {detail.publish_time && (
+                  <span>Published: {new Date(detail.publish_time).toLocaleDateString()}</span>
+                )}
+                {detail.created_at && (
+                  <span>Scraped: {timeAgo(detail.created_at)}</span>
+                )}
+                <span>ID: {detail.platform_content_id}</span>
+              </div>
+
+              {/* Comments */}
+              {detail.comments.length > 0 && (
+                <div className="detail-comments">
+                  <h3>Comments ({detail.comments.length})</h3>
+                  <div className="detail-comments-list">
+                    {detail.comments.map((cm) => (
+                      <div key={cm.id} className="detail-comment">
+                        <div className="detail-comment-header">
+                          <span className="detail-comment-author">{cm.user_nickname || "Anonymous"}</span>
+                          <span className="detail-comment-time">{timeAgo(cm.created_at)}</span>
+                        </div>
+                        <p className="detail-comment-text">{cm.text}</p>
+                        <div className="detail-comment-footer">
+                          {cm.likes > 0 && (
+                            <span className="detail-comment-likes"><ThumbsUp size={10} /> {cm.likes}</span>
+                          )}
+                          {cm.ip_location && (
+                            <span className="detail-comment-location"><MapPin size={10} /> {cm.ip_location}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: 48, textAlign: "center" }}>
+            <p className="text-sm text-muted">Content not found.</p>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -144,78 +389,6 @@ const TIME_RANGES = [
   { label: "1y", hours: 8760 },
   { label: "All", hours: null },
 ] as const
-
-/** Horizontal pill tabs — snap-center, sliding underline, scroll-aware fades. */
-function PlatformTabs({
-  items,
-  value,
-  onChange,
-}: {
-  items: { label: string; value: string | null }[]
-  value: string | null
-  onChange: (v: string | null) => void
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const underlineRef = useRef<HTMLDivElement>(null)
-  const [fades, setFades] = useState({ left: false, right: false })
-
-  // Update underline position whenever value changes
-  useEffect(() => {
-    const container = scrollRef.current
-    const bar = underlineRef.current
-    if (!container || !bar) return
-    const active = container.querySelector<HTMLElement>(".platform-tab.active")
-    if (active) {
-      bar.style.width = `${active.offsetWidth}px`
-      bar.style.transform = `translateX(${active.offsetLeft}px)`
-    }
-  }, [value, items])
-
-  // Scroll-aware fade edges
-  const updateFades = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    setFades({
-      left: el.scrollLeft > 4,
-      right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
-    })
-  }, [])
-
-  useEffect(() => {
-    updateFades()
-  }, [items, updateFades])
-
-  const handleScroll = useCallback(() => {
-    updateFades()
-  }, [updateFades])
-
-  const handleClick = useCallback(
-    (v: string | null, e: React.MouseEvent<HTMLButtonElement>) => {
-      onChange(v)
-      e.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" })
-    },
-    [onChange],
-  )
-
-  return (
-    <div className="platform-tabs">
-      {fades.left && <div className="platform-tabs-fade platform-tabs-fade-left" />}
-      {fades.right && <div className="platform-tabs-fade platform-tabs-fade-right" />}
-      <div className="platform-tabs-scroll" ref={scrollRef} onScroll={handleScroll}>
-        <div className="platform-tabs-underline" ref={underlineRef} />
-        {items.map((item) => (
-          <button
-            key={item.value ?? "__all"}
-            className={`platform-tab ${item.value === value ? "active" : ""}`}
-            onClick={(e) => handleClick(item.value, e)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 export function DatabasePage() {
   const [healthRange, setHealthRange] = useState<number | null>(24)
@@ -230,10 +403,59 @@ export function DatabasePage() {
   const { data: platforms } = useApi<PlatformBreakdown>("/api/stats/platforms")
   const { data: contentTypes, loading: typesLoading } = useApi<Record<string, number>>("/api/stats/content-types")
   const { data: scrapeHealth, loading: healthLoading } = useApi<ScrapeHealth>(`/api/stats/scrape-health${healthQuery ? `?${healthQuery}` : ""}`)
-  const { data: searchTasks, loading: tasksLoading } = useApi<SearchTask[]>("/api/stats/search-tasks")
   const { data: storage, loading: storageLoading } = useApi<StorageInfo>("/api/stats/storage")
 
   const totalToday = tables?.reduce((sum, t) => sum + t.today, 0) || 0
+
+  // Content gallery — paginated masonry wall with sort/filter
+  const [contentPage, setContentPage] = useState(1)
+  const [contentSort, setContentSort] = useState<string>("newest")
+  const [contentPlatform, setContentPlatform] = useState<string | null>(null)
+
+  const contentParams = new URLSearchParams()
+  contentParams.set("page", String(contentPage))
+  contentParams.set("limit", "20")
+  contentParams.set("sort", contentSort)
+  if (contentPlatform) contentParams.set("platform", contentPlatform)
+
+  const { data: contentList, loading: contentLoading } = useApi<ContentListResponse>(
+    `/api/stats/content/list?${contentParams.toString()}`
+  )
+  const [allCards, setAllCards] = useState<ContentCard[]>([])
+
+  useEffect(() => {
+    if (contentList?.items) {
+      setAllCards((prev) =>
+        contentPage === 1 ? contentList.items : [...prev, ...contentList.items]
+      )
+    }
+  }, [contentList, contentPage])
+
+  // Reset pagination when sort or platform filter changes
+  const handleContentSort = (sort: string) => {
+    setContentSort(sort)
+    setContentPage(1)
+    setAllCards([])
+  }
+  const handleContentPlatform = (p: string | null) => {
+    setContentPlatform(p)
+    setContentPage(1)
+    setAllCards([])
+  }
+
+  // Content detail modal
+  const [selectedContentId, setSelectedContentId] = useState<number | null>(null)
+  const closeDetail = useCallback(() => setSelectedContentId(null), [])
+
+  // Health tier
+  const healthTier = scrapeHealth
+    ? scrapeHealth.success_rate >= 80
+      ? "healthy"
+      : scrapeHealth.success_rate >= 50
+        ? "warning"
+        : "critical"
+    : "healthy"
+  const healthLabel = healthTier === "healthy" ? "Healthy" : healthTier === "warning" ? "Warning" : "Critical"
 
   return (
     <div className="page-container">
@@ -332,16 +554,59 @@ export function DatabasePage() {
         )}
       </div>
 
-      {/* Two Column: Scrape Health + Search Tasks */}
-      <div className="two-column">
-        <div className="stack">
-          <div className="section-header">
-            <h2>Scrape Health</h2>
+      {/* Scrape Health — 3-column panel */}
+      <div className="glass-card scrape-health-panel">
+        {healthLoading ? (
+          <div className="scrape-health-loading">
+            <div className="skeleton" style={{ width: 110, height: 110, borderRadius: "50%" }} />
+            <div className="health-metrics-2x2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="metric-square metric-square-gray">
+                  <div className="skeleton skeleton-number" />
+                </div>
+              ))}
+            </div>
+            <div className="skeleton" style={{ width: "100%", height: 60, borderRadius: 8 }} />
           </div>
+        ) : scrapeHealth ? (
+          <>
+            {/* Left: Health Score Circle */}
+            <div className="health-score-col">
+              <div className={`health-score-circle ${healthTier}`}>
+                <span className="health-score-number">
+                  <AnimatedCount value={scrapeHealth.success_rate} />%
+                </span>
+              </div>
+              <span className={`health-score-label ${healthTier}`}>{healthLabel}</span>
+              <span className="health-score-subtitle">
+                {healthRange ? `Last ${TIME_RANGES.find(r => r.hours === healthRange)?.label}` : "All time"} performance
+              </span>
+            </div>
 
-          <div className="glass-card" style={{ padding: 24 }}>
-            {/* Filters — two separate groups */}
-            <div className="health-filters">
+            {/* Middle: 2x2 Metric Grid */}
+            <div className="health-metrics-2x2">
+              <div className="metric-square metric-square-blue">
+                <span className="metric-square-value">{scrapeHealth.total}</span>
+                <span className="metric-square-label">Total Ops</span>
+              </div>
+              <div className="metric-square metric-square-green">
+                <span className="metric-square-value">{scrapeHealth.success}</span>
+                <span className="metric-square-label">Success</span>
+              </div>
+              <div className="metric-square metric-square-red">
+                <span className="metric-square-value">{scrapeHealth.failed}</span>
+                <span className="metric-square-label">Failed</span>
+              </div>
+              <div className="metric-square metric-square-gray">
+                <span className="metric-square-value">
+                  {scrapeHealth.avg_duration_ms > 0 ? Math.round(scrapeHealth.avg_duration_ms) : "—"}
+                </span>
+                <span className="metric-square-label">Avg ms</span>
+              </div>
+            </div>
+
+            {/* Right: Filters + Platform tags */}
+            <div className="health-filters-col">
               <div className="filter-tabs">
                 {TIME_RANGES.map((r) => (
                   <button
@@ -353,104 +618,123 @@ export function DatabasePage() {
                   </button>
                 ))}
               </div>
-              {platforms && (
-                <PlatformTabs
-                  items={[
-                    { label: "All", value: null },
-                    ...[...new Set([
-                      ...Object.keys(platforms.contents),
-                      ...Object.keys(platforms.users),
-                      ...Object.keys(platforms.comments),
-                    ])].map((p) => ({ label: p.toUpperCase(), value: p })),
-                    { label: "TikTok", value: "tiktok" },
-                    { label: "Instagram", value: "instagram" },
-                    { label: "YouTube", value: "youtube" },
-                    { label: "Facebook", value: "facebook" },
-                    { label: "LinkedIn", value: "linkedin" },
-                    { label: "微博", value: "weibo" },
-                    { label: "抖音", value: "douyin" },
-                    { label: "B站", value: "bilibili" },
-                  ]}
-                  value={healthPlatform}
-                  onChange={setHealthPlatform}
-                />
-              )}
-            </div>
-
-            {healthLoading ? (
-              <div className="skeleton skeleton-number" style={{ marginTop: 16 }} />
-            ) : scrapeHealth ? (
-              <>
-                <div className="health-hero">
-                  <span className={`health-hero-value ${scrapeHealth.success_rate >= 80 ? "health-success" : scrapeHealth.success_rate >= 50 ? "" : "health-error"}`}>
-                    {scrapeHealth.success_rate}%
-                  </span>
-                  <div className="health-hero-meta">
-                    <span>{scrapeHealth.total} ops</span>
-                    <span className="health-success">{scrapeHealth.success} ok</span>
-                    <span className="health-error">{scrapeHealth.failed} fail</span>
-                  </div>
-                </div>
-                <div style={{ marginTop: 12 }}>
-                  <div className="bar-track" style={{ height: 6, borderRadius: 3 }}>
-                    <div
-                      className="bar-fill bar-success"
-                      style={{
-                        width: `${scrapeHealth.success_rate}%`,
-                        height: "100%",
-                        borderRadius: 3,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted" style={{ marginTop: 6 }}>
-                    Avg {Math.round(scrapeHealth.avg_duration_ms)}ms
-                  </p>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted" style={{ textAlign: "center", padding: "16px 0" }}>
-                No data for this range.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="stack">
-          <div className="section-header">
-            <h2>Recent Search Tasks</h2>
-          </div>
-
-          {tasksLoading ? (
-            <div className="glass-card" style={{ padding: 24 }}>
-              <div className="skeleton skeleton-text" />
-              <div className="skeleton skeleton-text" style={{ marginTop: 12 }} />
-            </div>
-          ) : searchTasks && searchTasks.length > 0 ? (
-            <div className="glass-card-static" style={{ overflow: "hidden" }}>
-              <div className="task-list">
-                {searchTasks.slice(0, 8).map((task) => (
-                  <div key={task.id} className="task-item">
-                    <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
-                      <span className="code-tag" style={{ flexShrink: 0 }}>{task.platform.toUpperCase()}</span>
-                      <span className="text-sm" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {task.keyword}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted">{task.contents_found} found</span>
-                      <StatusBadge status={task.status} />
-                    </div>
-                  </div>
+              <div className="platform-tag-list">
+                <button
+                  className={`platform-tag ${healthPlatform === null ? "active" : ""}`}
+                  onClick={() => setHealthPlatform(null)}
+                >
+                  All
+                </button>
+                {platforms && [...new Set([
+                  ...Object.keys(platforms.contents),
+                  ...Object.keys(platforms.users),
+                  ...Object.keys(platforms.comments),
+                ])].map((p) => (
+                  <button
+                    key={p}
+                    className={`platform-tag ${healthPlatform === p ? "active" : ""}`}
+                    onClick={() => setHealthPlatform(p)}
+                  >
+                    {p.toUpperCase()}
+                  </button>
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="glass-card" style={{ padding: 24, textAlign: "center" }}>
-              <p className="text-sm text-muted">No search tasks yet.</p>
-            </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "24px 0" }}>
+            <p className="text-sm text-muted">No scrape data available.</p>
+          </div>
+        )}
       </div>
+
+      {/* Content Gallery — Masonry Wall */}
+      <div className="stack">
+        <div className="section-header">
+          <h2>Content Gallery</h2>
+          <span className="text-sm text-muted">
+            {contentList ? `${contentList.total} items` : ""}
+          </span>
+        </div>
+
+        {/* Sort + Platform filters */}
+        <div className="gallery-filters">
+          <div className="filter-tabs">
+            {[
+              { label: "Most Recent", value: "newest" },
+              { label: "Most Liked", value: "popular" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                className={`filter-tab ${contentSort === opt.value ? "active" : ""}`}
+                onClick={() => handleContentSort(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="platform-tag-list">
+            <button
+              className={`platform-tag ${contentPlatform === null ? "active" : ""}`}
+              onClick={() => handleContentPlatform(null)}
+            >
+              All
+            </button>
+            {platforms && [...new Set([
+              ...Object.keys(platforms.contents),
+            ])].map((p) => (
+              <button
+                key={p}
+                className={`platform-tag ${contentPlatform === p ? "active" : ""}`}
+                onClick={() => handleContentPlatform(p)}
+              >
+                {p.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {contentLoading && contentPage === 1 ? (
+          <div className="masonry-wall">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="masonry-card masonry-card-skeleton">
+                <div className="skeleton" style={{ width: "100%", height: 200, borderRadius: 0 }} />
+                <div style={{ padding: 12 }}>
+                  <div className="skeleton skeleton-text" />
+                  <div className="skeleton skeleton-text-sm" style={{ marginTop: 8 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : allCards.length > 0 ? (
+          <>
+            <div className="masonry-wall">
+              {allCards.map((card, i) => (
+                <ContentMasonryCard key={card.id} card={card} index={i} onClick={() => setSelectedContentId(card.id)} />
+              ))}
+            </div>
+            {contentList?.has_more && (
+              <button
+                className="btn btn-outline"
+                style={{ alignSelf: "center", marginTop: 8 }}
+                onClick={() => setContentPage((p) => p + 1)}
+                disabled={contentLoading}
+              >
+                {contentLoading ? "Loading..." : "Load More"}
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="glass-card" style={{ padding: 32, textAlign: "center" }}>
+            <p className="text-sm text-muted">No content yet.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Detail Modal */}
+      {selectedContentId !== null && (
+        <ContentDetailModal contentId={selectedContentId} onClose={closeDetail} />
+      )}
     </div>
   )
 }

@@ -33,3 +33,8 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Node.js (web/)
+node_modules/
+dist/
+*.local

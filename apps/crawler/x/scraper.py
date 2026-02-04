@@ -685,8 +685,8 @@ class XCrawler(BaseCrawler):
                     logger.error(f"Failed to load profile for @{username}: {e}")
                     raise
 
-            # Extract user information using JavaScript
-            user_data = await page.evaluate("""
+                # Extract user information using JavaScript
+                user_data = await page.evaluate("""
                 () => {
                     const data = {};
 
@@ -765,26 +765,26 @@ class XCrawler(BaseCrawler):
 
                     return data;
                 }
-            """)
+                """)
 
-            logger.info(f"✓ Scraped profile: @{user_data.get('username', username)} ({user_data.get('name', 'Unknown')})")
+                logger.info(f"✓ Scraped profile: @{user_data.get('username', username)} ({user_data.get('name', 'Unknown')})")
 
-            # Create UserInfo object
-            user_info = UserInfo(
-                platform="x",
-                platform_user_id=user_data.get('username', username),
-                nickname=user_data.get('name', ''),
-                avatar=user_data.get('avatar', ''),
-                fans=user_data.get('followers', '0'),  # Fixed: fans not followers
-                follows=user_data.get('following', '0'),  # Fixed: follows not following
-                description=user_data.get('bio', ''),
-                ip_location=user_data.get('location', ''),
-                platform_data={
-                    'website': user_data.get('website', ''),
-                    'joinDate': user_data.get('joinDate', ''),
-                    'profile_url': profile_url,  # Move to platform_data
-                }
-            )
+                # Create UserInfo object
+                user_info = UserInfo(
+                    platform="x",
+                    platform_user_id=user_data.get('username', username),
+                    nickname=user_data.get('name', ''),
+                    avatar=user_data.get('avatar', ''),
+                    fans=user_data.get('followers', '0'),  # Fixed: fans not followers
+                    follows=user_data.get('following', '0'),  # Fixed: follows not following
+                    description=user_data.get('bio', ''),
+                    ip_location=user_data.get('location', ''),
+                    platform_data={
+                        'website': user_data.get('website', ''),
+                        'joinDate': user_data.get('joinDate', ''),
+                        'profile_url': profile_url,  # Move to platform_data
+                    }
+                )
 
                 return user_info
 

@@ -68,3 +68,53 @@ services:
         reservations:
           cpus: '0.5'      # Min 0.5 CPU cores
           memory: 1G
+
+  # ===========================================
+  # Yizhi AI Crawler Agents
+  # ===========================================
+
+  # X (Twitter) AI Crawler
+  yizhi-x-crawler:
+    build: .
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CRAWLER_HEADLESS=true
+      - YIZHI_PLATFORM=x
+      - YIZHI_KEYWORD=${YIZHI_X_KEYWORD:-2026年穿搭女}
+      - YIZHI_MAX_RESULTS=${YIZHI_MAX_RESULTS:-20}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+    command: uv run python -m apps.yizhi.runner
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  # XHS (小红书) AI Crawler
+  yizhi-xhs-crawler:
+    build: .
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CRAWLER_HEADLESS=true
+      - YIZHI_PLATFORM=xhs
+      - YIZHI_KEYWORD=${YIZHI_XHS_KEYWORD:-2026年穿搭女}
+      - YIZHI_MAX_RESULTS=${YIZHI_MAX_RESULTS:-20}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+    command: uv run python -m apps.yizhi.runner
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G

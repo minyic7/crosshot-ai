@@ -157,6 +157,7 @@ def seed():
             comments_count_num=comments_n,
             comments_count_display=comments_d,
             content_url=f"https://{platform}.com/post/{i:04d}",
+            cover_url=f"https://picsum.photos/seed/{platform}_{i}/640/{random.choice([400, 480, 560, 640, 720])}",
             publish_time=ct - timedelta(hours=random.randint(0, 48)),
             created_at=ct,
             updated_at=ct + timedelta(hours=random.randint(0, 24)),

@@ -1,6 +1,6 @@
 """Stats API endpoints for dashboard and database page."""
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from apps.config import get_settings
 from apps.services.stats_service import StatsService
@@ -59,3 +59,23 @@ def growth(days: int = Query(default=7, le=90)):
 @router.get("/storage")
 def storage():
     return _get_service().get_storage_info()
+
+
+@router.get("/content/list")
+def content_list(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    platform: str | None = Query(default=None),
+    sort: str = Query(default="newest"),
+):
+    return _get_service().get_content_list(
+        page=page, limit=limit, platform=platform, sort=sort
+    )
+
+
+@router.get("/content/{content_id}")
+def content_detail(content_id: int):
+    result = _get_service().get_content_detail(content_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Content not found")
+    return result

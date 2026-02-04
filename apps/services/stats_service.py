@@ -1,10 +1,10 @@
 """Stats service for database aggregate queries."""
 
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from apps.database.models import (
     Comment,
@@ -14,7 +14,6 @@ from apps.database.models import (
     ImageDownloadLog,
     ScrapeLog,
     SearchTask,
-    SearchTaskContent,
     User,
 )
 
@@ -274,5 +273,120 @@ class StatsService:
                 result["comments"].append({"date": date_str, "count": comments_count})
 
             return result
+        finally:
+            session.close()
+
+    def get_content_list(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        platform: str | None = None,
+        sort: str = "newest",
+    ) -> dict:
+        """Paginated content list with author info for the card wall."""
+        session = self.db.get_session()
+        try:
+            query = session.query(Content).options(joinedload(Content.author))
+
+            if platform:
+                query = query.filter(Content.platform == platform)
+
+            if sort == "popular":
+                query = query.order_by(Content.likes_count_num.desc())
+            else:
+                query = query.order_by(Content.created_at.desc())
+
+            total = query.count()
+            items = query.offset((page - 1) * limit).limit(limit).all()
+
+            return {
+                "items": [
+                    {
+                        "id": c.id,
+                        "title": c.title,
+                        "content_text": (c.content_text or "")[:200],
+                        "content_type": c.content_type,
+                        "cover_url": c.cover_url,
+                        "platform": c.platform,
+                        "likes": c.likes_count_num or 0,
+                        "collects": c.collects_count_num or 0,
+                        "comments": c.comments_count_num or 0,
+                        "publish_time": c.publish_time.isoformat() if c.publish_time else None,
+                        "created_at": c.created_at.isoformat() if c.created_at else None,
+                        "author": {
+                            "nickname": c.author.nickname if c.author else None,
+                            "avatar_url": c.author.avatar_url if c.author else None,
+                            "platform": c.author.platform if c.author else c.platform,
+                        },
+                    }
+                    for c in items
+                ],
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "has_more": (page * limit) < total,
+            }
+        finally:
+            session.close()
+
+    def get_content_detail(self, content_id: int) -> dict | None:
+        """Full content detail with author, comments, and images."""
+        session = self.db.get_session()
+        try:
+            c = (
+                session.query(Content)
+                .options(
+                    joinedload(Content.author),
+                    joinedload(Content.comments).joinedload(Comment.user),
+                )
+                .filter(Content.id == content_id)
+                .first()
+            )
+            if not c:
+                return None
+
+            comments_list = sorted(
+                c.comments, key=lambda x: x.created_at or datetime.min, reverse=True
+            )
+
+            return {
+                "id": c.id,
+                "title": c.title,
+                "content_text": c.content_text,
+                "content_type": c.content_type,
+                "cover_url": c.cover_url,
+                "content_url": c.content_url,
+                "platform": c.platform,
+                "platform_content_id": c.platform_content_id,
+                "likes": c.likes_count_num or 0,
+                "likes_display": c.likes_count_display or "0",
+                "collects": c.collects_count_num or 0,
+                "collects_display": c.collects_count_display or "0",
+                "comments_count": c.comments_count_num or 0,
+                "comments_display": c.comments_count_display or "0",
+                "image_urls": c.get_image_urls(),
+                "video_urls": c.get_video_urls(),
+                "publish_time": c.publish_time.isoformat() if c.publish_time else None,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "author": {
+                    "nickname": c.author.nickname if c.author else None,
+                    "avatar_url": c.author.avatar_url if c.author else None,
+                    "description": c.author.description if c.author else None,
+                    "platform": c.author.platform if c.author else c.platform,
+                    "fans_count": c.author.fans_count_display if c.author else "0",
+                    "ip_location": c.author.ip_location if c.author else None,
+                } if c.author else None,
+                "comments": [
+                    {
+                        "id": cm.id,
+                        "text": cm.comment_text,
+                        "likes": cm.likes_count_num or 0,
+                        "ip_location": cm.ip_location,
+                        "created_at": cm.created_at.isoformat() if cm.created_at else None,
+                        "user_nickname": cm.user.nickname if cm.user else None,
+                    }
+                    for cm in comments_list[:50]
+                ],
+            }
         finally:
             session.close()
