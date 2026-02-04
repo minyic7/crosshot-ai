@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom"
-import { LayoutDashboard, Bot, Database, FileText, Settings } from "lucide-react"
+import { LayoutDashboard, Bot, Database, Settings } from "lucide-react"
 
 interface TabItem {
   icon: React.ReactNode
@@ -11,7 +11,6 @@ const tabItems: TabItem[] = [
   { icon: <LayoutDashboard size={20} />, label: "Dashboard", href: "/" },
   { icon: <Database size={20} />, label: "Database", href: "/database" },
   { icon: <Bot size={20} />, label: "Agents", href: "/agents" },
-  { icon: <FileText size={20} />, label: "Content", href: "/content" },
   { icon: <Settings size={20} />, label: "Settings", href: "/settings" },
 ]
 

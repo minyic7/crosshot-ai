@@ -16,6 +16,8 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "aiohttp>=3.9.0",
     "yt-dlp>=2024.0.0",
+    # Docker SDK for container management
+    "docker>=7.0.0",
     # AI Agent Framework
     "crewai>=0.80.0",
     "crewai-tools>=0.14.0",

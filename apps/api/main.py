@@ -1,8 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from apps.api.agents import router as agents_router
 from apps.api.stats import router as stats_router
+from apps.config import get_settings
 from apps.crawler.registry import get_crawler
+from apps.database.models import Database
 import apps.crawler.xhs  # Register xhs crawler
 
 app = FastAPI()
@@ -15,6 +18,15 @@ app.add_middleware(
 )
 
 app.include_router(stats_router, prefix="/api")
+app.include_router(agents_router, prefix="/api")
+
+
+@app.on_event("startup")
+def on_startup():
+    """Ensure all tables exist on startup."""
+    settings = get_settings()
+    db = Database(settings.database.path)
+    db.init_db()
 
 
 @app.get("/scrape/{platform}")

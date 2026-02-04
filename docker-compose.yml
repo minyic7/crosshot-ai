@@ -6,11 +6,16 @@ services:
     volumes:
       - .:/app
       - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
     command: uv run uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+    labels:
+      crosshot.managed: "true"
+      crosshot.agent.type: "api"
+      crosshot.agent.platform: "system"
 
   # Human simulation job - XHS (24/7 continuous operation)
   human-simulation-xhs:
@@ -30,6 +35,10 @@ services:
       --keywords "${SIMULATION_KEYWORDS:-正常穿搭海边}"
     # Auto-restart on failure (but not on manual stop)
     restart: on-failure
+    labels:
+      crosshot.managed: "true"
+      crosshot.agent.type: "human-simulation"
+      crosshot.agent.platform: "xhs"
     # Resource limits
     deploy:
       resources:
@@ -60,6 +69,10 @@ services:
         uv run python -m apps.jobs.x.human_simulation_job --duration ${X_SIMULATION_DURATION:-10080};
       fi"
     restart: on-failure
+    labels:
+      crosshot.managed: "true"
+      crosshot.agent.type: "human-simulation"
+      crosshot.agent.platform: "x"
     deploy:
       resources:
         limits:
@@ -90,6 +103,10 @@ services:
       - GROK_API_KEY=${GROK_API_KEY:-}
     command: uv run python -m apps.yizhi.runner
     restart: on-failure
+    labels:
+      crosshot.managed: "true"
+      crosshot.agent.type: "yizhi-crawler"
+      crosshot.agent.platform: "x"
     deploy:
       resources:
         limits:
@@ -113,6 +130,10 @@ services:
       - GROK_API_KEY=${GROK_API_KEY:-}
     command: uv run python -m apps.yizhi.runner
     restart: on-failure
+    labels:
+      crosshot.managed: "true"
+      crosshot.agent.type: "yizhi-crawler"
+      crosshot.agent.platform: "xhs"
     deploy:
       resources:
         limits:

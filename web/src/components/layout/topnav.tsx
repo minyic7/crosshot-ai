@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { NavLink } from "react-router-dom"
-import { LayoutDashboard, Bot, FileText, Settings, Search, Plus, Database, X } from "lucide-react"
+import { LayoutDashboard, Bot, Settings, Search, Plus, Database, X } from "lucide-react"
 
 interface NavItem {
   icon: React.ReactNode
@@ -12,7 +12,6 @@ const navItems: NavItem[] = [
   { icon: <LayoutDashboard size={16} />, label: "Dashboard", href: "/" },
   { icon: <Database size={16} />, label: "Database", href: "/database" },
   { icon: <Bot size={16} />, label: "Agents", href: "/agents" },
-  { icon: <FileText size={16} />, label: "Content", href: "/content" },
   { icon: <Settings size={16} />, label: "Settings", href: "/settings" },
 ]
 

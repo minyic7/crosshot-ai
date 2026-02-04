@@ -479,6 +479,45 @@ class ImageDownloadLog(Base):
     completed_at = Column(DateTime)
 
 
+class AgentConfig(Base):
+    """Agent type configuration template.
+
+    Each record defines a type of agent that can be instantiated as a Docker container.
+    Multiple containers can be spawned from the same AgentConfig with different parameters.
+    """
+
+    __tablename__ = "agent_configs"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False, unique=True)
+    display_name = Column(String(256), nullable=False)
+    agent_type = Column(String(64), nullable=False, index=True)
+    platform = Column(String(16), nullable=False, index=True)
+    description = Column(Text)
+
+    # Docker configuration
+    command = Column(Text, nullable=False)
+    environment_json = Column(Text, default="{}")
+    cpu_limit = Column(String(16), default="2.0")
+    memory_limit = Column(String(16), default="2G")
+    cpu_reservation = Column(String(16), default="0.5")
+    memory_reservation = Column(String(16), default="1G")
+    restart_policy = Column(String(32), default="on-failure")
+
+    is_active = Column(Integer, default=1)  # 1=active, 0=archived
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def get_environment(self) -> dict:
+        if not self.environment_json:
+            return {}
+        return json.loads(self.environment_json)
+
+    def set_environment(self, env: dict):
+        self.environment_json = json.dumps(env) if env else "{}"
+
+
 # Aliases for backward compatibility during migration
 Note = Content
 NoteHistory = ContentHistory

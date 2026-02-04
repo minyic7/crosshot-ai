@@ -5,6 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 from apps.database.models import (
+    AgentConfig,
     Base,
     Comment,
     Content,
@@ -301,8 +302,74 @@ def seed():
 
     session.commit()
     print("Created 80 image download logs")
+
+    # --- Agent Configs ---
+    seed_agent_configs(session)
+
     print("\nSeed complete!")
     session.close()
+
+
+def seed_agent_configs(session):
+    """Seed initial agent configuration templates matching docker-compose services."""
+    configs = [
+        AgentConfig(
+            name="human-simulation-xhs",
+            display_name="XHS Human Simulation Crawler",
+            agent_type="human-simulation",
+            platform="xhs",
+            description="Simulates human browsing on Xiaohongshu to discover and scrape content organically",
+            command='uv run python -m apps.jobs.xhs.human_simulation_job --duration 10080 --keywords "正常穿搭海边"',
+            environment_json='{"SIMULATION_DURATION": "10080", "SIMULATION_KEYWORDS": "正常穿搭海边"}',
+            cpu_limit="2.0",
+            memory_limit="2G",
+            cpu_reservation="0.5",
+            memory_reservation="1G",
+        ),
+        AgentConfig(
+            name="human-simulation-x",
+            display_name="X/Twitter Human Simulation Crawler",
+            agent_type="human-simulation",
+            platform="x",
+            description="Simulates human browsing on X/Twitter to discover and scrape content from the Following timeline",
+            command="uv run python -m apps.jobs.x.human_simulation_job --duration 10080",
+            environment_json='{"CRAWLER_HEADLESS": "true", "X_SIMULATION_DURATION": "10080"}',
+            cpu_limit="2.0",
+            memory_limit="2G",
+            cpu_reservation="0.5",
+            memory_reservation="1G",
+        ),
+        AgentConfig(
+            name="yizhi-x-crawler",
+            display_name="X/Twitter AI Crawler (Yizhi)",
+            agent_type="yizhi-crawler",
+            platform="x",
+            description="CrewAI-powered intelligent crawler for X/Twitter with automated keyword analysis",
+            command="uv run python -m apps.yizhi.runner",
+            environment_json='{"CRAWLER_HEADLESS": "true", "YIZHI_PLATFORM": "x", "YIZHI_KEYWORD": "2026年穿搭女", "YIZHI_MAX_RESULTS": "20"}',
+            cpu_limit="2.0",
+            memory_limit="2G",
+        ),
+        AgentConfig(
+            name="yizhi-xhs-crawler",
+            display_name="XHS AI Crawler (Yizhi)",
+            agent_type="yizhi-crawler",
+            platform="xhs",
+            description="CrewAI-powered intelligent crawler for Xiaohongshu with automated keyword analysis",
+            command="uv run python -m apps.yizhi.runner",
+            environment_json='{"CRAWLER_HEADLESS": "true", "YIZHI_PLATFORM": "xhs", "YIZHI_KEYWORD": "2026年穿搭女", "YIZHI_MAX_RESULTS": "20"}',
+            cpu_limit="2.0",
+            memory_limit="2G",
+        ),
+    ]
+
+    for config in configs:
+        existing = session.query(AgentConfig).filter_by(name=config.name).first()
+        if not existing:
+            session.add(config)
+
+    session.commit()
+    print(f"Created/verified {len(configs)} agent configs")
 
 
 if __name__ == "__main__":
