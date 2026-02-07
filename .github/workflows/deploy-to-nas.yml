@@ -1,0 +1,25 @@
+name: Deploy to NAS
+
+on:
+  workflow_run:
+    workflows: ["Build Crawler"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Trigger Portainer Webhook
+        run: |
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+      - name: Deployment Summary
+        run: |
+          echo "### 🚀 Deployment Triggered!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Portainer webhook has been triggered to update containers on NAS" >> $GITHUB_STEP_SUMMARY

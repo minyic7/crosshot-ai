@@ -1,0 +1,31 @@
+name: Deploy via SSH
+
+on:
+  workflow_run:
+    workflows: ["Build Crawler"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy to NAS via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.NAS_HOST }}
+          username: ${{ secrets.NAS_USER }}
+          key: ${{ secrets.NAS_SSH_KEY }}
+          script: |
+            cd /path/to/crosshot-ai
+            docker compose -f docker-compose.yml -f docker-compose.x.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.x.yml up -d
+            echo "Deployment completed at $(date)"
+
+      - name: Deployment Summary
+        run: |
+          echo "### 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Containers have been updated on NAS via SSH" >> $GITHUB_STEP_SUMMARY
