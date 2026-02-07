@@ -24,6 +24,10 @@ ENV/
 data/
 *.db
 
+# Monitoring
+monitoring/loki-data/
+monitoring/grafana-data/
+
 # Archive
 archive/
 

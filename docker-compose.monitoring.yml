@@ -1,0 +1,101 @@
+# ============================================
+# 监控和日志管理配置 - Loki + Grafana
+# ============================================
+#
+# 使用方式：
+#   docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+#
+# 访问：
+#   Grafana: http://localhost:3000 (admin/admin)
+#   Loki: http://localhost:3100
+#
+# ============================================
+
+services:
+  # ============================================
+  # Loki - 日志聚合后端
+  # ============================================
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    networks:
+      - crosshot
+
+  # ============================================
+  # Promtail - 日志收集代理
+  # ============================================
+  promtail:
+    image: grafana/promtail:3.3.2
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/promtail-config.yaml:/etc/promtail/config.yaml
+      - ./logs:/var/log/crosshot:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yaml
+    networks:
+      - crosshot
+    depends_on:
+      - loki
+
+  # ============================================
+  # Grafana - 可视化前端
+  # ============================================
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./monitoring/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./monitoring/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - crosshot
+    depends_on:
+      - loki
+
+volumes:
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ============================================
+# 使用说明
+# ============================================
+#
+# 1. 启动监控栈：
+#    docker-compose -f docker-compose.yml \
+#                   -f docker-compose.x.yml \
+#                   -f docker-compose.monitoring.yml up -d
+#
+# 2. 访问 Grafana：
+#    http://localhost:3000
+#    用户名: admin
+#    密码: admin
+#
+# 3. 查看日志：
+#    - 在 Grafana 中选择 "Explore"
+#    - 选择 Loki 数据源
+#    - 使用 LogQL 查询，例如：
+#      {container="crawler-x-ai"}
+#      {platform="x"} |= "ERROR"
+#
+# ============================================
