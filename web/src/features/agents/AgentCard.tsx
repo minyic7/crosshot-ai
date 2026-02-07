@@ -1,17 +1,14 @@
-import { Terminal } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
-import { Button } from '@/components/ui/Button'
-import type { Agent } from '@/types/models'
+import type { AgentHeartbeat } from '@/types/models'
 
 interface AgentCardProps {
-  agent: Agent
-  onViewLogs: () => void
+  agent: AgentHeartbeat
 }
 
-export function AgentCard({ agent, onViewLogs }: AgentCardProps) {
-  const uptimeStr = formatUptime(agent.uptime_seconds)
+export function AgentCard({ agent }: AgentCardProps) {
+  const uptimeStr = formatUptime(agent.started_at)
 
   return (
     <Card className="agent-page-card">
@@ -19,14 +16,14 @@ export function AgentCard({ agent, onViewLogs }: AgentCardProps) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <StatusDot status={agent.status} />
+              <StatusDot status={agent.status === 'error' ? 'error' : 'running'} />
               {agent.name}
             </CardTitle>
             <Badge
               variant={
-                agent.status === 'running' ? 'success' :
-                agent.status === 'error' ? 'error' :
-                'muted'
+                agent.status === 'busy' ? 'warning' :
+                agent.status === 'idle' ? 'success' :
+                'error'
               }
             >
               {agent.status}
@@ -40,6 +37,18 @@ export function AgentCard({ agent, onViewLogs }: AgentCardProps) {
               <Badge key={label} variant="muted">{label}</Badge>
             ))}
           </div>
+
+          {agent.current_task_label && (
+            <div className="flex items-center gap-2 text-sm">
+              <span style={{ color: 'var(--foreground-muted)' }}>Working on:</span>
+              <Badge variant="warning">{agent.current_task_label}</Badge>
+              {agent.current_task_id && (
+                <span className="font-mono" style={{ color: 'var(--foreground-muted)' }}>
+                  {agent.current_task_id.slice(0, 8)}
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="agent-stats">
             <div className="flex justify-between text-sm">
@@ -55,18 +64,14 @@ export function AgentCard({ agent, onViewLogs }: AgentCardProps) {
               <span className="font-medium">{uptimeStr}</span>
             </div>
           </div>
-
-          <Button variant="ghost" size="sm" onClick={onViewLogs}>
-            <Terminal size={14} />
-            View Logs
-          </Button>
         </div>
       </CardContent>
     </Card>
   )
 }
 
-function formatUptime(seconds: number): string {
+function formatUptime(startedAt: string): string {
+  const seconds = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
   if (seconds < 60) return `${seconds}s`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`

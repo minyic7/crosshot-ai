@@ -41,7 +41,7 @@ export function TasksTable() {
             <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid #e5e7eb' }}>
               <span style={{ flex: 1 }}>ID</span>
               <span style={{ flex: 1 }}>Label</span>
-              <span style={{ flex: 0.5 }}>Priority</span>
+              <span style={{ flex: 0.7 }}>Agent</span>
               <span style={{ flex: 0.5 }}>Status</span>
               <span style={{ flex: 1 }}>Created</span>
             </div>
@@ -54,8 +54,8 @@ export function TasksTable() {
                   <span style={{ flex: 1 }}>
                     <Badge variant="muted">{task.label}</Badge>
                   </span>
-                  <span style={{ flex: 0.5 }}>
-                    {task.priority === 2 ? 'High' : task.priority === 1 ? 'Medium' : 'Low'}
+                  <span style={{ flex: 0.7 }} className="text-sm">
+                    {task.assigned_to || '-'}
                   </span>
                   <span style={{ flex: 0.5 }}>
                     <Badge
@@ -69,7 +69,7 @@ export function TasksTable() {
                       {task.status}
                     </Badge>
                   </span>
-                  <span style={{ flex: 1 }} className="text-sm" >
+                  <span style={{ flex: 1 }} className="text-sm">
                     {new Date(task.created_at).toLocaleString()}
                   </span>
                 </div>

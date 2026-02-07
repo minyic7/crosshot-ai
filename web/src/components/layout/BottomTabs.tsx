@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Database, Bot, ListTodo, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Bot, ListTodo, Cookie, MessageSquare } from 'lucide-react'
 
 const tabItems = [
   { to: '/', label: 'Home', icon: LayoutDashboard },
-  { to: '/database', label: 'DB', icon: Database },
   { to: '/agents', label: 'Agents', icon: Bot },
   { to: '/tasks', label: 'Tasks', icon: ListTodo },
+  { to: '/cookies', label: 'Cookies', icon: Cookie },
   { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 

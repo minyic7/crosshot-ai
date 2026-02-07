@@ -45,9 +45,11 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     payload: dict[str, Any] = Field(default_factory=dict)
     parent_job_id: str | None = None
+    assigned_to: str | None = None
     created_at: datetime = Field(default_factory=datetime.now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
     retry_count: int = 0
     max_retries: int = 3
     error: str | None = None
+    result: dict[str, Any] | None = None

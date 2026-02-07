@@ -3,24 +3,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useGetHealthQuery, useListTasksQuery, useListAgentsQuery } from '@/store/api'
+import { useGetHealthQuery, useGetDashboardStatsQuery, useListAgentsQuery, useListTasksQuery } from '@/store/api'
 
 export function DashboardPage() {
   const { data: health, isLoading: healthLoading } = useGetHealthQuery(undefined, {
     pollingInterval: 10000,
   })
-  const { data: tasksData, isLoading: tasksLoading } = useListTasksQuery(undefined, {
+  const { data: stats, isLoading: statsLoading } = useGetDashboardStatsQuery(undefined, {
     pollingInterval: 5000,
   })
   const { data: agents, isLoading: agentsLoading } = useListAgentsQuery(undefined, {
     pollingInterval: 5000,
   })
+  const { data: tasksData, isLoading: tasksLoading } = useListTasksQuery({ limit: 10 }, {
+    pollingInterval: 5000,
+  })
 
   const tasks = tasksData?.tasks ?? []
-  const pending = tasks.filter((t) => t.status === 'pending').length
-  const running = tasks.filter((t) => t.status === 'running').length
-  const completed = tasks.filter((t) => t.status === 'completed').length
-  const failed = tasks.filter((t) => t.status === 'failed').length
 
   return (
     <div className="stack">
@@ -42,10 +41,10 @@ export function DashboardPage() {
             <CardHeader>
               <CardDescription>Pending</CardDescription>
               <CardTitle>
-                {tasksLoading ? <Skeleton className="w-12 h-8" /> : (
+                {statsLoading ? <Skeleton className="w-12 h-8" /> : (
                   <span className="text-2xl flex items-center gap-2">
                     <Clock size={20} style={{ color: 'var(--warning)' }} />
-                    {pending}
+                    {stats?.total_pending ?? 0}
                   </span>
                 )}
               </CardTitle>
@@ -56,12 +55,12 @@ export function DashboardPage() {
         <Card className="glass-card-static">
           <CardContent>
             <CardHeader>
-              <CardDescription>Running</CardDescription>
+              <CardDescription>Agents Online</CardDescription>
               <CardTitle>
-                {tasksLoading ? <Skeleton className="w-12 h-8" /> : (
+                {statsLoading ? <Skeleton className="w-12 h-8" /> : (
                   <span className="text-2xl flex items-center gap-2">
                     <Activity size={20} style={{ color: 'var(--blue)' }} />
-                    {running}
+                    {stats?.agents_online ?? 0}
                   </span>
                 )}
               </CardTitle>
@@ -74,10 +73,10 @@ export function DashboardPage() {
             <CardHeader>
               <CardDescription>Completed</CardDescription>
               <CardTitle>
-                {tasksLoading ? <Skeleton className="w-12 h-8" /> : (
+                {statsLoading ? <Skeleton className="w-12 h-8" /> : (
                   <span className="text-2xl flex items-center gap-2">
                     <CheckCircle size={20} style={{ color: 'var(--success)' }} />
-                    {completed}
+                    {stats?.recent_completed ?? 0}
                   </span>
                 )}
               </CardTitle>
@@ -90,10 +89,10 @@ export function DashboardPage() {
             <CardHeader>
               <CardDescription>Failed</CardDescription>
               <CardTitle>
-                {tasksLoading ? <Skeleton className="w-12 h-8" /> : (
+                {statsLoading ? <Skeleton className="w-12 h-8" /> : (
                   <span className="text-2xl flex items-center gap-2">
                     <AlertCircle size={20} style={{ color: 'var(--error)' }} />
-                    {failed}
+                    {stats?.recent_failed ?? 0}
                   </span>
                 )}
               </CardTitle>
@@ -121,8 +120,11 @@ export function DashboardPage() {
               agents.map((agent) => (
                 <div key={agent.name} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-3">
-                    <StatusDot status={agent.status} />
+                    <StatusDot status={agent.status === 'busy' ? 'running' : agent.status === 'idle' ? 'running' : 'error'} />
                     <span className="font-medium">{agent.name}</span>
+                    {agent.current_task_label && (
+                      <Badge variant="warning">{agent.current_task_label}</Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {agent.labels.map((label) => (
@@ -159,6 +161,11 @@ export function DashboardPage() {
                     <span className="text-sm font-mono" style={{ color: 'var(--foreground-muted)' }}>
                       {task.id.slice(0, 8)}
                     </span>
+                    {task.assigned_to && (
+                      <span className="text-sm" style={{ color: 'var(--foreground-subtle)' }}>
+                        → {task.assigned_to}
+                      </span>
+                    )}
                   </div>
                   <Badge
                     variant={

@@ -2,10 +2,9 @@
 
 Uses Redis Sorted Sets for priority ordering.
 Each label gets its own sorted set: task:queue:{label}
-Task status tracked in Redis Hash: task:status:{task_id}
+Full task state stored as JSON: task:{task_id}
 """
 
-import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -37,65 +36,71 @@ class TaskQueue:
     async def push(self, task: Task) -> None:
         """Push a task to the queue.
 
-        The task is added to a sorted set keyed by its label.
-        Score is computed so higher priority + earlier creation = higher score.
+        Stores task ID in sorted set (for queue ordering) and
+        full task JSON in a separate key (for querying).
         """
         key = f"task:queue:{task.label}"
         score = task.priority.value * 1_000_000_000 + (
             self.MAX_TS - int(task.created_at.timestamp())
         )
         task.status = TaskStatus.PENDING
-        await self._redis.zadd(key, {task.model_dump_json(): score})
+        await self._redis.zadd(key, {task.id: score})
+        await self._store_task(task)
         logger.debug("Pushed task %s to %s (score=%s)", task.id, key, score)
 
-    async def pop(self, labels: list[str]) -> Task | None:
+    async def pop(self, labels: list[str], agent_name: str | None = None) -> Task | None:
         """Pop the highest-priority task from any of the given labels.
 
         Checks each label's queue and returns the task with the highest score.
+        Sets assigned_to if agent_name is provided.
         Returns None if all queues are empty.
         """
-        best_task: Task | None = None
+        best_id: str | None = None
         best_score: float = -1
         best_key: str = ""
 
         for label in labels:
             key = f"task:queue:{label}"
-            # Peek at the highest-scored item
             results = await self._redis.zrange(key, -1, -1, withscores=True)
             if results:
-                task_json, score = results[0]
+                task_id, score = results[0]
                 if score > best_score:
                     best_score = score
-                    best_task = Task.model_validate_json(task_json)
+                    best_id = task_id
                     best_key = key
 
-        if best_task is None:
+        if best_id is None:
             return None
 
         # Remove from queue atomically
-        removed = await self._redis.zrem(best_key, best_task.model_dump_json())
+        removed = await self._redis.zrem(best_key, best_id)
         if not removed:
-            # Another consumer grabbed it; try again
-            return await self.pop(labels)
+            return await self.pop(labels, agent_name)
+
+        # Load full task state
+        task = await self._load_task(best_id)
+        if task is None:
+            logger.warning("Task %s in queue but no stored state, skipping", best_id)
+            return await self.pop(labels, agent_name)
 
         # Mark as running
-        best_task.status = TaskStatus.RUNNING
-        best_task.started_at = datetime.now()
-        await self._set_status(best_task)
-        logger.info("Popped task %s from %s", best_task.id, best_key)
-        return best_task
+        task.status = TaskStatus.RUNNING
+        task.started_at = datetime.now()
+        if agent_name:
+            task.assigned_to = agent_name
+        await self._store_task(task)
+        logger.info("Popped task %s from %s (assigned_to=%s)", task.id, best_key, agent_name)
+        return task
 
     async def mark_done(self, task: Task, result: Any = None) -> None:
-        """Mark a task as completed."""
+        """Mark a task as completed and store result on the task."""
         task.status = TaskStatus.COMPLETED
         task.completed_at = datetime.now()
-        await self._set_status(task)
         if result is not None:
-            await self._redis.set(
-                f"task:result:{task.id}",
-                json.dumps(result, default=str),
-                ex=86400,  # expire after 24h
-            )
+            task.result = result if isinstance(result, dict) else {"data": result}
+        await self._store_task(task)
+        await self._redis.lpush("task:recent_completed", task.id)
+        await self._redis.ltrim("task:recent_completed", 0, 99)
         logger.info("Task %s completed", task.id)
 
     async def mark_failed(self, task: Task, error: str) -> None:
@@ -104,9 +109,8 @@ class TaskQueue:
         task.error = error
 
         if task.retry_count < task.max_retries:
-            # Re-queue with lower priority
             task.status = TaskStatus.PENDING
-            task.priority = min(task.priority, task.priority)  # keep same priority
+            task.assigned_to = None
             await self.push(task)
             logger.warning(
                 "Task %s failed (attempt %d/%d), re-queued: %s",
@@ -118,8 +122,10 @@ class TaskQueue:
         else:
             task.status = TaskStatus.FAILED
             task.completed_at = datetime.now()
-            await self._set_status(task)
-            await self._redis.lpush("task:dead_letter", task.model_dump_json())
+            await self._store_task(task)
+            await self._redis.lpush("task:dead_letter", task.id)
+            await self._redis.lpush("task:recent_completed", task.id)
+            await self._redis.ltrim("task:recent_completed", 0, 99)
             logger.error(
                 "Task %s permanently failed after %d retries: %s",
                 task.id,
@@ -131,19 +137,38 @@ class TaskQueue:
         """Get the number of pending tasks for a label."""
         return await self._redis.zcard(f"task:queue:{label}")
 
-    async def _set_status(self, task: Task) -> None:
-        """Store task status in Redis Hash."""
-        await self._redis.hset(
-            f"task:status:{task.id}",
-            mapping={
-                "status": task.status.value,
-                "started_at": task.started_at.isoformat() if task.started_at else "",
-                "completed_at": (
-                    task.completed_at.isoformat() if task.completed_at else ""
-                ),
-                "retry_count": str(task.retry_count),
-                "error": task.error or "",
-            },
-        )
-        # Expire status after 7 days
-        await self._redis.expire(f"task:status:{task.id}", 604800)
+    async def get_task(self, task_id: str) -> Task | None:
+        """Get a task by ID."""
+        return await self._load_task(task_id)
+
+    async def get_queue_labels(self) -> list[str]:
+        """Get all queue labels that have pending tasks."""
+        labels = []
+        async for key in self._redis.scan_iter("task:queue:*"):
+            labels.append(key.removeprefix("task:queue:"))
+        return labels
+
+    async def get_recent_completed(self, limit: int = 20) -> list[Task]:
+        """Get recently completed/failed tasks."""
+        task_ids = await self._redis.lrange("task:recent_completed", 0, limit - 1)
+        tasks = []
+        for tid in task_ids:
+            task = await self._load_task(tid)
+            if task:
+                tasks.append(task)
+        return tasks
+
+    # ──────────────────────────────────────────────
+    # Task storage
+    # ──────────────────────────────────────────────
+
+    async def _store_task(self, task: Task) -> None:
+        """Store full task as JSON string in Redis (7-day expiry)."""
+        await self._redis.set(f"task:{task.id}", task.model_dump_json(), ex=604800)
+
+    async def _load_task(self, task_id: str) -> Task | None:
+        """Load a task from Redis by ID."""
+        data = await self._redis.get(f"task:{task_id}")
+        if data is None:
+            return None
+        return Task.model_validate_json(data)

@@ -1,15 +1,22 @@
-import { useState } from 'react'
-import { Bot } from 'lucide-react'
+import { Bot, Layers } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Modal } from '@/components/ui/Modal'
-import { useListAgentsQuery, useGetAgentLogsQuery } from '@/store/api'
+import { useListAgentsQuery, useListQueuesQuery, useListTasksQuery } from '@/store/api'
 import { AgentCard } from './AgentCard'
 
 export function AgentsPage() {
-  const { data: agents, isLoading } = useListAgentsQuery(undefined, {
+  const { data: agents, isLoading: agentsLoading } = useListAgentsQuery(undefined, {
     pollingInterval: 5000,
   })
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
+  const { data: queues, isLoading: queuesLoading } = useListQueuesQuery(undefined, {
+    pollingInterval: 5000,
+  })
+  const { data: tasksData, isLoading: tasksLoading } = useListTasksQuery({ limit: 20 }, {
+    pollingInterval: 5000,
+  })
+
+  const recentTasks = tasksData?.tasks ?? []
 
   return (
     <div className="stack">
@@ -18,55 +25,90 @@ export function AgentsPage() {
         <h1 className="text-xl font-semibold">Agents</h1>
       </div>
 
-      {isLoading ? (
+      {/* Task Queues */}
+      <Card>
+        <CardContent>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Layers size={18} />
+              Task Queues
+            </CardTitle>
+          </CardHeader>
+          <div className="stack-sm" style={{ marginTop: '1rem' }}>
+            {queuesLoading ? (
+              <Skeleton className="w-full h-10" />
+            ) : queues && queues.length > 0 ? (
+              queues.map((q) => (
+                <div key={q.label} className="flex items-center justify-between py-2">
+                  <Badge variant="muted">{q.label}</Badge>
+                  <span className="font-medium">{q.pending} pending</span>
+                </div>
+              ))
+            ) : (
+              <p style={{ color: 'var(--foreground-subtle)' }}>No queues active</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Agent Cards */}
+      {agentsLoading ? (
         <div className="stats-grid">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="w-full h-48" />
           ))}
         </div>
       ) : agents && agents.length > 0 ? (
         <div className="stats-grid">
           {agents.map((agent) => (
-            <AgentCard
-              key={agent.name}
-              agent={agent}
-              onViewLogs={() => setSelectedAgent(agent.name)}
-            />
+            <AgentCard key={agent.name} agent={agent} />
           ))}
         </div>
       ) : (
         <p style={{ color: 'var(--foreground-subtle)' }}>No agents connected</p>
       )}
 
-      {selectedAgent && (
-        <AgentLogsModal
-          agentName={selectedAgent}
-          onClose={() => setSelectedAgent(null)}
-        />
-      )}
+      {/* Recent Completed Tasks */}
+      <Card>
+        <CardContent>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+          </CardHeader>
+          <div className="stack-sm" style={{ marginTop: '1rem' }}>
+            {tasksLoading ? (
+              <Skeleton className="w-full h-10" />
+            ) : recentTasks.length > 0 ? (
+              recentTasks.map((task) => (
+                <div key={task.id} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="muted">{task.label}</Badge>
+                    <span className="text-sm font-mono" style={{ color: 'var(--foreground-muted)' }}>
+                      {task.id.slice(0, 8)}
+                    </span>
+                    {task.assigned_to && (
+                      <span className="text-sm" style={{ color: 'var(--foreground-subtle)' }}>
+                        → {task.assigned_to}
+                      </span>
+                    )}
+                  </div>
+                  <Badge
+                    variant={
+                      task.status === 'completed' ? 'success' :
+                      task.status === 'failed' ? 'error' :
+                      task.status === 'running' ? 'warning' :
+                      'muted'
+                    }
+                  >
+                    {task.status}
+                  </Badge>
+                </div>
+              ))
+            ) : (
+              <p style={{ color: 'var(--foreground-subtle)' }}>No recent activity</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
-  )
-}
-
-function AgentLogsModal({ agentName, onClose }: { agentName: string; onClose: () => void }) {
-  const { data, isLoading } = useGetAgentLogsQuery(
-    { name: agentName, lines: 100 },
-    { pollingInterval: 3000 },
-  )
-
-  return (
-    <Modal open title={`Logs: ${agentName}`} onClose={onClose} className="logs-modal">
-      <div className="logs-content">
-        {isLoading ? (
-          <p>Loading logs...</p>
-        ) : data?.logs && data.logs.length > 0 ? (
-          data.logs.map((line, i) => (
-            <div key={i} className="font-mono text-xs">{line}</div>
-          ))
-        ) : (
-          <p style={{ color: 'var(--foreground-subtle)' }}>No logs available</p>
-        )}
-      </div>
-    </Modal>
   )
 }

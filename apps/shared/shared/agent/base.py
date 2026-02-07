@@ -6,22 +6,25 @@ BaseAgent configured with different labels, tools, and system prompts.
 Key capabilities:
 - Queue consumption: pop tasks from Redis by label, execute, push new tasks
 - ReAct loop: Reason + Act cycle using LLM function calling
+- Heartbeat: writes status to Redis every 10s for monitoring
 - Graceful shutdown: handles SIGTERM/SIGINT for Docker stop
 """
 
 import asyncio
 import json
 import logging
-import os
 import signal
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import redis.asyncio as aioredis
 import yaml
 from openai import AsyncOpenAI
 
 from shared.config.settings import get_settings
+from shared.models.agent import AgentHeartbeat
 from shared.models.task import Task, TaskStatus
 from shared.queue.redis_queue import TaskQueue
 from shared.tools.base import Tool
@@ -67,7 +70,14 @@ class BaseAgent:
         self._shutdown_event = asyncio.Event()
         self._settings = get_settings()
         self._queue = TaskQueue(self._settings.redis_url)
+        self._redis = aioredis.from_url(self._settings.redis_url, decode_responses=True)
         self._llm: AsyncOpenAI | None = None
+
+        # Heartbeat state
+        self._current_task: Task | None = None
+        self._tasks_completed: int = 0
+        self._tasks_failed: int = 0
+        self._started_at: datetime = datetime.now()
 
     @classmethod
     def from_config(cls, agent_name: str) -> "BaseAgent":
@@ -98,6 +108,34 @@ class BaseAgent:
         )
 
     # ──────────────────────────────────────────────
+    # Heartbeat
+    # ──────────────────────────────────────────────
+
+    async def _heartbeat_loop(self) -> None:
+        """Write heartbeat to Redis every 10s. Expires after 30s."""
+        while not self._shutdown_event.is_set():
+            try:
+                heartbeat = AgentHeartbeat(
+                    name=self.name,
+                    labels=self.labels,
+                    status="busy" if self._current_task else "idle",
+                    current_task_id=self._current_task.id if self._current_task else None,
+                    current_task_label=self._current_task.label if self._current_task else None,
+                    tasks_completed=self._tasks_completed,
+                    tasks_failed=self._tasks_failed,
+                    started_at=self._started_at,
+                    last_heartbeat=datetime.now(),
+                )
+                await self._redis.set(
+                    f"agent:heartbeat:{self.name}",
+                    heartbeat.model_dump_json(),
+                    ex=30,
+                )
+            except Exception:
+                logger.warning("Failed to write heartbeat", exc_info=True)
+            await asyncio.sleep(10)
+
+    # ──────────────────────────────────────────────
     # Main loop
     # ──────────────────────────────────────────────
 
@@ -107,6 +145,7 @@ class BaseAgent:
         Runs until SIGTERM/SIGINT is received (Docker stop).
         """
         self._register_signals()
+        self._started_at = datetime.now()
         logger.info(
             "Agent '%s' starting | labels=%s | ai_enabled=%s | tools=%s",
             self.name,
@@ -115,14 +154,18 @@ class BaseAgent:
             [t.name for t in self.tools],
         )
 
+        # Start heartbeat in background
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
         try:
             while not self._shutdown_event.is_set():
-                task = await self._queue.pop(self.labels)
+                task = await self._queue.pop(self.labels, agent_name=self.name)
 
                 if task is None:
                     await asyncio.sleep(5)
                     continue
 
+                self._current_task = task
                 logger.info(
                     "Executing task %s (label=%s, priority=%s)",
                     task.id,
@@ -135,6 +178,7 @@ class BaseAgent:
 
                     # Mark task as done
                     await self._queue.mark_done(task, result.data)
+                    self._tasks_completed += 1
 
                     # Push any new tasks produced by this execution
                     for new_task in result.new_tasks:
@@ -149,10 +193,16 @@ class BaseAgent:
                 except Exception as e:
                     logger.error("Task %s failed: %s", task.id, e, exc_info=True)
                     await self._queue.mark_failed(task, str(e))
+                    self._tasks_failed += 1
+                finally:
+                    self._current_task = None
 
         except asyncio.CancelledError:
             logger.info("Agent '%s' cancelled", self.name)
         finally:
+            heartbeat_task.cancel()
+            await self._redis.delete(f"agent:heartbeat:{self.name}")
+            await self._redis.aclose()
             await self._queue.close()
             logger.info("Agent '%s' stopped", self.name)
 

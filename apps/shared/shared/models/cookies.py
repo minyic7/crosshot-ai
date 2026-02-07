@@ -20,7 +20,7 @@ class CookiesPool(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     platform: str
     name: str
-    cookies: dict[str, Any] = Field(default_factory=dict)
+    cookies: list[dict[str, Any]] = Field(default_factory=list)
     is_active: bool = True
     last_used_at: datetime | None = None
     use_count_today: int = 0

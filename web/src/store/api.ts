@@ -1,14 +1,19 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import type { Task, Job, Agent, Content, ChatMessage, HealthResponse } from '@/types/models'
+import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats } from '@/types/models'
 
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Task', 'Job', 'Agent', 'Content'],
+  tagTypes: ['Task', 'Job', 'Agent', 'Content', 'Cookies'],
   endpoints: (builder) => ({
     // Health (at root, not /api)
     getHealth: builder.query<HealthResponse, void>({
       query: () => ({ url: '/health', baseUrl: '' }),
+    }),
+
+    // Dashboard
+    getDashboardStats: builder.query<DashboardStats, void>({
+      query: () => '/dashboard/stats',
     }),
 
     // Tasks
@@ -32,18 +37,36 @@ export const apiSlice = createApi({
     }),
 
     // Agents
-    listAgents: builder.query<Agent[], void>({
+    listAgents: builder.query<AgentHeartbeat[], void>({
       query: () => '/agents',
       providesTags: ['Agent'],
     }),
-    getAgentLogs: builder.query<{ logs: string[] }, { name: string; lines?: number }>({
-      query: ({ name, lines = 100 }) => `/agents/${name}/logs?lines=${lines}`,
+    listQueues: builder.query<QueueInfo[], void>({
+      query: () => '/agents/queues',
     }),
 
     // Contents
     listContents: builder.query<{ contents: Content[]; total: number }, { platform?: string; limit?: number; offset?: number } | void>({
       query: (params) => ({ url: '/contents', params: params ?? undefined }),
       providesTags: ['Content'],
+    }),
+
+    // Cookies
+    listCookies: builder.query<CookiesPool[], { platform?: string } | void>({
+      query: (params) => ({ url: '/cookies', params: params ?? undefined }),
+      providesTags: ['Cookies'],
+    }),
+    createCookies: builder.mutation<CookiesPool, { platform: string; name: string; cookies: BrowserCookie[] }>({
+      query: (body) => ({ url: '/cookies', method: 'POST', body }),
+      invalidatesTags: ['Cookies'],
+    }),
+    updateCookies: builder.mutation<CookiesPool, { id: string; name?: string; cookies?: BrowserCookie[]; is_active?: boolean }>({
+      query: ({ id, ...body }) => ({ url: `/cookies/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Cookies'],
+    }),
+    deleteCookies: builder.mutation<{ deleted: string }, string>({
+      query: (id) => ({ url: `/cookies/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Cookies'],
     }),
 
     // Chat
@@ -55,12 +78,17 @@ export const apiSlice = createApi({
 
 export const {
   useGetHealthQuery,
+  useGetDashboardStatsQuery,
   useListTasksQuery,
   useGetTaskQuery,
   useCreateJobMutation,
   useGetJobQuery,
   useListAgentsQuery,
-  useGetAgentLogsQuery,
+  useListQueuesQuery,
   useListContentsQuery,
+  useListCookiesQuery,
+  useCreateCookiesMutation,
+  useUpdateCookiesMutation,
+  useDeleteCookiesMutation,
   useSendChatMessageMutation,
 } = apiSlice
