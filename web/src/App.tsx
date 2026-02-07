@@ -1,21 +1,21 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
-import { Layout } from "@/components/layout/layout"
-import { Dashboard } from "@/pages/dashboard"
-import { DatabasePage } from "@/pages/database"
-import { AgentsPage } from "@/pages/agents"
+import { Routes, Route } from 'react-router-dom'
+import { Layout } from '@/components/layout/Layout'
+import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { DatabasePage } from '@/features/database/DatabasePage'
+import { AgentsPage } from '@/features/agents/AgentsPage'
+import { TasksPage } from '@/features/tasks/TasksPage'
+import { ChatPage } from '@/features/chat/ChatPage'
 
-function App() {
+export function App() {
   return (
-    <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/database" element={<DatabasePage />} />
-          <Route path="/agents" element={<AgentsPage />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<DashboardPage />} />
+        <Route path="database" element={<DatabasePage />} />
+        <Route path="agents" element={<AgentsPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="chat" element={<ChatPage />} />
+      </Route>
+    </Routes>
   )
 }
-
-export default App

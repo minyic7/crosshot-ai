@@ -1,21 +1,17 @@
-import { TopNav } from "./topnav"
-import { BottomTabs } from "./bottom-tabs"
-import { Fab } from "./fab"
-import type { ReactNode } from "react"
+import { Outlet } from 'react-router-dom'
+import { TopNav } from './TopNav'
+import { BottomTabs } from './BottomTabs'
 
-interface LayoutProps {
-  children: ReactNode
-}
-
-export function Layout({ children }: LayoutProps) {
+export function Layout() {
   return (
     <div className="app-layout">
       <TopNav />
       <main className="main-content">
-        {children}
+        <div className="page-container">
+          <Outlet />
+        </div>
       </main>
       <BottomTabs />
-      <Fab />
     </div>
   )
 }
