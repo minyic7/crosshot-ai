@@ -24,6 +24,9 @@ ENV/
 data/
 *.db
 
+# Archive
+archive/
+
 # Screenshots and test images
 *.png
 

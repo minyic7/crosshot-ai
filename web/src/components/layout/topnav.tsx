@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { NavLink } from "react-router-dom"
-import { LayoutDashboard, Bot, Settings, Search, Plus, Database, X } from "lucide-react"
+import { LayoutDashboard, Bot, Settings, Search, Database, X } from "lucide-react"
 
 interface NavItem {
   icon: React.ReactNode
@@ -64,14 +64,6 @@ export function TopNav() {
             <Search size={14} className="topnav-search-icon" />
             <input type="text" placeholder="Search...  ⌘K" />
           </div>
-          <div className="topnav-status">
-            <div className="status-dot online" />
-            <span>Online</span>
-          </div>
-          <button className="topnav-cta">
-            <Plus size={14} />
-            New Crawler
-          </button>
         </div>
 
         {/* Mobile: Search icon toggle */}

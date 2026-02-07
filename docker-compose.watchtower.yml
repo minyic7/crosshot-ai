@@ -1,0 +1,75 @@
+# ============================================
+# 全局 Watchtower 配置（可选）
+# ============================================
+#
+# 如果你不想为每个平台单独配置 watchtower，
+# 可以使用这个全局配置，监控所有 crawler。
+#
+# 使用：
+#   docker-compose -f docker-compose.yml -f docker-compose.watchtower.yml up -d
+#
+# 或者和平台配置一起：
+#   docker-compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.x.yml \
+#     -f docker-compose.xhs.yml \
+#     -f docker-compose.watchtower.yml \
+#     up -d
+#
+# 注意：如果使用全局 watchtower，记得停止平台专属的 watchtower
+#
+# ============================================
+
+services:
+  watchtower-global:
+    image: containrrr/watchtower:latest
+    container_name: watchtower-global
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # 监控所有有标签的容器
+      - WATCHTOWER_LABEL_ENABLE=true
+
+      # 每 10 分钟检查一次（折中方案）
+      - WATCHTOWER_POLL_INTERVAL=600
+
+      # 基础配置
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_DEBUG=false
+
+      # 通知配置（可选）
+      # - WATCHTOWER_NOTIFICATIONS=shoutrrr
+      # - WATCHTOWER_NOTIFICATION_URL=discord://token@id
+
+      # 调度（可选，代替 POLL_INTERVAL）
+      # - WATCHTOWER_SCHEDULE=0 0 3 * * *  # 每天凌晨 3 点更新
+    networks:
+      - crosshot
+
+# ============================================
+# 配置说明
+# ============================================
+#
+# 选择哪种 watchtower 策略：
+#
+# 方案 1：平台专属 watchtower（推荐）
+#   - X 平台：每 5 分钟检查（docker-compose.x.yml）
+#   - 小红书：每 30 分钟检查（docker-compose.xhs.yml）
+#   - 优点：灵活，不同平台不同策略
+#   - 缺点：多个 watchtower 容器
+#
+# 方案 2：全局 watchtower（简单）
+#   - 使用这个文件，监控所有平台
+#   - 统一的更新间隔
+#   - 优点：简单，只有一个 watchtower
+#   - 缺点：所有平台用同一个策略
+#
+# 方案 3：混合方案
+#   - 重要平台用专属 watchtower（如 X）
+#   - 其他平台用全局 watchtower
+#   - 需要在平台配置中注释掉 watchtower 部分
+#
+# ============================================

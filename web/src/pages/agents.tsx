@@ -168,7 +168,7 @@ function AgentCard({
       {/* Header */}
       <div className="agent-card-header">
         <div className="agent-card-title-row">
-          <div className={`agent-status-dot ${isRunning ? "online" : "offline"}`} />
+          <div className={`status-dot ${isRunning ? "online" : "offline"}`} />
           <span className="agent-card-name">{container.name}</span>
         </div>
         <div className="agent-card-tags">
@@ -500,7 +500,7 @@ export function AgentsPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span className="live-badge">
-            <span className="live-dot" />
+            <span className="status-dot online" style={{ width: 8, height: 8 }} />
             {runningCount}/{totalCount} running
           </span>
           <button className="topnav-cta" onClick={() => setShowCreate(true)}>
