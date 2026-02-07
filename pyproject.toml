@@ -1,5 +1,7 @@
 [tool.uv.workspace]
 members = [
-    "apps/crawler",
-    "apps/example-app",
+    "apps/shared",
+    "apps/agent-crawler",
+    "apps/agent-coordinator",
+    "apps/api",
 ]

@@ -1,0 +1,129 @@
+name: Deploy to NAS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  NAS_DEPLOY_PATH: /share/minyic-volumn/crosshot-ai
+  DOCKER: /share/CACHEDEV1_DATA/.qpkg/container-station/usr/bin/.libs/docker
+
+jobs:
+  # ──────────────────────────────────────
+  # CI: Build and push images to GHCR
+  # ──────────────────────────────────────
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push crawler image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/agent-crawler/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-crawler:latest
+          cache-from: type=gha,scope=crawler
+          cache-to: type=gha,mode=max,scope=crawler
+
+      - name: Build and push coordinator image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/agent-coordinator/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-coordinator:latest
+          cache-from: type=gha,scope=coordinator
+          cache-to: type=gha,mode=max,scope=coordinator
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  # ──────────────────────────────────────
+  # CD: Deploy to NAS via Tailscale + SSH
+  # ──────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Connect to Tailscale network to reach the NAS
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+
+      # Setup SSH key for NAS access
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.NAS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.NAS_TAILSCALE_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Copy docker-compose.yml to NAS
+      - name: Copy compose file to NAS
+        run: |
+          ssh ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }} "mkdir -p ${{ env.NAS_DEPLOY_PATH }}"
+          scp docker-compose.yml ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }}:${{ env.NAS_DEPLOY_PATH }}/
+
+      # Deploy: login GHCR → pull images → restart containers
+      - name: Deploy on NAS
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          ssh ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }} << EOF
+            DOCKER="${{ env.DOCKER }}"
+            COMPOSE="\$DOCKER compose"
+            cd ${{ env.NAS_DEPLOY_PATH }}
+
+            # Login to GHCR
+            echo "${GHCR_TOKEN}" | \$DOCKER login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+            # Pull new images
+            \$COMPOSE pull
+
+            # Restart containers (recreate only changed images)
+            \$COMPOSE up -d --remove-orphans
+
+            # Wait for startup
+            sleep 15
+
+            # Health check
+            curl -sf http://localhost:8000/health && echo "Deploy successful" || echo "Health check failed"
+          EOF
+
+      # Verify deployment from CI runner via Tailscale
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -sf http://${{ secrets.NAS_TAILSCALE_IP }}:8000/health || exit 1
+          echo "Deployment verified successfully"

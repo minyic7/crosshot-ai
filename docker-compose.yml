@@ -1,48 +1,114 @@
-# ============================================
-# 基础配置 - 网络和共享资源
-# ============================================
-#
-# 使用方式：
-#   docker-compose -f docker-compose.yml -f docker-compose.x.yml up -d
-#
-# ============================================
+services:
+  # ──────────────────────────────────────
+  # Infrastructure
+  # ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
-networks:
-  crosshot:
-    driver: bridge
-    name: crosshot-ai
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crosshot
+      POSTGRES_USER: ${DB_USER:-crosshot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-crosshot}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-crosshot}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
-# 可选：共享的数据卷
+  # ──────────────────────────────────────
+  # Agents
+  # ──────────────────────────────────────
+  crawler-xhs:
+    image: ghcr.io/minyic7/crosshot-ai-crawler:latest
+    build:
+      context: .
+      dockerfile: apps/agent-crawler/Dockerfile
+    restart: unless-stopped
+    environment:
+      AGENT_NAME: crawler-xhs
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 1g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  crawler-x:
+    image: ghcr.io/minyic7/crosshot-ai-crawler:latest
+    restart: unless-stopped
+    environment:
+      AGENT_NAME: crawler-x
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 1g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  coordinator:
+    image: ghcr.io/minyic7/crosshot-ai-coordinator:latest
+    build:
+      context: .
+      dockerfile: apps/agent-coordinator/Dockerfile
+    restart: unless-stopped
+    environment:
+      AGENT_NAME: coordinator
+      REDIS_URL: redis://redis:6379/0
+      GROK_API_KEY: ${GROK_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 512m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ──────────────────────────────────────
+  # API
+  # ──────────────────────────────────────
+  api:
+    image: ghcr.io/minyic7/crosshot-ai-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 300m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
-  shared-data:
-    driver: local
-
-# ============================================
-# 说明
-# ============================================
-#
-# 这是基础配置文件，定义了共享的网络和卷。
-# 不包含任何服务，需要和平台特定的配置文件一起使用。
-#
-# 示例命令：
-#
-# 1. 启动 X 平台所有 crawler
-#    docker-compose -f docker-compose.yml -f docker-compose.x.yml up -d
-#
-# 2. 启动小红书平台所有 crawler
-#    docker-compose -f docker-compose.yml -f docker-compose.xhs.yml up -d
-#
-# 3. 启动所有平台
-#    docker-compose \
-#      -f docker-compose.yml \
-#      -f docker-compose.x.yml \
-#      -f docker-compose.xhs.yml \
-#      up -d
-#
-# 4. 查看特定平台日志
-#    docker-compose -f docker-compose.yml -f docker-compose.x.yml logs -f
-#
-# 5. 停止特定平台
-#    docker-compose -f docker-compose.yml -f docker-compose.x.yml down
-#
-# ============================================
+  redis_data:
+  pg_data:

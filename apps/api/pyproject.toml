@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api"
+version = "0.1.0"
+description = "Crosshot AI API service"
+requires-python = ">=3.13"
+dependencies = [
+    "shared",
+    "fastapi>=0.128.4",
+    "uvicorn>=0.40.0",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }

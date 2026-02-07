@@ -45,3 +45,6 @@ Thumbs.db
 node_modules/
 dist/
 *.local
+
+# Docker
+images.tar.gz
