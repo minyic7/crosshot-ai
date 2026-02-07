@@ -109,18 +109,13 @@ function CookieCard({
 }) {
   const [expanded, setExpanded] = useState(false)
 
-  const keyNames = cookie.cookies
-    .filter((c) => ['auth_token', 'ct0', 'twid', 'kdt'].includes(c.name))
-    .map((c) => c.name)
-
-  const earliestExpiry = cookie.cookies
+  // Auth-critical cookies and their expiry
+  const AUTH_KEYS = ['auth_token', 'ct0', 'twid', 'kdt']
+  const authCookies = cookie.cookies.filter((c) => AUTH_KEYS.includes(c.name))
+  const authExpiry = authCookies
     .filter((c) => c.expirationDate)
-    .reduce((min, c) => {
-      const exp = c.expirationDate!
-      return exp < min ? exp : min
-    }, Infinity)
-
-  const expiryStr = earliestExpiry < Infinity ? formatExpiry(earliestExpiry) : null
+    .reduce((min, c) => (c.expirationDate! < min ? c.expirationDate! : min), Infinity)
+  const missingAuth = AUTH_KEYS.filter((k) => !authCookies.find((c) => c.name === k))
 
   return (
     <Card className={cookie.is_active ? '' : 'opacity-60'}>
@@ -147,18 +142,20 @@ function CookieCard({
           </div>
         </div>
 
-        {/* Stats row */}
+        {/* Auth status row */}
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <Badge variant="muted">{cookie.cookies.length} cookies</Badge>
-          {keyNames.length > 0 && (
-            <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-              Keys: {keyNames.join(', ')}
-            </span>
-          )}
-          {expiryStr && (
-            <Badge variant={isExpiringSoon(earliestExpiry) ? 'warning' : 'muted'}>
-              {expiryStr}
+          {authExpiry < Infinity ? (
+            <Badge variant={isExpired(authExpiry) ? 'error' : isExpiringSoon(authExpiry) ? 'warning' : 'success'}>
+              {isExpired(authExpiry) ? 'Auth expired' : `Auth valid ${formatExpiry(authExpiry)}`}
             </Badge>
+          ) : authCookies.length === 0 ? (
+            <Badge variant="error">No auth tokens</Badge>
+          ) : null}
+          {missingAuth.length > 0 && (
+            <span className="text-xs" style={{ color: 'var(--warning)' }}>
+              Missing: {missingAuth.join(', ')}
+            </span>
           )}
           {cookie.fail_count > 0 && (
             <Badge variant="error">{cookie.fail_count} fails</Badge>
@@ -190,7 +187,9 @@ function CookieCard({
               </div>
               {cookie.cookies.map((c, i) => (
                 <div key={i} className="table-compact-row" style={{ fontSize: '0.75rem' }}>
-                  <span style={{ flex: 1.2 }} className="font-mono">{c.name}</span>
+                  <span style={{ flex: 1.2, fontWeight: AUTH_KEYS.includes(c.name) ? 600 : 400 }} className="font-mono">
+                    {AUTH_KEYS.includes(c.name) ? '★ ' : ''}{c.name}
+                  </span>
                   <span style={{ flex: 1 }} className="font-mono">{c.domain}</span>
                   <span style={{ flex: 1 }}>
                     {c.expirationDate ? (
