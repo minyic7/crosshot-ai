@@ -84,6 +84,21 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
     is_reply = bool(legacy.get("in_reply_to_status_id_str"))
     is_quote = "quoted_status_result" in result
 
+    # Quote tweet — recursively parse the quoted tweet
+    quoted_tweet = None
+    if is_quote:
+        quoted_result = result.get("quoted_status_result", {}).get("result")
+        if quoted_result:
+            quoted_tweet = parse_tweet_result(quoted_result)
+
+    # Reply context
+    reply_to = None
+    if is_reply:
+        reply_to = {
+            "tweet_id": legacy.get("in_reply_to_status_id_str", ""),
+            "username": legacy.get("in_reply_to_screen_name", ""),
+        }
+
     return {
         "tweet_id": tweet_id,
         "text": legacy.get("full_text", ""),
@@ -96,6 +111,8 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
         "is_retweet": is_retweet,
         "is_reply": is_reply,
         "is_quote": is_quote,
+        "quoted_tweet": quoted_tweet,
+        "reply_to": reply_to,
         "lang": legacy.get("lang", ""),
         "source_url": f"https://x.com/{author['username']}/status/{tweet_id}",
     }

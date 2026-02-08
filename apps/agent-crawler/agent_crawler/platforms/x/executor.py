@@ -129,6 +129,12 @@ class XExecutor(BasePlatformExecutor):
                 "Search payload must contain 'query', 'query_builder', or 'intent'"
             )
 
+        # Default: filter out pure retweets (duplicate content)
+        # Set "include_retweets": true in payload to keep them
+        if not payload.get("include_retweets", False):
+            if "-is:retweet" not in query:
+                query += " -is:retweet"
+
         logger.info("Executing search: query=%r tab=%s", query, tab)
         tweets = await search_tweets(
             session, query=query, tab=tab, max_tweets=max_tweets,
