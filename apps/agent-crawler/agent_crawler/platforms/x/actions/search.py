@@ -53,17 +53,25 @@ async def search_tweets(
 
     await session.goto(url)
 
+    # Log page state after navigation for debugging
+    current_url = await session.get_page_url()
+    page_title = await session.get_page_title()
+    logger.info("Page loaded: url=%s title=%r", current_url, page_title)
+
     all_tweets: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
 
-    for page in range(max_pages):
+    for page_num in range(max_pages):
         # Wait for SearchTimeline response
         data = await session.interceptor.wait_for(
             "SearchTimeline", timeout=GRAPHQL_WAIT_TIMEOUT,
         )
 
         if data is None:
-            logger.info("No more SearchTimeline data at page %d", page + 1)
+            logger.warning(
+                "No SearchTimeline data at page %d (url=%s title=%r)",
+                page_num + 1, current_url, page_title,
+            )
             break
 
         tweets = parse_search_timeline(data)
@@ -77,14 +85,14 @@ async def search_tweets(
 
         logger.info(
             "Search page %d: %d new tweets (total %d)",
-            page + 1, new_count, len(all_tweets),
+            page_num + 1, new_count, len(all_tweets),
         )
 
         # Stop conditions
         if len(all_tweets) >= max_tweets:
             break
         if new_count == 0:
-            logger.info("No new tweets on page %d, stopping", page + 1)
+            logger.info("No new tweets on page %d, stopping", page_num + 1)
             break
 
         # Scroll for next page

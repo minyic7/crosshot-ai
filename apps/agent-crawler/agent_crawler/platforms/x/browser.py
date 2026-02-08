@@ -207,6 +207,23 @@ class XBrowserSession:
         """Wait a random duration to simulate human behavior."""
         await asyncio.sleep(random.uniform(min_s, max_s))
 
+    async def screenshot_base64(self) -> str:
+        """Take a screenshot and return as base64 string (for debugging)."""
+        import base64
+        assert self.page is not None
+        buf = await self.page.screenshot(full_page=False)
+        return base64.b64encode(buf).decode()
+
+    async def get_page_title(self) -> str:
+        """Get the current page title."""
+        assert self.page is not None
+        return await self.page.title()
+
+    async def get_page_url(self) -> str:
+        """Get the current page URL (useful to detect redirects)."""
+        assert self.page is not None
+        return self.page.url
+
     # ──────────────────────────────────────
     # Cookie formatting
     # ──────────────────────────────────────
@@ -226,11 +243,15 @@ class XBrowserSession:
             if c.get("secure") is not None:
                 cookie["secure"] = c["secure"]
             if c.get("sameSite"):
-                ss = c["sameSite"]
-                if ss.lower() in ("strict", "lax", "none"):
+                ss = c["sameSite"].lower()
+                # Chrome extension format → Playwright format
+                if ss == "no_restriction":
+                    cookie["sameSite"] = "None"
+                elif ss in ("strict", "lax", "none"):
                     cookie["sameSite"] = ss.capitalize()
                     if cookie["sameSite"] == "None":
                         cookie["sameSite"] = "None"
+                # "unspecified" → skip (use browser default)
             if c.get("expirationDate"):
                 cookie["expires"] = c["expirationDate"]
             pw_cookies.append(cookie)

@@ -102,8 +102,10 @@ class XExecutor(BasePlatformExecutor):
         3. {"action": "search", "intent": "find AI tweets..."}  → AI hybrid
         """
         payload = task.payload
-        tab = payload.get("search_tab", "Top")
         max_tweets = payload.get("max_tweets", 100)
+
+        # Tab can be at top-level or inside query_builder dict
+        tab = payload.get("search_tab", "Top")
 
         # Mode 1: Raw query string
         if "query" in payload:
@@ -111,7 +113,11 @@ class XExecutor(BasePlatformExecutor):
 
         # Mode 2: Builder dict
         elif "query_builder" in payload:
-            query = XQueryBuilder.from_dict(payload["query_builder"]).build()
+            builder = XQueryBuilder.from_dict(payload["query_builder"])
+            query, builder_tab = builder.build_with_tab()
+            # Builder tab overrides default unless top-level explicitly set
+            if "search_tab" not in payload:
+                tab = builder_tab
 
         # Mode 3: AI hybrid (intent → query)
         elif "intent" in payload:
@@ -131,13 +137,27 @@ class XExecutor(BasePlatformExecutor):
         # Save as Content objects
         saved_ids = await self._save_contents(task, tweets)
 
-        return {
+        result: dict[str, Any] = {
             "action": "search",
             "query": query,
             "tab": tab,
             "tweets_found": len(tweets),
             "content_ids": saved_ids,
         }
+
+        # Add diagnostic info when no tweets found
+        if not tweets:
+            try:
+                result["debug"] = {
+                    "page_url": await session.get_page_url(),
+                    "page_title": await session.get_page_title(),
+                    "screenshot_b64": await session.screenshot_base64(),
+                }
+            except Exception as e:
+                logger.warning("Failed to capture debug info: %s", e)
+                result["debug"] = {"error": str(e)}
+
+        return result
 
     async def _handle_tweet(
         self, session: XBrowserSession, task: Task,
