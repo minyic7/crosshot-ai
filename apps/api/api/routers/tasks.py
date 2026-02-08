@@ -1,11 +1,12 @@
 """Task query and creation endpoints."""
 
+import json
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from api.deps import get_queue
+from api.deps import get_queue, get_redis
 from shared.models.task import Task, TaskPriority
 
 router = APIRouter(tags=["tasks"])
@@ -76,3 +77,13 @@ async def get_task(task_id: str) -> dict:
     if task is None:
         return {"error": "Task not found", "task_id": task_id}
     return task.model_dump(mode="json")
+
+
+@router.get("/content/{content_id}")
+async def get_content(content_id: str) -> dict:
+    """Get a crawled content item by ID."""
+    redis = get_redis()
+    raw = await redis.get(f"content:{content_id}")
+    if raw is None:
+        return {"error": "Content not found", "content_id": content_id}
+    return json.loads(raw)
