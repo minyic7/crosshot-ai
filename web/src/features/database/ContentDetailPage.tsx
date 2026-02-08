@@ -29,7 +29,7 @@ interface TweetData {
     quote_count: number
     views_count: number
   }
-  media: Array<{ type: string; url: string; video_url?: string }>
+  media: Array<{ type: string; url: string; video_url?: string; local_path?: string; video_local_path?: string }>
   urls: string[]
   hashtags: string[]
   quoted_tweet: TweetData | null

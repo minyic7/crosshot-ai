@@ -28,6 +28,8 @@ interface TweetData {
     video_url?: string
     local_path?: string
     video_local_path?: string
+    width?: number
+    height?: number
   }>
   hashtags?: string[]
   created_at?: string
@@ -266,7 +268,6 @@ function MasonryCard({
             style={{
               width: '100%',
               display: imgLoaded ? 'block' : 'none',
-              objectFit: 'cover',
             }}
             loading="lazy"
           />
