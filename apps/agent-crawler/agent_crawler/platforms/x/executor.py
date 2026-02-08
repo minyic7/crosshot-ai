@@ -197,21 +197,31 @@ class XExecutor(BasePlatformExecutor):
     async def _handle_tweet(
         self, session: XBrowserSession, task: Task,
     ) -> dict[str, Any]:
-        """Handle single tweet fetch."""
+        """Handle single tweet fetch with replies."""
         payload = task.payload
-        tweet = await fetch_tweet(
+        max_replies = payload.get("max_replies", 20)
+
+        result = await fetch_tweet(
             session,
             tweet_url=payload.get("url"),
             tweet_id=payload.get("tweet_id"),
             username=payload.get("username"),
+            max_replies=max_replies,
         )
 
-        saved_ids = await self._save_contents(task, [tweet])
+        main_tweet = result["tweet"]
+        replies = result["replies"]
+
+        # Save main tweet + all replies as Content
+        saved_ids = await self._save_contents(task, [main_tweet])
+        reply_ids = await self._save_contents(task, replies)
 
         return {
             "action": "tweet",
-            "tweet_id": tweet["tweet_id"],
+            "tweet_id": main_tweet["tweet_id"],
             "content_ids": saved_ids,
+            "replies_found": len(replies),
+            "reply_content_ids": reply_ids,
         }
 
     async def _handle_timeline(

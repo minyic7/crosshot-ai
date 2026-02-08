@@ -99,6 +99,15 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
             "username": legacy.get("in_reply_to_screen_name", ""),
         }
 
+    # Recommend deep crawl for high-engagement tweets
+    deep_crawl_recommended = (
+        metrics["reply_count"] >= 10
+        or metrics["like_count"] >= 100
+        or metrics["quote_count"] >= 5
+        or is_quote
+        or is_reply
+    )
+
     return {
         "tweet_id": tweet_id,
         "text": legacy.get("full_text", ""),
@@ -113,6 +122,7 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
         "is_quote": is_quote,
         "quoted_tweet": quoted_tweet,
         "reply_to": reply_to,
+        "deep_crawl_recommended": deep_crawl_recommended,
         "lang": legacy.get("lang", ""),
         "source_url": f"https://x.com/{author['username']}/status/{tweet_id}",
     }
@@ -145,7 +155,10 @@ def parse_search_timeline(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def parse_tweet_detail(data: dict[str, Any]) -> dict[str, Any] | None:
-    """Parse a TweetDetail / TweetResultByRestId response."""
+    """Parse a TweetDetail / TweetResultByRestId response.
+
+    Returns the main tweet only (first tweet in the conversation).
+    """
     try:
         # TweetResultByRestId format
         result = data.get("data", {}).get("tweetResult", {}).get("result", {})
@@ -170,6 +183,55 @@ def parse_tweet_detail(data: dict[str, Any]) -> dict[str, Any] | None:
         raise ParseError(f"TweetDetail parse failed: {e}") from e
 
     return None
+
+
+def parse_tweet_replies(
+    data: dict[str, Any],
+    main_tweet_id: str,
+) -> list[dict[str, Any]]:
+    """Parse replies from a TweetDetail conversation thread.
+
+    Extracts all tweet entries except the main tweet itself.
+    Handles both top-level replies (TimelineTimelineItem) and
+    conversation threads (TimelineTimelineModule with multiple items).
+    """
+    replies: list[dict[str, Any]] = []
+    try:
+        instructions = (
+            data.get("data", {})
+            .get("threaded_conversation_with_injections_v2", {})
+            .get("instructions", [])
+        )
+        entries = _extract_entries(instructions)
+
+        for entry in entries:
+            content = entry.get("content", {})
+            entry_type = content.get("entryType", "")
+
+            if entry_type == "TimelineTimelineItem":
+                tweet_data = _entry_to_tweet_result(entry)
+                if tweet_data:
+                    parsed = parse_tweet_result(tweet_data)
+                    if parsed and parsed["tweet_id"] != main_tweet_id:
+                        replies.append(parsed)
+
+            elif entry_type == "TimelineTimelineModule":
+                # Conversation thread — extract all tweets in the module
+                items = content.get("items", [])
+                for module_item in items:
+                    item = module_item.get("item", {}).get("itemContent", {})
+                    if item.get("itemType") == "TimelineTweet":
+                        tweet_data = item.get("tweet_results", {}).get("result")
+                        if tweet_data:
+                            parsed = parse_tweet_result(tweet_data)
+                            if parsed and parsed["tweet_id"] != main_tweet_id:
+                                replies.append(parsed)
+
+    except Exception as e:
+        logger.error("Failed to parse replies: %s", e)
+        raise ParseError(f"Reply parse failed: {e}") from e
+
+    return replies
 
 
 def parse_user_tweets(data: dict[str, Any]) -> list[dict[str, Any]]:
