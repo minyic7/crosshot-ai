@@ -145,25 +145,42 @@ class XExecutor(BasePlatformExecutor):
             "content_ids": saved_ids,
         }
 
-        # Add diagnostic info when no tweets found
-        if not tweets:
+        # Add diagnostic info when no tweets or author info missing
+        has_author_issue = any(
+            not t.get("author", {}).get("username") for t in tweets
+        )
+        if not tweets or has_author_issue:
             try:
-                # Include raw interceptor data for format debugging
+                import json
                 raw_graphql = session.interceptor.get_all("SearchTimeline")
-                raw_summary = []
+
+                # Extract one raw tweet entry for structure debugging
+                raw_tweet_sample = None
                 for resp in raw_graphql:
-                    import json
-                    raw_str = json.dumps(resp)
-                    raw_summary.append(
-                        raw_str[:2000] + ("..." if len(raw_str) > 2000 else "")
-                    )
+                    try:
+                        entries = (
+                            resp.get("data", {})
+                            .get("search_by_raw_query", {})
+                            .get("search_timeline", {})
+                            .get("timeline", {})
+                            .get("instructions", [{}])[0]
+                            .get("entries", [])
+                        )
+                        for entry in entries:
+                            content = entry.get("content", {})
+                            if content.get("entryType") == "TimelineTimelineItem":
+                                raw_tweet_sample = json.dumps(entry)[:3000]
+                                break
+                    except (IndexError, KeyError):
+                        pass
+                    if raw_tweet_sample:
+                        break
 
                 result["debug"] = {
                     "page_url": await session.get_page_url(),
                     "page_title": await session.get_page_title(),
-                    "screenshot_b64": await session.screenshot_base64(),
                     "graphql_responses_count": len(raw_graphql),
-                    "graphql_raw_preview": raw_summary,
+                    "raw_tweet_entry_sample": raw_tweet_sample,
                 }
             except Exception as e:
                 logger.warning("Failed to capture debug info: %s", e)

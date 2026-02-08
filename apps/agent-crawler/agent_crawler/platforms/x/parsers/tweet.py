@@ -30,8 +30,20 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
 
     core = result.get("core", {})
     legacy = result.get("legacy", {})
-    user_results = core.get("user_results", {}).get("result", {})
+
+    # X uses varying paths for user data across API versions
+    user_results = (
+        core.get("user_results", {}).get("result", {})
+        or core.get("user_result", {}).get("result", {})
+    )
     user_legacy = user_results.get("legacy", {})
+
+    # Log structure on first miss for debugging
+    if not user_legacy and core:
+        logger.debug(
+            "No user_legacy found. core keys: %s, user_results keys: %s",
+            list(core.keys()), list(user_results.keys()),
+        )
 
     if not legacy:
         return None
