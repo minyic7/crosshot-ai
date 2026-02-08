@@ -17,17 +17,18 @@ from typing import Any
 import redis.asyncio as aioredis
 from openai import AsyncOpenAI
 
+from shared.config import get_settings
 from shared.models.content import Content
-from shared.models.cookies import CookiesPool
 from shared.models.task import Task
 from shared.services.cookies_service import CookiesService
 
 from ..base import BasePlatformExecutor
+from ..services.media_downloader import download_media_batch
 from .actions.search import search_tweets
 from .actions.timeline import fetch_timeline
 from .actions.tweet import fetch_tweet
 from .browser import ProxyConfig, XBrowserSession
-from .errors import NoCookiesAvailable, XCrawlerError
+from .errors import ContentNotFoundError, NoCookiesAvailable, XCrawlerError
 from .query_builder import XQueryBuilder
 from .query_generator import QueryGenerator
 
@@ -81,7 +82,20 @@ class XExecutor(BasePlatformExecutor):
                     raise ValueError(f"Unknown action: {action}")
 
             await self._cookies_service.report_success(cookie)
+
+            # Download media AFTER browser closes (frees memory for downloads)
+            all_content_ids = (
+                result.get("content_ids", [])
+                + result.get("reply_content_ids", [])
+            )
+            await self._download_and_update_media(all_content_ids)
+
             return result
+
+        except ContentNotFoundError:
+            # Content not found is NOT a cookie problem — still report success
+            await self._cookies_service.report_success(cookie)
+            raise
 
         except XCrawlerError:
             await self._cookies_service.report_failure(cookie)
@@ -276,6 +290,52 @@ class XExecutor(BasePlatformExecutor):
 
         logger.info("Saved %d content items for task %s", len(content_ids), task.id)
         return content_ids
+
+    async def _download_and_update_media(
+        self, content_ids: list[str],
+    ) -> None:
+        """Download media for saved content items, update their records.
+
+        Best-effort: logs errors but never raises.
+        """
+        settings = get_settings()
+        base_path = settings.media_base_path
+        if not base_path:
+            return
+
+        downloaded = 0
+        for cid in content_ids:
+            try:
+                raw = await self._redis.get(f"content:{cid}")
+                if not raw:
+                    continue
+                content = Content.model_validate_json(raw)
+                media_items = content.data.get("media", [])
+                if not media_items:
+                    continue
+
+                crawled_date = content.crawled_at.strftime("%Y-%m-%d")
+                updated_media = await download_media_batch(
+                    media_items=media_items,
+                    platform=content.platform,
+                    content_id=content.id,
+                    crawled_date=crawled_date,
+                    base_path=base_path,
+                )
+
+                content.data["media"] = updated_media
+                content.data["media_downloaded"] = True
+                await self._redis.set(
+                    f"content:{content.id}",
+                    content.model_dump_json(),
+                    ex=604800,  # 7 days
+                )
+                downloaded += 1
+            except Exception as e:
+                logger.warning("Media download failed for content %s: %s", cid, e)
+
+        if downloaded:
+            logger.info("Downloaded media for %d/%d content items", downloaded, len(content_ids))
 
     def _get_query_generator(self) -> QueryGenerator:
         """Lazy init query generator."""

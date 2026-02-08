@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     grok_base_url: str = "https://api.x.ai/v1"
     grok_model: str = "grok-beta"
 
+    # Media storage
+    media_base_path: str = "/data/media"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

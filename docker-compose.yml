@@ -40,6 +40,9 @@ services:
     environment:
       AGENT_NAME: crawler-xhs
       REDIS_URL: redis://redis:6379/0
+      MEDIA_BASE_PATH: /data/media
+    volumes:
+      - media_data:/data/media
     depends_on:
       redis:
         condition: service_healthy
@@ -56,6 +59,9 @@ services:
     environment:
       AGENT_NAME: crawler-x
       REDIS_URL: redis://redis:6379/0
+      MEDIA_BASE_PATH: /data/media
+    volumes:
+      - media_data:/data/media
     depends_on:
       redis:
         condition: service_healthy
@@ -99,6 +105,9 @@ services:
       - "8000:8000"
     environment:
       REDIS_URL: redis://redis:6379/0
+      MEDIA_BASE_PATH: /data/media
+    volumes:
+      - media_data:/data/media:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -133,3 +142,4 @@ services:
 volumes:
   redis_data:
   pg_data:
+  media_data:

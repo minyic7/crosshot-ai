@@ -1,7 +1,7 @@
 """CookiesService — acquire and manage cookies for platform crawlers.
 
 Shared across all agents. Provides:
-- acquire(platform): Pick the best cookie (round-robin, respects cooldown/fail limits)
+- acquire(platform): Pick the best cookie (round-robin, respects cooldown/fail/rate limits)
 - report_success(cookie): Reset fail count, bump use counter
 - report_failure(cookie, error): Increment fail count, apply cooldown, deactivate if needed
 """
@@ -9,6 +9,7 @@ Shared across all agents. Provides:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import redis.asyncio as aioredis
@@ -17,11 +18,23 @@ from shared.models.cookies import CookiesPool
 
 logger = logging.getLogger(__name__)
 
-# Deactivate after this many consecutive failures
-MAX_FAIL_COUNT = 3
 
-# Cooldown duration after a failure (increases with fail count)
-BASE_COOLDOWN_SECONDS = 60
+@dataclass(frozen=True)
+class PlatformRateConfig:
+    """Per-platform rate limiting configuration."""
+
+    daily_limit: int
+    min_interval_seconds: int
+    max_fail_count: int = 3
+    base_cooldown_seconds: int = 60
+
+
+PLATFORM_RATE_CONFIGS: dict[str, PlatformRateConfig] = {
+    "x": PlatformRateConfig(daily_limit=100, min_interval_seconds=30),
+    "xhs": PlatformRateConfig(daily_limit=60, min_interval_seconds=60),
+}
+
+DEFAULT_RATE_CONFIG = PlatformRateConfig(daily_limit=50, min_interval_seconds=60)
 
 
 class CookiesService:
@@ -35,12 +48,15 @@ class CookiesService:
 
         Selection criteria (in order):
         1. is_active = True
-        2. fail_count < MAX_FAIL_COUNT
+        2. fail_count < max_fail_count
         3. cooldown_until is None or in the past
-        4. Lowest use_count_today (round-robin)
+        4. use_count_today < daily_limit
+        5. last_used_at + min_interval has elapsed
+        6. Lowest use_count_today (round-robin)
 
         Returns None if no suitable cookies are available.
         """
+        config = PLATFORM_RATE_CONFIGS.get(platform, DEFAULT_RATE_CONFIG)
         cookie_ids = await self._redis.smembers(f"cookies:index:{platform}")
         if not cookie_ids:
             return None
@@ -59,12 +75,22 @@ class CookiesService:
                 continue
 
             # Skip too many failures
-            if cookie.fail_count >= MAX_FAIL_COUNT:
+            if cookie.fail_count >= config.max_fail_count:
                 continue
 
             # Skip in cooldown
             if cookie.cooldown_until and cookie.cooldown_until > now:
                 continue
+
+            # Skip if daily limit reached
+            if cookie.use_count_today >= config.daily_limit:
+                continue
+
+            # Skip if minimum interval not elapsed
+            if cookie.last_used_at:
+                elapsed = (now - cookie.last_used_at).total_seconds()
+                if elapsed < config.min_interval_seconds:
+                    continue
 
             candidates.append(cookie)
 
@@ -80,8 +106,9 @@ class CookiesService:
         await self._save(best)
 
         logger.info(
-            "Acquired cookie %s (%s) for platform %s (use_count=%d)",
-            best.id[:8], best.name, platform, best.use_count_today,
+            "Acquired cookie %s (%s) for platform %s (use_count=%d/%d)",
+            best.id[:8], best.name, platform,
+            best.use_count_today, config.daily_limit,
         )
         return best
 
@@ -98,11 +125,12 @@ class CookiesService:
 
         Increments fail_count, applies cooldown, deactivates if too many failures.
         """
+        config = PLATFORM_RATE_CONFIGS.get(cookie.platform, DEFAULT_RATE_CONFIG)
         cookie.fail_count += 1
-        cooldown_secs = BASE_COOLDOWN_SECONDS * cookie.fail_count
+        cooldown_secs = config.base_cooldown_seconds * cookie.fail_count
         cookie.cooldown_until = datetime.now() + timedelta(seconds=cooldown_secs)
 
-        if cookie.fail_count >= MAX_FAIL_COUNT:
+        if cookie.fail_count >= config.max_fail_count:
             cookie.is_active = False
             logger.warning(
                 "Cookie %s (%s) deactivated after %d failures. Last error: %s",
@@ -112,7 +140,7 @@ class CookiesService:
             logger.warning(
                 "Cookie %s (%s) failed (%d/%d), cooldown %ds. Error: %s",
                 cookie.id[:8], cookie.name, cookie.fail_count,
-                MAX_FAIL_COUNT, cooldown_secs, error,
+                config.max_fail_count, cooldown_secs, error,
             )
 
         await self._save(cookie)
