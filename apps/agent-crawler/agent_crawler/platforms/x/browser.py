@@ -178,10 +178,11 @@ class XBrowserSession:
     # ──────────────────────────────────────
 
     async def goto(self, url: str) -> None:
-        """Navigate to URL with wait for DOM content loaded."""
+        """Navigate to URL and wait for network to settle."""
         assert self.page is not None
-        await self.page.goto(url, wait_until="domcontentloaded")
-        await self.random_delay(0.5, 1.5)
+        await self.page.goto(url, wait_until="load")
+        # Extra wait for JS-driven GraphQL calls to fire
+        await self.random_delay(2.0, 4.0)
 
     async def scroll_down(self) -> None:
         """Scroll to bottom with human-like behavior."""

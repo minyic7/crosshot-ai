@@ -148,10 +148,22 @@ class XExecutor(BasePlatformExecutor):
         # Add diagnostic info when no tweets found
         if not tweets:
             try:
+                # Include raw interceptor data for format debugging
+                raw_graphql = session.interceptor.get_all("SearchTimeline")
+                raw_summary = []
+                for resp in raw_graphql:
+                    import json
+                    raw_str = json.dumps(resp)
+                    raw_summary.append(
+                        raw_str[:2000] + ("..." if len(raw_str) > 2000 else "")
+                    )
+
                 result["debug"] = {
                     "page_url": await session.get_page_url(),
                     "page_title": await session.get_page_title(),
                     "screenshot_b64": await session.screenshot_base64(),
+                    "graphql_responses_count": len(raw_graphql),
+                    "graphql_raw_preview": raw_summary,
                 }
             except Exception as e:
                 logger.warning("Failed to capture debug info: %s", e)
