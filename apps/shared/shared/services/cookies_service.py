@@ -82,15 +82,16 @@ class CookiesService:
             if cookie.cooldown_until and cookie.cooldown_until > now:
                 continue
 
-            # Skip if daily limit reached
-            if cookie.use_count_today >= config.daily_limit:
-                continue
+            # TODO: re-enable rate limits for production
+            # # Skip if daily limit reached
+            # if cookie.use_count_today >= config.daily_limit:
+            #     continue
 
-            # Skip if minimum interval not elapsed
-            if cookie.last_used_at:
-                elapsed = (now - cookie.last_used_at).total_seconds()
-                if elapsed < config.min_interval_seconds:
-                    continue
+            # # Skip if minimum interval not elapsed
+            # if cookie.last_used_at:
+            #     elapsed = (now - cookie.last_used_at).total_seconds()
+            #     if elapsed < config.min_interval_seconds:
+            #         continue
 
             candidates.append(cookie)
 

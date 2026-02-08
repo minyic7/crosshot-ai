@@ -350,7 +350,7 @@ _OP_PATTERN = re.compile(
 
 # Known is: / has: values
 _VALID_IS_VALUES = frozenset({"retweet", "reply", "quote", "verified"})
-_VALID_HAS_VALUES = frozenset({"media", "images", "video_link", "links", "hashtags", "mentions"})
+_VALID_HAS_VALUES = frozenset({"media", "images", "video", "video_link", "links", "hashtags", "mentions"})
 
 
 def validate_query(query: str) -> tuple[bool, list[str]]:

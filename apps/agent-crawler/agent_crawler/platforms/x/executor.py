@@ -29,7 +29,7 @@ from .actions.timeline import fetch_timeline
 from .actions.tweet import fetch_tweet
 from .browser import ProxyConfig, XBrowserSession
 from .errors import ContentNotFoundError, NoCookiesAvailable, XCrawlerError
-from .query_builder import XQueryBuilder
+from .query_builder import QueryValidationError, XQueryBuilder
 from .query_generator import QueryGenerator
 
 logger = logging.getLogger(__name__)
@@ -92,8 +92,8 @@ class XExecutor(BasePlatformExecutor):
 
             return result
 
-        except ContentNotFoundError:
-            # Content not found is NOT a cookie problem — still report success
+        except (ContentNotFoundError, QueryValidationError):
+            # Not a cookie problem — still report success
             await self._cookies_service.report_success(cookie)
             raise
 
