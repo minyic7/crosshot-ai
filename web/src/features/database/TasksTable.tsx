@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -7,6 +8,7 @@ import type { TaskStatus } from '@/types/models'
 
 export function TasksTable() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('')
+  const navigate = useNavigate()
   const { data, isLoading } = useListTasksQuery(
     statusFilter ? { status: statusFilter } : undefined,
     { pollingInterval: 5000 },
@@ -47,7 +49,12 @@ export function TasksTable() {
             </div>
             {tasks.length > 0 ? (
               tasks.map((task) => (
-                <div key={task.id} className="table-compact-row">
+                <div
+                  key={task.id}
+                  className="table-compact-row"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/task/${task.id}`)}
+                >
                   <span style={{ flex: 1 }} className="font-mono text-sm">
                     {task.id.slice(0, 8)}...
                   </span>

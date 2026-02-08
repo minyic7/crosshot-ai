@@ -7,6 +7,7 @@ import { TasksPage } from '@/features/tasks/TasksPage'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { CookiesPage } from '@/features/cookies/CookiesPage'
 import { ContentDetailPage } from '@/features/database/ContentDetailPage'
+import { TaskDetailPage } from '@/features/database/TaskDetailPage'
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="database" element={<DatabasePage />} />
         <Route path="content/:id" element={<ContentDetailPage />} />
+        <Route path="task/:id" element={<TaskDetailPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="cookies" element={<CookiesPage />} />
