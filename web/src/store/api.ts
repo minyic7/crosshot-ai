@@ -26,6 +26,11 @@ export const apiSlice = createApi({
       providesTags: (_result, _error, id) => [{ type: 'Task', id }],
     }),
 
+    createTask: builder.mutation<{ task_id: string; label: string; status: string }, { label: string; payload: Record<string, unknown>; priority?: number }>({
+      query: (body) => ({ url: '/tasks', method: 'POST', body }),
+      invalidatesTags: ['Task'],
+    }),
+
     // Jobs
     createJob: builder.mutation<{ job_id: string; status: string; tasks_created: number }, { description: string }>({
       query: (body) => ({ url: '/jobs', method: 'POST', body }),
@@ -81,6 +86,7 @@ export const {
   useGetDashboardStatsQuery,
   useListTasksQuery,
   useGetTaskQuery,
+  useCreateTaskMutation,
   useCreateJobMutation,
   useGetJobQuery,
   useListAgentsQuery,

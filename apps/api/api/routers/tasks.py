@@ -1,10 +1,38 @@
-"""Task query endpoints."""
+"""Task query and creation endpoints."""
+
+from typing import Any
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from api.deps import get_queue
+from shared.models.task import Task, TaskPriority
 
 router = APIRouter(tags=["tasks"])
+
+
+class TaskCreate(BaseModel):
+    """Request body for creating a task directly."""
+
+    label: str
+    payload: dict[str, Any] = {}
+    priority: int = 1  # 0=LOW, 1=MEDIUM, 2=HIGH
+
+
+@router.post("/tasks")
+async def create_task(body: TaskCreate) -> dict:
+    """Push a task directly to the queue.
+
+    Useful for testing and manual task dispatch.
+    """
+    queue = get_queue()
+    task = Task(
+        label=body.label,
+        payload=body.payload,
+        priority=TaskPriority(body.priority),
+    )
+    await queue.push(task)
+    return {"task_id": task.id, "label": task.label, "status": "pending"}
 
 
 @router.get("/tasks")
