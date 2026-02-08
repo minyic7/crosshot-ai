@@ -42,6 +42,12 @@ function formatNumber(n: number): string {
   return String(n)
 }
 
+/** Convert a NAS local path like /data/media/x/... to a /media/x/... URL */
+function mediaUrl(localPath?: string, fallback?: string): string {
+  if (localPath) return localPath.replace(/^\/data\/media/, '/media')
+  return fallback ?? ''
+}
+
 function MediaGrid({ media }: { media: TweetData['media'] }) {
   if (media.length === 0) return null
 
@@ -61,13 +67,13 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
           }}
         >
           <video
-            src={v.video_url ?? v.url}
+            src={mediaUrl(v.video_local_path, v.video_url ?? v.url)}
             controls={v.type === 'video'}
             autoPlay={v.type === 'animated_gif'}
             loop={v.type === 'animated_gif'}
             muted={v.type === 'animated_gif'}
             playsInline
-            poster={v.url}
+            poster={mediaUrl(v.local_path, v.url)}
             style={{ width: '100%', maxHeight: 480, display: 'block' }}
           />
           <div
@@ -112,7 +118,7 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
           {photos.map((p, i) => (
             <a
               key={`photo-${i}`}
-              href={p.url}
+              href={mediaUrl(p.local_path, p.url)}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -122,7 +128,7 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
               }}
             >
               <img
-                src={p.url}
+                src={mediaUrl(p.local_path, p.url)}
                 alt={`Photo ${i + 1}`}
                 style={{
                   width: '100%',

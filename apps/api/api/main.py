@@ -1,11 +1,14 @@
 """FastAPI application."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from api.deps import close_deps, init_deps
 from api.routers import agents, cookies, dashboard, health, jobs, tasks
+from shared.config.settings import get_settings
 
 
 @asynccontextmanager
@@ -28,3 +31,8 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(cookies.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+
+# Serve downloaded media files
+_media_path = Path(get_settings().media_base_path)
+if _media_path.is_dir():
+    app.mount("/media", StaticFiles(directory=str(_media_path)), name="media")

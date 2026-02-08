@@ -41,6 +41,12 @@ function formatNumber(n: number): string {
   return String(n)
 }
 
+/** Convert a NAS local path like /data/media/x/... to a /media/x/... URL */
+function mediaUrl(localPath?: string, fallback?: string): string {
+  if (localPath) return localPath.replace(/^\/data\/media/, '/media')
+  return fallback ?? ''
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
@@ -261,7 +267,7 @@ function MasonryCard({
             <div className="skeleton" style={{ width: '100%', height: 180 }} />
           )}
           <img
-            src={firstMedia!.url}
+            src={mediaUrl(firstMedia!.local_path, firstMedia!.url)}
             alt=""
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
