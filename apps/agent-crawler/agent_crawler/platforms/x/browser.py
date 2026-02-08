@@ -1,11 +1,12 @@
 """Stealth Playwright browser session for X.
 
 Provides an async context manager that:
-1. Launches Chromium with anti-detection args
-2. Injects stealth JS (patches navigator.webdriver, etc.)
-3. Injects cookies from CookiesPool
-4. Attaches GraphQL interceptor
-5. Optionally configures residential proxy
+1. Launches Chromium with comprehensive anti-detection args
+2. Injects stealth JS (17 detection surfaces patched)
+3. Sends correct Sec-CH-UA client hints headers
+4. Injects cookies from CookiesPool
+5. Attaches GraphQL interceptor
+6. Optionally configures residential proxy
 """
 
 from __future__ import annotations
@@ -26,12 +27,12 @@ from playwright.async_api import (
 
 from shared.models.cookies import CookiesPool
 
+from agent_crawler.stealth import UAProfile, build_stealth_js, random_profile
+
 from .constants import (
     MAX_ACTION_DELAY,
     MIN_ACTION_DELAY,
     PAGE_LOAD_TIMEOUT_MS,
-    STEALTH_JS,
-    random_user_agent,
 )
 from .interceptor import GraphQLInterceptor
 
@@ -70,22 +71,48 @@ class XBrowserSession:
         self.interceptor = GraphQLInterceptor()
 
         self._pw: Playwright | None = None
+        self._profile: UAProfile | None = None
 
     async def __aenter__(self) -> XBrowserSession:
         self._pw = await async_playwright().start()
+        self._profile = random_profile()
 
+        # ── Chromium launch args ──
+        # Each flag addresses a specific detection vector.
         launch_args: dict[str, Any] = {
             "headless": True,
             "args": [
+                # Core anti-detection
                 "--disable-blink-features=AutomationControlled",
+
+                # Performance / stability in Docker
                 "--disable-dev-shm-usage",
                 "--no-sandbox",
+
+                # Reduce headless fingerprint surface
+                "--disable-infobars",                          # No "controlled by automation" bar
+                "--disable-background-timer-throttling",       # Prevent tab throttling
+                "--disable-backgrounding-occluded-windows",    # Keep window active
+                "--disable-renderer-backgrounding",            # Keep renderer active
+                "--disable-ipc-flooding-protection",           # Prevent IPC throttle
+
+                # Match viewport to launch size (consistency)
+                "--window-size=1920,1080",
+
+                # Disable features that leak headless
+                "--disable-features=TranslateUI",              # No translate popup
+                "--disable-default-apps",                      # No default app installs
+                "--disable-hang-monitor",                      # No hang detection
+                "--disable-prompt-on-repost",                  # No repost prompts
+                "--disable-sync",                              # No sync features
+
+                # GPU — use software rendering but hide it
                 "--disable-gpu",
-                "--disable-extensions",
+                "--disable-software-rasterizer",
             ],
         }
 
-        # Residential proxy
+        # ── Residential proxy ──
         if self.proxy:
             proxy_dict: dict[str, str] = {"server": self.proxy.server}
             if self.proxy.username:
@@ -96,27 +123,44 @@ class XBrowserSession:
 
         self.browser = await self._pw.chromium.launch(**launch_args)
 
+        # ── Browser context ──
+        # Every field must be consistent with the UA profile.
         self.context = await self.browser.new_context(
             viewport={"width": 1920, "height": 1080},
-            user_agent=random_user_agent(),
+            screen={"width": 1920, "height": 1080},
+            user_agent=self._profile.user_agent,
             locale="en-US",
             timezone_id="America/New_York",
+            color_scheme="light",
+            has_touch=False,
+            device_scale_factor=1,
+            # Sec-CH-UA client hints — modern Chrome sends these on every request.
+            # Missing or wrong values is a strong signal.
+            extra_http_headers={
+                "Sec-CH-UA": self._profile.sec_ch_ua,
+                "Sec-CH-UA-Mobile": self._profile.sec_ch_ua_mobile,
+                "Sec-CH-UA-Platform": self._profile.sec_ch_ua_platform,
+            },
         )
 
-        # Stealth: inject anti-detection before any page loads
-        await self.context.add_init_script(STEALTH_JS)
+        # ── Stealth JS ──
+        stealth_js = build_stealth_js(self._profile)
+        await self.context.add_init_script(stealth_js)
 
-        # Inject cookies from pool
+        # ── Cookies ──
         await self.context.add_cookies(self._format_cookies())
 
-        # Create page and attach interceptor
+        # ── Page + interceptor ──
         self.page = await self.context.new_page()
         self.page.set_default_timeout(PAGE_LOAD_TIMEOUT_MS)
         self.page.on("response", self.interceptor.on_response)
 
         logger.info(
-            "Browser session opened for %s (cookie=%s)",
-            self.cookies.platform, self.cookies.name,
+            "Browser session opened for %s (cookie=%s, ua=%s, platform=%s)",
+            self.cookies.platform,
+            self.cookies.name,
+            self._profile.user_agent[:50] + "...",
+            self._profile.platform,
         )
         return self
 
@@ -134,16 +178,25 @@ class XBrowserSession:
     # ──────────────────────────────────────
 
     async def goto(self, url: str) -> None:
-        """Navigate to URL with wait for network idle."""
+        """Navigate to URL with wait for DOM content loaded."""
         assert self.page is not None
         await self.page.goto(url, wait_until="domcontentloaded")
-        # Small random delay after navigation
         await self.random_delay(0.5, 1.5)
 
     async def scroll_down(self) -> None:
-        """Scroll to bottom to trigger lazy loading."""
+        """Scroll to bottom with human-like behavior."""
         assert self.page is not None
-        await self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        # Smooth scroll in chunks instead of instant jump
+        scroll_height = await self.page.evaluate("document.body.scrollHeight")
+        current = await self.page.evaluate("window.scrollY")
+        target = scroll_height
+        step = random.randint(300, 600)
+
+        while current < target:
+            current = min(current + step, target)
+            await self.page.evaluate(f"window.scrollTo(0, {current})")
+            await asyncio.sleep(random.uniform(0.05, 0.15))
+
         await self.random_delay()
 
     async def random_delay(
@@ -173,7 +226,6 @@ class XBrowserSession:
             if c.get("secure") is not None:
                 cookie["secure"] = c["secure"]
             if c.get("sameSite"):
-                # Playwright expects: "Strict", "Lax", "None"
                 ss = c["sameSite"]
                 if ss.lower() in ("strict", "lax", "none"):
                     cookie["sameSite"] = ss.capitalize()
