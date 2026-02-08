@@ -79,6 +79,34 @@ async def get_task(task_id: str) -> dict:
     return task.model_dump(mode="json")
 
 
+@router.get("/contents")
+async def list_contents(
+    platform: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """List crawled content items."""
+    redis = get_redis()
+    platforms = [platform] if platform else ["x", "xhs"]
+    all_ids: list[str] = []
+    for p in platforms:
+        ids = await redis.smembers(f"content:index:{p}")
+        all_ids.extend(ids)
+
+    total = len(all_ids)
+    # Fetch all to sort by crawled_at
+    contents = []
+    for cid in all_ids:
+        raw = await redis.get(f"content:{cid}")
+        if raw:
+            contents.append(json.loads(raw))
+
+    contents.sort(key=lambda c: c.get("crawled_at", ""), reverse=True)
+    page = contents[offset : offset + limit]
+
+    return {"contents": page, "total": total}
+
+
 @router.get("/content/{content_id}")
 async def get_content(content_id: str) -> dict:
     """Get a crawled content item by ID."""

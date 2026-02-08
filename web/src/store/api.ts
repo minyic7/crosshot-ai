@@ -55,6 +55,10 @@ export const apiSlice = createApi({
       query: (params) => ({ url: '/contents', params: params ?? undefined }),
       providesTags: ['Content'],
     }),
+    getContent: builder.query<Content, string>({
+      query: (id) => `/content/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'Content', id }],
+    }),
 
     // Cookies
     listCookies: builder.query<CookiesPool[], { platform?: string } | void>({
@@ -92,6 +96,7 @@ export const {
   useListAgentsQuery,
   useListQueuesQuery,
   useListContentsQuery,
+  useGetContentQuery,
   useListCookiesQuery,
   useCreateCookiesMutation,
   useUpdateCookiesMutation,
