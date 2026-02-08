@@ -23,7 +23,7 @@ from shared.models.task import Task
 from shared.services.cookies_service import CookiesService
 
 from ..base import BasePlatformExecutor
-from ..services.media_downloader import download_media_batch
+from ...services.media_downloader import download_media_batch
 from .actions.search import search_tweets
 from .actions.timeline import fetch_timeline
 from .actions.tweet import fetch_tweet
