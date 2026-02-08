@@ -103,7 +103,11 @@ async def get_cookies(cookie_id: str) -> dict:
 
 @router.patch("/cookies/{cookie_id}")
 async def update_cookies(cookie_id: str, body: CookiesUpdate) -> dict:
-    """Update cookies (name, cookies data, or active status)."""
+    """Update cookies (name, cookies data, or active status).
+
+    When re-activating (is_active=True), automatically resets
+    fail_count and cooldown so the cookie is immediately usable.
+    """
     cookie = await _get_cookie(cookie_id)
     if body.name is not None:
         cookie.name = body.name
@@ -111,6 +115,10 @@ async def update_cookies(cookie_id: str, body: CookiesUpdate) -> dict:
         cookie.cookies = body.cookies
     if body.is_active is not None:
         cookie.is_active = body.is_active
+        # Reset failure state when re-activating
+        if body.is_active:
+            cookie.fail_count = 0
+            cookie.cooldown_until = None
     await _save_cookie(cookie)
     return cookie.model_dump(mode="json")
 
