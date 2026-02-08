@@ -37,13 +37,8 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
         or core.get("user_result", {}).get("result", {})
     )
     user_legacy = user_results.get("legacy", {})
-
-    # Log structure on first miss for debugging
-    if not user_legacy and core:
-        logger.debug(
-            "No user_legacy found. core keys: %s, user_results keys: %s",
-            list(core.keys()), list(user_results.keys()),
-        )
+    # 2026 API: screen_name and name moved to user_results.result.core
+    user_core = user_results.get("core", {})
 
     if not legacy:
         return None
@@ -52,11 +47,17 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
     if not tweet_id:
         return None
 
-    # Author
+    # Author — check new "core" sub-object first, then fall back to "legacy"
     author = {
         "user_id": user_results.get("rest_id", ""),
-        "username": user_legacy.get("screen_name", ""),
-        "display_name": user_legacy.get("name", ""),
+        "username": (
+            user_core.get("screen_name")
+            or user_legacy.get("screen_name", "")
+        ),
+        "display_name": (
+            user_core.get("name")
+            or user_legacy.get("name", "")
+        ),
         "verified": user_results.get("is_blue_verified", False),
         "followers_count": user_legacy.get("followers_count", 0),
     }
