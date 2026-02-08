@@ -57,52 +57,96 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
   return (
     <div className="stack-sm">
       {/* Video players */}
-      {videos.map((v, i) => (
-        <div
-          key={`video-${i}`}
-          style={{
-            borderRadius: 12,
-            overflow: 'hidden',
-            background: '#000',
-          }}
-        >
-          <video
-            src={mediaUrl(v.video_local_path, v.video_url ?? v.url)}
-            controls={v.type === 'video'}
-            autoPlay={v.type === 'animated_gif'}
-            loop={v.type === 'animated_gif'}
-            muted={v.type === 'animated_gif'}
-            playsInline
-            poster={mediaUrl(v.local_path, v.url)}
-            style={{ width: '100%', maxHeight: 480, display: 'block' }}
-          />
+      {videos.map((v, i) => {
+        const hasLocalVideo = !!v.video_local_path
+        return (
           <div
+            key={`video-${i}`}
             style={{
-              padding: '6px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(0,0,0,0.85)',
+              borderRadius: 12,
+              overflow: 'hidden',
+              background: '#000',
             }}
           >
-            <Film size={12} style={{ color: '#94a3b8' }} />
-            <span style={{ fontSize: '0.6875rem', color: '#94a3b8', fontWeight: 500 }}>
-              {v.type === 'animated_gif' ? 'GIF' : 'Video'}
-            </span>
-            {v.video_url && (
+            {hasLocalVideo ? (
+              <video
+                src={mediaUrl(v.video_local_path)}
+                controls={v.type === 'video'}
+                autoPlay={v.type === 'animated_gif'}
+                loop={v.type === 'animated_gif'}
+                muted={v.type === 'animated_gif'}
+                playsInline
+                poster={mediaUrl(v.local_path, v.url)}
+                style={{ width: '100%', maxHeight: 480, display: 'block' }}
+              />
+            ) : (
+              /* No local file — show thumbnail with link to original */
               <a
-                href={v.video_url}
+                href={v.video_url ?? v.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ml-auto flex items-center gap-1"
-                style={{ fontSize: '0.6875rem', color: '#64748b', textDecoration: 'none' }}
+                style={{ display: 'block', position: 'relative' }}
               >
-                <ExternalLink size={10} /> Open
+                <img
+                  src={v.url}
+                  alt="Video thumbnail"
+                  style={{ width: '100%', maxHeight: 480, objectFit: 'contain', display: 'block' }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.35)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: '50%',
+                      background: 'rgba(255,255,255,0.9)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+                  </div>
+                </div>
               </a>
             )}
+            <div
+              style={{
+                padding: '6px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(0,0,0,0.85)',
+              }}
+            >
+              <Film size={12} style={{ color: '#94a3b8' }} />
+              <span style={{ fontSize: '0.6875rem', color: '#94a3b8', fontWeight: 500 }}>
+                {v.type === 'animated_gif' ? 'GIF' : 'Video'}
+                {!hasLocalVideo && ' (not downloaded)'}
+              </span>
+              {v.video_url && (
+                <a
+                  href={v.video_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto flex items-center gap-1"
+                  style={{ fontSize: '0.6875rem', color: '#64748b', textDecoration: 'none' }}
+                >
+                  <ExternalLink size={10} /> Open on X
+                </a>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       {/* Photo grid */}
       {photos.length > 0 && (
