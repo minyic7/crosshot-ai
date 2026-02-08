@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, Heart, MessageCircle, Repeat2, Quote, Eye } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Heart, MessageCircle, Repeat2, Quote, Eye, Film } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -42,20 +42,152 @@ function formatNumber(n: number): string {
   return String(n)
 }
 
+function MediaGrid({ media }: { media: TweetData['media'] }) {
+  if (media.length === 0) return null
+
+  const photos = media.filter(m => m.type === 'photo')
+  const videos = media.filter(m => m.type === 'video' || m.type === 'animated_gif')
+
+  return (
+    <div className="stack-sm">
+      {/* Video players */}
+      {videos.map((v, i) => (
+        <div
+          key={`video-${i}`}
+          style={{
+            borderRadius: 12,
+            overflow: 'hidden',
+            background: '#000',
+          }}
+        >
+          <video
+            src={v.video_url ?? v.url}
+            controls={v.type === 'video'}
+            autoPlay={v.type === 'animated_gif'}
+            loop={v.type === 'animated_gif'}
+            muted={v.type === 'animated_gif'}
+            playsInline
+            poster={v.url}
+            style={{ width: '100%', maxHeight: 480, display: 'block' }}
+          />
+          <div
+            style={{
+              padding: '6px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(0,0,0,0.85)',
+            }}
+          >
+            <Film size={12} style={{ color: '#94a3b8' }} />
+            <span style={{ fontSize: '0.6875rem', color: '#94a3b8', fontWeight: 500 }}>
+              {v.type === 'animated_gif' ? 'GIF' : 'Video'}
+            </span>
+            {v.video_url && (
+              <a
+                href={v.video_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto flex items-center gap-1"
+                style={{ fontSize: '0.6875rem', color: '#64748b', textDecoration: 'none' }}
+              >
+                <ExternalLink size={10} /> Open
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Photo grid */}
+      {photos.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: photos.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+            gap: 4,
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
+          {photos.map((p, i) => (
+            <a
+              key={`photo-${i}`}
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block',
+                lineHeight: 0,
+                ...(photos.length === 3 && i === 0 ? { gridRow: 'span 2' } : {}),
+              }}
+            >
+              <img
+                src={p.url}
+                alt={`Photo ${i + 1}`}
+                style={{
+                  width: '100%',
+                  height: photos.length === 1 ? 'auto' : '100%',
+                  maxHeight: photos.length === 1 ? 500 : 240,
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+              />
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boolean }) {
   return (
-    <Card className={nested ? 'mt-3' : ''} style={nested ? { opacity: 0.85, borderLeft: '3px solid var(--accent)' } : undefined}>
+    <Card
+      className={nested ? 'mt-3' : ''}
+      style={nested ? { opacity: 0.85, borderLeft: '3px solid var(--teal)' } : undefined}
+    >
       <CardContent>
         {/* Author */}
-        <div className="flex items-center gap-2 mb-3">
-          <div>
-            <span className="font-semibold">{tweet.author.display_name}</span>
-            {tweet.author.verified && <Badge variant="success" className="ml-1">Verified</Badge>}
-            <span className="text-sm ml-2" style={{ color: 'var(--foreground-muted)' }}>
+        <div className="flex items-center gap-3 mb-3">
+          <div
+            style={{
+              width: nested ? 32 : 40,
+              height: nested ? 32 : 40,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--teal), #434e61)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: nested ? '0.75rem' : '0.875rem',
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            {tweet.author.display_name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="font-semibold truncate"
+                style={{ fontSize: nested ? '0.875rem' : '0.9375rem' }}
+              >
+                {tweet.author.display_name}
+              </span>
+              {tweet.author.verified && (
+                <Badge variant="success" style={{ fontSize: '0.625rem', padding: '1px 6px' }}>
+                  Verified
+                </Badge>
+              )}
+            </div>
+            <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
               @{tweet.author.username}
             </span>
           </div>
-          <span className="text-xs ml-auto" style={{ color: 'var(--foreground-subtle)' }}>
+          <span
+            className="text-xs"
+            style={{ color: 'var(--foreground-subtle)', whiteSpace: 'nowrap' }}
+          >
             {formatNumber(tweet.author.followers_count)} followers
           </span>
         </div>
@@ -63,51 +195,36 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
         {/* Reply context */}
         {tweet.reply_to && (
           <p className="text-xs mb-2" style={{ color: 'var(--foreground-muted)' }}>
-            Replying to @{tweet.reply_to.username}
+            Replying to{' '}
+            <span style={{ color: 'var(--teal)', fontWeight: 500 }}>
+              @{tweet.reply_to.username}
+            </span>
           </p>
         )}
 
         {/* Tweet text */}
-        <p className="mb-3 whitespace-pre-wrap" style={{ lineHeight: 1.6 }}>{tweet.text}</p>
+        <p
+          className="mb-3 whitespace-pre-wrap"
+          style={{ lineHeight: 1.7, fontSize: nested ? '0.875rem' : '0.9375rem' }}
+        >
+          {tweet.text}
+        </p>
 
         {/* Hashtags */}
         {tweet.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
             {tweet.hashtags.map((tag) => (
-              <Badge key={tag} variant="muted">#{tag}</Badge>
+              <Badge key={tag} variant="muted">
+                #{tag}
+              </Badge>
             ))}
           </div>
         )}
 
         {/* Media */}
         {tweet.media.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {tweet.media.map((m, i) => (
-              <div key={i} className="text-sm">
-                {m.type === 'photo' ? (
-                  <a href={m.url} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={m.url}
-                      alt={`Media ${i + 1}`}
-                      style={{ maxWidth: 300, maxHeight: 200, borderRadius: 8, objectFit: 'cover' }}
-                    />
-                  </a>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <Badge variant="warning">{m.type}</Badge>
-                    <a
-                      href={m.video_url ?? m.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs underline"
-                      style={{ color: 'var(--accent)' }}
-                    >
-                      Open {m.type}
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="mb-3">
+            <MediaGrid media={tweet.media} />
           </div>
         )}
 
@@ -121,7 +238,7 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs block truncate underline"
-                style={{ color: 'var(--accent)' }}
+                style={{ color: 'var(--teal)' }}
               >
                 {url}
               </a>
@@ -129,25 +246,49 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
           </div>
         )}
 
-        {/* Metrics */}
-        <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--foreground-muted)' }}>
-          <span className="flex items-center gap-1"><MessageCircle size={14} /> {formatNumber(tweet.metrics.reply_count)}</span>
-          <span className="flex items-center gap-1"><Repeat2 size={14} /> {formatNumber(tweet.metrics.retweet_count)}</span>
-          <span className="flex items-center gap-1"><Heart size={14} /> {formatNumber(tweet.metrics.like_count)}</span>
-          <span className="flex items-center gap-1"><Quote size={14} /> {formatNumber(tweet.metrics.quote_count)}</span>
-          <span className="flex items-center gap-1"><Eye size={14} /> {formatNumber(tweet.metrics.views_count)}</span>
+        {/* Metrics bar */}
+        <div
+          className="flex items-center gap-4 flex-wrap"
+          style={{
+            padding: '10px 14px',
+            borderRadius: 10,
+            background: 'rgba(100, 116, 139, 0.05)',
+            border: '1px solid rgba(100, 116, 139, 0.1)',
+          }}
+        >
+          {[
+            { icon: <MessageCircle size={14} />, value: tweet.metrics.reply_count, label: 'Replies' },
+            { icon: <Repeat2 size={14} />, value: tweet.metrics.retweet_count, label: 'Retweets' },
+            { icon: <Heart size={14} />, value: tweet.metrics.like_count, label: 'Likes' },
+            { icon: <Quote size={14} />, value: tweet.metrics.quote_count, label: 'Quotes' },
+            { icon: <Eye size={14} />, value: tweet.metrics.views_count, label: 'Views' },
+          ].map((m, i) => (
+            <span
+              key={i}
+              className="flex items-center gap-1.5 text-xs"
+              style={{ color: 'var(--foreground-muted)' }}
+              title={m.label}
+            >
+              {m.icon}
+              <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {formatNumber(m.value)}
+              </span>
+            </span>
+          ))}
         </div>
 
         {/* Quoted tweet */}
         {tweet.quoted_tweet && (
-          <div className="mt-3 pl-2">
-            <p className="text-xs mb-1" style={{ color: 'var(--foreground-muted)' }}>Quoted tweet:</p>
+          <div className="mt-3">
             <TweetCard tweet={tweet.quoted_tweet} nested />
           </div>
         )}
 
         {/* Footer */}
-        <div className="flex items-center gap-3 mt-3 pt-2" style={{ borderTop: '1px solid var(--border)', color: 'var(--foreground-subtle)' }}>
+        <div
+          className="flex items-center gap-3 mt-3 pt-2 flex-wrap"
+          style={{ borderTop: '1px solid rgba(100, 116, 139, 0.12)', color: 'var(--foreground-subtle)' }}
+        >
           <span className="text-xs">{tweet.created_at}</span>
           <span className="text-xs">lang: {tweet.lang}</span>
           {tweet.is_retweet && <Badge variant="muted">Retweet</Badge>}
@@ -158,7 +299,7 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
             target="_blank"
             rel="noopener noreferrer"
             className="ml-auto flex items-center gap-1 text-xs"
-            style={{ color: 'var(--accent)' }}
+            style={{ color: 'var(--teal)' }}
           >
             <ExternalLink size={12} /> View on X
           </a>
@@ -211,10 +352,22 @@ export function ContentDetailPage() {
             <CardDescription>Metadata</CardDescription>
           </CardHeader>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Content ID:</span> <code className="text-xs">{content.id}</code></div>
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Task ID:</span> <code className="text-xs">{content.task_id}</code></div>
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Platform:</span> <Badge variant="muted">{content.platform}</Badge></div>
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Crawled:</span> {new Date(content.crawled_at).toLocaleString()}</div>
+            <div>
+              <span style={{ color: 'var(--foreground-muted)' }}>Content ID:</span>{' '}
+              <code className="text-xs">{content.id}</code>
+            </div>
+            <div>
+              <span style={{ color: 'var(--foreground-muted)' }}>Task ID:</span>{' '}
+              <code className="text-xs">{content.task_id}</code>
+            </div>
+            <div>
+              <span style={{ color: 'var(--foreground-muted)' }}>Platform:</span>{' '}
+              <Badge variant="muted">{content.platform}</Badge>
+            </div>
+            <div>
+              <span style={{ color: 'var(--foreground-muted)' }}>Crawled:</span>{' '}
+              {new Date(content.crawled_at).toLocaleString()}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -228,7 +381,10 @@ export function ContentDetailPage() {
             <CardHeader className="mb-3">
               <CardDescription>Raw Data</CardDescription>
             </CardHeader>
-            <pre className="text-xs overflow-auto p-3" style={{ background: 'var(--background)', borderRadius: 8, maxHeight: 500 }}>
+            <pre
+              className="text-xs overflow-auto p-3"
+              style={{ background: 'var(--background)', borderRadius: 8, maxHeight: 500 }}
+            >
               {JSON.stringify(content.data, null, 2)}
             </pre>
           </CardContent>

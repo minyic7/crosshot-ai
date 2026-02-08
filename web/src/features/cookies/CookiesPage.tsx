@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Cookie, Plus, Trash2, Power, ChevronDown, ChevronUp } from 'lucide-react'
+import { Cookie, Plus, Trash2, Power, ChevronDown, ChevronUp, Clock, AlertTriangle, Timer } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -117,6 +117,8 @@ function CookieCard({
     .reduce((min, c) => (c.expirationDate! < min ? c.expirationDate! : min), Infinity)
   const missingAuth = AUTH_KEYS.filter((k) => !authCookies.find((c) => c.name === k))
 
+  const inCooldown = cookie.cooldown_until && new Date(cookie.cooldown_until).getTime() > Date.now()
+
   return (
     <Card className={cookie.is_active ? '' : 'opacity-60'}>
       <CardContent>
@@ -157,11 +159,50 @@ function CookieCard({
               Missing: {missingAuth.join(', ')}
             </span>
           )}
-          {cookie.fail_count > 0 && (
-            <Badge variant="error">{cookie.fail_count} fails</Badge>
-          )}
+        </div>
+
+        {/* Usage & health metrics */}
+        <div
+          className="flex items-center gap-4 mt-3 flex-wrap"
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: 'rgba(100, 116, 139, 0.04)',
+            border: '1px solid rgba(100, 116, 139, 0.08)',
+          }}
+        >
           {cookie.use_count_today > 0 && (
-            <Badge variant="muted">{cookie.use_count_today} used today</Badge>
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--foreground-muted)' }}>
+              <Timer size={12} />
+              <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {cookie.use_count_today}
+              </span>
+              used today
+            </span>
+          )}
+          {cookie.fail_count > 0 && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--error)' }}>
+              <AlertTriangle size={12} />
+              <span style={{ fontWeight: 600 }}>{cookie.fail_count}</span>
+              {cookie.fail_count === 1 ? 'failure' : 'failures'}
+            </span>
+          )}
+          {inCooldown && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--warning)' }}>
+              <Clock size={12} />
+              Cooldown until {new Date(cookie.cooldown_until!).toLocaleTimeString()}
+            </span>
+          )}
+          {cookie.last_used_at && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--foreground-subtle)' }}>
+              <Clock size={12} />
+              Last used {formatTimeAgo(cookie.last_used_at)}
+            </span>
+          )}
+          {!cookie.use_count_today && !cookie.fail_count && !inCooldown && !cookie.last_used_at && (
+            <span className="text-xs" style={{ color: 'var(--foreground-subtle)' }}>
+              No activity yet
+            </span>
           )}
         </div>
 
@@ -188,7 +229,7 @@ function CookieCard({
               {cookie.cookies.map((c, i) => (
                 <div key={i} className="table-compact-row" style={{ fontSize: '0.75rem' }}>
                   <span style={{ flex: 1.2, fontWeight: AUTH_KEYS.includes(c.name) ? 600 : 400 }} className="font-mono">
-                    {AUTH_KEYS.includes(c.name) ? '★ ' : ''}{c.name}
+                    {AUTH_KEYS.includes(c.name) ? '\u2605 ' : ''}{c.name}
                   </span>
                   <span style={{ flex: 1 }} className="font-mono">{c.domain}</span>
                   <span style={{ flex: 1 }}>
@@ -335,6 +376,16 @@ function formatExpiry(unixTimestamp: number): string {
   const hours = Math.floor(diff / 3600000)
   if (hours > 0) return `${hours}h`
   return `${Math.floor(diff / 60000)}m`
+}
+
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 function isExpired(unixTimestamp: number): boolean {
