@@ -2522,6 +2522,20 @@ h3 {
   animation: spin 0.8s linear infinite;
 }
 
+.assist-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--accent);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
 .assist-divider {
   height: 1px;
   background: rgba(100, 116, 139, 0.12);

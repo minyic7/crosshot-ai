@@ -1,10 +1,12 @@
 """Topics CRUD API — create, list, update, delete monitoring topics."""
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
@@ -220,47 +222,47 @@ async def reorder_topics(body: TopicReorder) -> dict:
 
 
 _ASSIST_SYSTEM = """\
-You are a topic configuration assistant for CrossHot AI, a cross-platform social media monitoring system.
+You are a sharp, concise topic creation assistant for CrossHot AI (social media monitoring).
+You speak the same language as the user (Chinese if they write Chinese, English if English, mix if they mix).
 
-The user wants to create a new monitoring topic. Help them define what to monitor.
+## Behavior
+- Be direct. No greetings, no "很高兴", no filler.
+- If the user's request is vague, ask a SHORT clarifying question (what angle? which aspects?).
+- Proactively suggest interesting monitoring angles the user might not have thought of.
+- When the user refines, update the suggestion — don't repeat what you already said.
 
-## Your job
-1. Understand what the user wants to monitor
-2. Suggest a structured topic configuration
-3. Refine based on user feedback
+## Platforms
+- **x**: Twitter/X, English-dominant
+- **xhs**: 小红书, Chinese-dominant, lifestyle/consumer focus
 
-## Supported platforms
-- **x** (Twitter/X) — English-dominant, supports hashtags, @mentions
-- **xhs** (小红书/Xiaohongshu) — Chinese-dominant, lifestyle/consumer platform
+## Keyword guidelines
+- General search terms only (the system handles platform-specific syntax)
+- Include both English AND Chinese keywords for multi-platform coverage
+- Include: exact names, aliases, abbreviations, trending hashtags (without #), related terms
+- 5-10 diverse keywords for good coverage
 
-## Guidelines for keywords
-- Suggest keywords that are GENERAL search terms, NOT platform-specific syntax
-- The system's coordinator handles platform-specific query syntax automatically
-- For multi-platform coverage, include BOTH English AND Chinese keywords where relevant
-- Include: exact names, aliases, abbreviations, related terms, hashtags (without #)
-- Aim for 5-10 diverse keywords for good coverage
-
-## Response format
-You MUST respond with valid JSON only, no markdown fences, with this exact structure:
+## STRICT response format
+Respond with raw JSON only (no markdown, no fences):
 {
-  "reply": "Your conversational message to the user (1-3 sentences, can be bilingual)",
+  "reply": "Your message (1-3 sentences, same language as user)",
   "suggestion": {
     "name": "Short topic name",
     "icon": "single emoji",
-    "description": "1-2 sentence description of what this topic monitors",
+    "description": "1-2 sentence description",
     "platforms": ["x", "xhs"],
     "keywords": ["keyword1", "keyword2", "..."]
   }
 }
-
-Always include both "reply" and "suggestion" in every response.
-Refine the suggestion based on user feedback in follow-up messages.
 """
 
 
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
 @router.post("/topics/assist")
-async def assist_topic(body: TopicAssistRequest) -> dict:
-    """Use AI to suggest topic configuration from natural language input."""
+async def assist_topic(body: TopicAssistRequest):
+    """Stream AI suggestions via SSE. Events: {t:token}, {done:true,reply,suggestion}."""
     settings = get_settings()
     if not settings.grok_api_key:
         return {"error": "Grok API key not configured"}
@@ -270,33 +272,45 @@ async def assist_topic(body: TopicAssistRequest) -> dict:
         base_url=settings.grok_base_url,
     )
 
-    messages = [{"role": "system", "content": _ASSIST_SYSTEM}]
+    messages: list[dict] = [{"role": "system", "content": _ASSIST_SYSTEM}]
     for m in body.messages:
         messages.append({"role": m.role, "content": m.content})
 
-    try:
-        resp = await client.chat.completions.create(
-            model=settings.grok_model,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1024,
-        )
-        raw = resp.choices[0].message.content or "{}"
+    async def generate():
+        try:
+            stream = await client.chat.completions.create(
+                model=settings.grok_model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024,
+                stream=True,
+            )
+            full = ""
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    full += delta
+                    yield _sse({"t": delta})
 
-        # Parse JSON response — strip markdown fences if present
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            # Parse complete JSON response
+            text = full.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-        import json
-        data = json.loads(text)
-        return {
-            "reply": data.get("reply", ""),
-            "suggestion": data.get("suggestion", {}),
-        }
-    except json.JSONDecodeError:
-        logger.warning("AI assist returned non-JSON: %s", raw[:200])
-        return {"reply": raw, "suggestion": {}}
-    except Exception as e:
-        logger.exception("AI assist error")
-        return {"error": str(e)}
+            data = json.loads(text)
+            yield _sse({
+                "done": True,
+                "reply": data.get("reply", ""),
+                "suggestion": data.get("suggestion", {}),
+            })
+        except json.JSONDecodeError:
+            yield _sse({"done": True, "reply": full, "suggestion": {}})
+        except Exception as e:
+            logger.exception("AI assist stream error")
+            yield _sse({"error": str(e)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

@@ -16,7 +16,6 @@ import {
   useUpdateTopicMutation,
   useRefreshTopicMutation,
   useReorderTopicsMutation,
-  useAssistTopicMutation,
 } from '@/store/api'
 import type { Topic, TopicAlert } from '@/types/models'
 
@@ -244,6 +243,35 @@ function TopicCard({
   )
 }
 
+// ─── SSE Helpers ─────────────────────────────────────────────
+
+/** Extract the "reply" value from a partial JSON string as it streams in. */
+function extractReplyFromPartial(raw: string): string {
+  const idx = raw.indexOf('"reply"')
+  if (idx === -1) return ''
+  // Find opening quote of the value
+  const valStart = raw.indexOf('"', idx + 7)
+  if (valStart === -1) return ''
+  let result = ''
+  let i = valStart + 1
+  while (i < raw.length) {
+    if (raw[i] === '\\' && i + 1 < raw.length) {
+      const next = raw[i + 1]
+      if (next === '"') result += '"'
+      else if (next === 'n') result += '\n'
+      else if (next === '\\') result += '\\'
+      else result += next
+      i += 2
+    } else if (raw[i] === '"') {
+      break
+    } else {
+      result += raw[i]
+      i++
+    }
+  }
+  return result
+}
+
 // ─── Create Topic Modal ───────────────────────────────────────
 
 interface ChatMsg {
@@ -263,18 +291,21 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   // AI assist state
   const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
-  const [assistTopic, { isLoading: isAssisting }] = useAssistTopicMutation()
+  const [streamingReply, setStreamingReply] = useState('')
+  const [isAssisting, setIsAssisting] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+  }, [chatMessages, streamingReply])
 
   // Reset state when modal closes
   useEffect(() => {
     if (!open) {
       setChatInput('')
       setChatMessages([])
+      setStreamingReply('')
+      setIsAssisting(false)
       setName('')
       setIcon('📊')
       setDescription('')
@@ -292,24 +323,69 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     const newMessages = [...chatMessages, userMsg]
     setChatMessages(newMessages)
     setChatInput('')
+    setStreamingReply('')
+    setIsAssisting(true)
 
-    const res = await assistTopic({ messages: newMessages }).unwrap()
+    try {
+      const res = await fetch('/api/topics/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages }),
+      })
 
-    if (res.error) {
-      setChatMessages([...newMessages, { role: 'assistant', content: `Error: ${res.error}` }])
-      return
-    }
+      if (!res.ok || !res.body) {
+        setChatMessages([...newMessages, { role: 'assistant', content: 'Failed to connect to AI.' }])
+        setIsAssisting(false)
+        return
+      }
 
-    setChatMessages([...newMessages, { role: 'assistant', content: res.reply }])
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let accumulated = '' // raw JSON tokens from Grok
+      let finalReply = ''
 
-    // Auto-fill form from suggestion
-    const s = res.suggestion
-    if (s) {
-      if (s.name) setName(s.name)
-      if (s.icon) setIcon(s.icon)
-      if (s.description) setDescription(s.description)
-      if (s.platforms?.length) setPlatforms(s.platforms)
-      if (s.keywords?.length) setKeywords(s.keywords.join(', '))
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()!
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const evt = JSON.parse(line.slice(6))
+            if (evt.t) {
+              accumulated += evt.t
+              const partial = extractReplyFromPartial(accumulated)
+              if (partial) setStreamingReply(partial)
+            } else if (evt.done) {
+              finalReply = evt.reply || ''
+              // Auto-fill form from suggestion
+              const s = evt.suggestion
+              if (s) {
+                if (s.name) setName(s.name)
+                if (s.icon) setIcon(s.icon)
+                if (s.description) setDescription(s.description)
+                if (s.platforms?.length) setPlatforms(s.platforms)
+                if (s.keywords?.length) setKeywords(s.keywords.join(', '))
+              }
+            } else if (evt.error) {
+              finalReply = `Error: ${evt.error}`
+            }
+          } catch { /* skip malformed SSE */ }
+        }
+      }
+
+      // Commit the final reply as a chat message
+      setChatMessages([...newMessages, { role: 'assistant', content: finalReply || extractReplyFromPartial(accumulated) || accumulated }])
+      setStreamingReply('')
+    } catch {
+      setChatMessages([...newMessages, { role: 'assistant', content: 'Connection error.' }])
+    } finally {
+      setIsAssisting(false)
     }
   }
 
@@ -347,14 +423,19 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
             <Sparkles size={13} />
             AI Assist
           </div>
-          {chatMessages.length > 0 && (
+          {(chatMessages.length > 0 || streamingReply) && (
             <div className="assist-messages">
               {chatMessages.map((m, i) => (
                 <div key={i} className={`assist-msg ${m.role}`}>
                   <span className="assist-msg-text">{m.content}</span>
                 </div>
               ))}
-              {isAssisting && (
+              {streamingReply && (
+                <div className="assist-msg assistant">
+                  <span className="assist-msg-text">{streamingReply}<span className="assist-cursor" /></span>
+                </div>
+              )}
+              {isAssisting && !streamingReply && (
                 <div className="assist-msg assistant">
                   <Loader2 size={13} className="assist-spinner" />
                   <span className="assist-msg-text">Thinking...</span>

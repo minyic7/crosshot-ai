@@ -118,12 +118,6 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Topic'],
     }),
-    assistTopic: builder.mutation<
-      { reply: string; suggestion: { name?: string; icon?: string; description?: string; platforms?: string[]; keywords?: string[] }; error?: string },
-      { messages: { role: string; content: string }[] }
-    >({
-      query: (body) => ({ url: '/topics/assist', method: 'POST', body }),
-    }),
   }),
 })
 
@@ -151,5 +145,4 @@ export const {
   useDeleteTopicMutation,
   useRefreshTopicMutation,
   useReorderTopicsMutation,
-  useAssistTopicMutation,
 } = apiSlice
