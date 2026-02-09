@@ -105,12 +105,7 @@ export type TopicAlert = string | { level: string; message: string }
 
 export interface TopicSummaryData {
   cycle_id?: string
-  metrics?: {
-    total_contents: number
-    platforms_coverage: Record<string, number>
-    engagement_score?: number
-    trend_velocity?: string
-  }
+  metrics?: Record<string, unknown>
   alerts?: TopicAlert[]
   recommended_next_queries?: { platform: string; query: string; priority: string }[]
 }
