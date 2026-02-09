@@ -116,6 +116,14 @@ jobs:
             COMPOSE="\$DOCKER compose"
             cd ${{ env.NAS_DEPLOY_PATH }}
 
+            # Ensure data directories exist for bind mounts
+            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/redis
+            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/pgdata
+            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/media
+
+            # Export DATA_DIR for docker-compose bind mounts
+            export DATA_DIR="${{ env.NAS_DEPLOY_PATH }}/data"
+
             # Login to GHCR
             echo "${GHCR_TOKEN}" | \$DOCKER login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 

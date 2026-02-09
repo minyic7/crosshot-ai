@@ -6,7 +6,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - ${DATA_DIR:-./data}/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -21,7 +21,7 @@ services:
       POSTGRES_USER: ${DB_USER:-crosshot}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-crosshot}
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - ${DATA_DIR:-./data}/pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-crosshot}"]
       interval: 10s
@@ -42,7 +42,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       MEDIA_BASE_PATH: /data/media
     volumes:
-      - media_data:/data/media
+      - ${DATA_DIR:-./data}/media:/data/media
     depends_on:
       redis:
         condition: service_healthy
@@ -61,7 +61,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       MEDIA_BASE_PATH: /data/media
     volumes:
-      - media_data:/data/media
+      - ${DATA_DIR:-./data}/media:/data/media
     depends_on:
       redis:
         condition: service_healthy
@@ -106,10 +106,13 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       MEDIA_BASE_PATH: /data/media
+      DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
     volumes:
-      - media_data:/data/media:ro
+      - ${DATA_DIR:-./data}/media:/data/media:ro
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     mem_limit: 300m
     logging:
@@ -139,7 +142,3 @@ services:
         max-size: "10m"
         max-file: "3"
 
-volumes:
-  redis_data:
-  pg_data:
-  media_data:
