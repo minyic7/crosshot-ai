@@ -125,6 +125,9 @@ async def list_topics(status: str | None = None) -> dict:
         )
         if status:
             stmt = stmt.where(TopicRow.status == status)
+        else:
+            # By default, hide cancelled topics
+            stmt = stmt.where(TopicRow.status != "cancelled")
         result = await session.execute(stmt)
         topics = result.scalars().all()
         return {

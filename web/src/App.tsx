@@ -8,12 +8,14 @@ import { ChatPage } from '@/features/chat/ChatPage'
 import { CookiesPage } from '@/features/cookies/CookiesPage'
 import { ContentDetailPage } from '@/features/database/ContentDetailPage'
 import { TaskDetailPage } from '@/features/database/TaskDetailPage'
+import { TopicDetailPage } from '@/features/dashboard/TopicDetailPage'
 
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="topic/:id" element={<TopicDetailPage />} />
         <Route path="database" element={<DatabasePage />} />
         <Route path="content/:id" element={<ContentDetailPage />} />
         <Route path="task/:id" element={<TaskDetailPage />} />

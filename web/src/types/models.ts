@@ -101,6 +101,8 @@ export interface DashboardStats {
 
 export type TopicStatus = 'active' | 'paused' | 'cancelled'
 
+export type TopicAlert = string | { level: string; message: string }
+
 export interface TopicSummaryData {
   cycle_id?: string
   metrics?: {
@@ -109,7 +111,7 @@ export interface TopicSummaryData {
     engagement_score?: number
     trend_velocity?: string
   }
-  alerts?: { level: string; message: string }[]
+  alerts?: TopicAlert[]
   recommended_next_queries?: { platform: string; query: string; priority: string }[]
 }
 

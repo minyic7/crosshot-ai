@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Activity, CheckCircle, AlertCircle, Clock, Bot, Plus, GripVertical, Pin, RefreshCw, AlertTriangle, Info } from 'lucide-react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
@@ -19,7 +20,7 @@ import {
   useRefreshTopicMutation,
   useReorderTopicsMutation,
 } from '@/store/api'
-import type { Topic } from '@/types/models'
+import type { Topic, TopicAlert } from '@/types/models'
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
@@ -35,6 +36,11 @@ function timeAgo(dateStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
+function normalizeAlert(alert: TopicAlert): { level: string; message: string } {
+  if (typeof alert === 'string') return { level: 'info', message: alert }
+  return alert
+}
+
 // ─── Topic Card (sortable) ────────────────────────────────────────
 
 function TopicCard({
@@ -42,20 +48,28 @@ function TopicCard({
   index,
   onPin,
   onRefresh,
+  onClick,
 }: {
   topic: Topic
   index: number
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
+  onClick: (id: string) => void
 }) {
   const { ref, handleRef, isDragging } = useSortable({ id: topic.id, index })
-  const alerts = topic.summary_data?.alerts ?? []
+  const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
   const metrics = topic.summary_data?.metrics
 
   return (
     <div
       ref={ref}
       className={`glass-card insight-card${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''}${isDragging ? ' drag-over' : ''}`}
+      style={{ cursor: 'pointer' }}
+      onClick={(e) => {
+        // Don't navigate if clicking on buttons or drag handle
+        if ((e.target as HTMLElement).closest('button, .insight-drag-handle, .insight-pin-btn')) return
+        onClick(topic.id)
+      }}
     >
       {/* Header */}
       <div className="insight-card-header">
@@ -64,6 +78,9 @@ function TopicCard({
           <span className="insight-card-icon">{topic.icon}</span>
           <h3>{topic.name}</h3>
           {topic.is_pinned && <span className="insight-pinned-badge">Pinned</span>}
+          <Badge variant={topic.status === 'active' ? 'success' : topic.status === 'paused' ? 'warning' : 'muted'}>
+            {topic.status}
+          </Badge>
         </div>
         <button
           className={`insight-pin-btn${topic.is_pinned ? ' active' : ''}`}
@@ -92,32 +109,41 @@ function TopicCard({
           </div>
         ))}
 
-        {/* Metrics */}
+        {/* Metrics row */}
         {metrics && (
-          <>
-            <div className="insight-metric">
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <div className="insight-metric" style={{ flex: 1, minWidth: 80 }}>
               <span className="insight-metric-label">Contents</span>
               <span className="insight-metric-value">{metrics.total_contents}</span>
             </div>
+            {metrics.engagement_score != null && (
+              <div className="insight-metric" style={{ flex: 1, minWidth: 80 }}>
+                <span className="insight-metric-label">Score</span>
+                <span className="insight-metric-value">{metrics.engagement_score}</span>
+              </div>
+            )}
             {metrics.trend_velocity && (
-              <div className="insight-metric">
+              <div className="insight-metric" style={{ flex: 1, minWidth: 80 }}>
                 <span className="insight-metric-label">Trend</span>
                 <span className={`insight-metric-change ${metrics.trend_velocity === 'rising' ? 'up' : metrics.trend_velocity === 'falling' ? 'down' : ''}`}>
                   {metrics.trend_velocity}
                 </span>
               </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* Keywords */}
+        {/* Platform + keyword pills */}
         <div className="insight-keyword-pills">
           {topic.platforms.map((p) => (
-            <span key={p} className="insight-pill">{p}</span>
+            <span key={p} className="insight-pill" style={{ background: 'rgba(82,96,119,0.15)', fontWeight: 600 }}>{p.toUpperCase()}</span>
           ))}
           {topic.keywords.slice(0, 4).map((kw) => (
             <span key={kw} className="insight-pill">{kw}</span>
           ))}
+          {topic.keywords.length > 4 && (
+            <span className="insight-pill">+{topic.keywords.length - 4}</span>
+          )}
         </div>
 
         {/* Empty state if no summary yet */}
@@ -218,7 +244,6 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
             {PLATFORM_OPTIONS.map((p) => (
               <button
                 key={p}
-                className={`insight-pill${platforms.includes(p) ? '' : ''}`}
                 style={{
                   padding: '6px 14px',
                   cursor: 'pointer',
@@ -267,6 +292,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
 // ─── Dashboard Page ───────────────────────────────────────────────
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
 
   const { data: health, isLoading: healthLoading } = useGetHealthQuery(undefined, { pollingInterval: 10000 })
@@ -286,6 +312,10 @@ export function DashboardPage() {
     refreshTopic(id)
   }, [refreshTopic])
 
+  const handleTopicClick = useCallback((id: string) => {
+    navigate(`/topic/${id}`)
+  }, [navigate])
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDragEnd = useCallback((event: any) => {
     if (event.canceled || !topics) return
@@ -303,7 +333,6 @@ export function DashboardPage() {
     reorderTopics({ ids: reordered })
   }, [topics, reorderTopics])
 
-  // Separate pinned vs unpinned for display order
   const sortedTopics = topics ?? []
 
   return (
@@ -452,6 +481,7 @@ export function DashboardPage() {
                 index={index}
                 onPin={handlePin}
                 onRefresh={handleRefresh}
+                onClick={handleTopicClick}
               />
             ))}
           </div>
