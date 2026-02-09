@@ -137,8 +137,8 @@ export function ContentGallery() {
   for (const content of allContents) {
     const tweet = content.data as unknown as TweetData
     const hasMedia = (tweet?.media?.length ?? 0) > 0
-    // Media cards: capped image (260) + ~100 body; text cards: fixed
-    const estimatedHeight = hasMedia ? 260 + 100 : TEXT_CARD_HEIGHT
+    // Media cards: assume 16:9 + ~100 body; text cards: fixed
+    const estimatedHeight = hasMedia ? Math.round(COLUMN_WIDTH * 9 / 16) + 100 : TEXT_CARD_HEIGHT
     const shortestCol = columnHeights.indexOf(Math.min(...columnHeights))
     columnItems[shortestCol].push(content)
     columnHeights[shortestCol] += estimatedHeight + GAP
@@ -273,7 +273,7 @@ function MasonryCard({
     >
       {/* Media */}
       {hasMedia && !imgError && (
-        <div className="relative overflow-hidden" style={{ background: 'rgba(100,116,139,0.05)', maxHeight: 260 }}>
+        <div className="relative overflow-hidden" style={{ background: 'rgba(100,116,139,0.05)' }}>
           {!imgLoaded && (
             <div className="skeleton" style={{ width: '100%', height: 180 }} />
           )}
@@ -284,7 +284,6 @@ function MasonryCard({
             onError={() => setImgError(true)}
             style={{
               width: '100%',
-              objectFit: 'cover',
               ...(imgLoaded
                 ? {}
                 : { position: 'absolute' as const, top: 0, left: 0, opacity: 0 }),
