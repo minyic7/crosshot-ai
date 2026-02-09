@@ -1,5 +1,6 @@
 """Shared dependencies for API endpoints."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -10,11 +11,12 @@ from shared.queue.redis_queue import TaskQueue
 
 _redis: aioredis.Redis | None = None
 _queue: TaskQueue | None = None
+_scheduler_task: asyncio.Task | None = None
 
 
 async def init_deps() -> None:
     """Initialize shared dependencies (called on app startup)."""
-    global _redis, _queue
+    global _redis, _queue, _scheduler_task
     settings = get_settings()
     _redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     _queue = TaskQueue(settings.redis_url)
@@ -24,10 +26,17 @@ async def init_deps() -> None:
 
     await create_tables()
 
+    # Start background topic scheduler
+    from api.scheduler import scheduler_loop
+
+    _scheduler_task = asyncio.create_task(scheduler_loop(_queue))
+
 
 async def close_deps() -> None:
     """Close shared dependencies (called on app shutdown)."""
-    global _redis, _queue
+    global _redis, _queue, _scheduler_task
+    if _scheduler_task:
+        _scheduler_task.cancel()
     if _redis:
         await _redis.aclose()
     if _queue:

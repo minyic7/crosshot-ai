@@ -98,3 +98,36 @@ export interface DashboardStats {
   recent_failed: number
   queues: Record<string, number>
 }
+
+export type TopicStatus = 'active' | 'paused' | 'cancelled'
+
+export interface TopicSummaryData {
+  cycle_id?: string
+  metrics?: {
+    total_contents: number
+    platforms_coverage: Record<string, number>
+    engagement_score?: number
+    trend_velocity?: string
+  }
+  alerts?: { level: string; message: string }[]
+  recommended_next_queries?: { platform: string; query: string; priority: string }[]
+}
+
+export interface Topic {
+  id: string
+  name: string
+  icon: string
+  description: string | null
+  platforms: string[]
+  keywords: string[]
+  config: Record<string, unknown>
+  status: TopicStatus
+  is_pinned: boolean
+  position: number
+  total_contents: number
+  last_crawl_at: string | null
+  last_summary: string | null
+  summary_data: TopicSummaryData | null
+  created_at: string
+  updated_at: string
+}

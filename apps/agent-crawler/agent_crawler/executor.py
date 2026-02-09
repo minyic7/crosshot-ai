@@ -13,7 +13,7 @@ import redis.asyncio as aioredis
 
 from shared.agent.base import Result
 from shared.config.settings import Settings
-from shared.models.task import Task
+from shared.models.task import Task, TaskPriority
 
 from .platforms.base import BasePlatformExecutor
 from .platforms.x.executor import XExecutor
@@ -68,4 +68,25 @@ async def execute_task(
         task.id, task.label, executor.platform,
     )
     data = await executor.run(task)
-    return Result(data=data)
+
+    # If this crawl was triggered by a topic, notify coordinator
+    new_tasks: list[Task] = []
+    topic_id = task.payload.get("topic_id")
+    if topic_id:
+        new_tasks.append(
+            Task(
+                label="coord:crawl_done",
+                priority=TaskPriority.MEDIUM,
+                payload={
+                    "topic_id": topic_id,
+                    "content_ids": data.get("content_ids", []),
+                    "platform": task.payload.get(
+                        "platform", task.label.split(":")[-1]
+                    ),
+                    "query": task.payload.get("query", ""),
+                },
+                parent_job_id=task.parent_job_id,
+            )
+        )
+
+    return Result(data=data, new_tasks=new_tasks)

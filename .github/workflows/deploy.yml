@@ -53,6 +53,16 @@ jobs:
           cache-from: type=gha,scope=coordinator
           cache-to: type=gha,mode=max,scope=coordinator
 
+      - name: Build and push analyst image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/agent-analyst/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-analyst:latest
+          cache-from: type=gha,scope=analyst
+          cache-to: type=gha,mode=max,scope=analyst
+
       - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
@@ -144,8 +154,14 @@ jobs:
             # Restart containers (recreate only changed images)
             \$COMPOSE up -d --remove-orphans
 
-            # Wait for startup
+            # Wait for startup (API creates new tables via create_tables())
             sleep 15
+
+            # Run database migrations for existing tables
+            \$DOCKER exec -i \$(\$DOCKER ps -q -f name=postgres) psql -U \${DB_USER:-crosshot} -d crosshot <<'SQL' || true
+            ALTER TABLE contents ADD COLUMN IF NOT EXISTS topic_id UUID REFERENCES topics(id);
+            CREATE INDEX IF NOT EXISTS ix_contents_topic_id ON contents(topic_id);
+SQL
 
             # Health check
             curl -sf http://localhost:8000/health && echo "API deploy successful" || echo "API health check failed"

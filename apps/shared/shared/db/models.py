@@ -61,6 +61,7 @@ class ContentRow(Base):
 
     id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
     task_id: Mapped[str] = mapped_column(Uuid, ForeignKey("tasks.id"), nullable=False)
+    topic_id: Mapped[str | None] = mapped_column(Uuid, ForeignKey("topics.id"), nullable=True)
     platform: Mapped[str] = mapped_column(String(16), nullable=False)
     platform_content_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
@@ -87,6 +88,7 @@ class ContentRow(Base):
 
     # Relationships
     task: Mapped["TaskRow"] = relationship(back_populates="contents")
+    topic: Mapped["TopicRow | None"] = relationship(back_populates="contents", foreign_keys=[topic_id])
     media: Mapped[list["ContentMediaRow"]] = relationship(
         back_populates="content", cascade="all, delete-orphan"
     )
@@ -94,6 +96,7 @@ class ContentRow(Base):
     __table_args__ = (
         Index("ix_contents_platform", "platform"),
         Index("ix_contents_task_id", "task_id"),
+        Index("ix_contents_topic_id", "topic_id"),
         Index(
             "ix_contents_platform_content_id",
             "platform",
@@ -157,3 +160,53 @@ class CookieRow(Base):
     )
 
     __table_args__ = (Index("ix_cookies_platform_active", "platform", "is_active"),)
+
+
+class TopicRow(Base):
+    """A monitored topic — the top-level entity users create and track."""
+
+    __tablename__ = "topics"
+
+    id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(256), nullable=False)
+    icon: Mapped[str] = mapped_column(String(8), nullable=False, default="📊")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Configuration
+    platforms: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    keywords: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # State
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Stats (updated by analyst after summarize)
+    total_contents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_crawl_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    contents: Mapped[list["ContentRow"]] = relationship(
+        back_populates="topic", foreign_keys="ContentRow.topic_id"
+    )
+
+    __table_args__ = (
+        Index("ix_topics_status", "status"),
+        Index("ix_topics_position", "position"),
+    )

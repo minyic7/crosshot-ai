@@ -1,10 +1,10 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats } from '@/types/models'
+import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic } from '@/types/models'
 
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Task', 'Job', 'Agent', 'Content', 'Cookies'],
+  tagTypes: ['Task', 'Job', 'Agent', 'Content', 'Cookies', 'Topic'],
   endpoints: (builder) => ({
     // Health (at root, not /api)
     getHealth: builder.query<HealthResponse, void>({
@@ -82,6 +82,36 @@ export const apiSlice = createApi({
     sendChatMessage: builder.mutation<ChatMessage, { message: string }>({
       query: (body) => ({ url: '/chat', method: 'POST', body }),
     }),
+
+    // Topics
+    listTopics: builder.query<Topic[], void>({
+      query: () => '/topics',
+      providesTags: ['Topic'],
+    }),
+    getTopic: builder.query<Topic, string>({
+      query: (id) => `/topics/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'Topic', id }],
+    }),
+    createTopic: builder.mutation<Topic, { name: string; icon?: string; description?: string; platforms: string[]; keywords: string[]; config?: Record<string, unknown> }>({
+      query: (body) => ({ url: '/topics', method: 'POST', body }),
+      invalidatesTags: ['Topic'],
+    }),
+    updateTopic: builder.mutation<Topic, { id: string } & Partial<{ name: string; icon: string; description: string; platforms: string[]; keywords: string[]; config: Record<string, unknown>; status: string; is_pinned: boolean }>>({
+      query: ({ id, ...body }) => ({ url: `/topics/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Topic'],
+    }),
+    deleteTopic: builder.mutation<{ deleted: string }, string>({
+      query: (id) => ({ url: `/topics/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Topic'],
+    }),
+    refreshTopic: builder.mutation<{ task_id: string }, string>({
+      query: (id) => ({ url: `/topics/${id}/refresh`, method: 'POST' }),
+      invalidatesTags: ['Topic'],
+    }),
+    reorderTopics: builder.mutation<{ updated: number }, { ids: string[] }>({
+      query: (body) => ({ url: '/topics/reorder', method: 'POST', body }),
+      invalidatesTags: ['Topic'],
+    }),
   }),
 })
 
@@ -102,4 +132,11 @@ export const {
   useUpdateCookiesMutation,
   useDeleteCookiesMutation,
   useSendChatMessageMutation,
+  useListTopicsQuery,
+  useGetTopicQuery,
+  useCreateTopicMutation,
+  useUpdateTopicMutation,
+  useDeleteTopicMutation,
+  useRefreshTopicMutation,
+  useReorderTopicsMutation,
 } = apiSlice

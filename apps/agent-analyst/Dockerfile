@@ -17,10 +17,10 @@ COPY apps/api/pyproject.toml apps/api/pyproject.toml
 
 # Copy source code for this agent and shared library
 COPY apps/shared apps/shared
-COPY apps/agent-coordinator apps/agent-coordinator
+COPY apps/agent-analyst apps/agent-analyst
 
 # Install only this package's dependencies
-RUN uv sync --frozen --package agent-coordinator
+RUN uv sync --frozen --package agent-analyst
 
 # Default command
-CMD ["uv", "run", "--package", "agent-coordinator", "python", "-m", "agent_coordinator"]
+CMD ["uv", "run", "--package", "agent-analyst", "python", "-m", "agent_analyst"]

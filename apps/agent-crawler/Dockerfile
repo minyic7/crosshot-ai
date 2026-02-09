@@ -12,6 +12,7 @@ COPY pyproject.toml uv.lock ./
 COPY apps/shared/pyproject.toml apps/shared/pyproject.toml
 COPY apps/agent-crawler/pyproject.toml apps/agent-crawler/pyproject.toml
 COPY apps/agent-coordinator/pyproject.toml apps/agent-coordinator/pyproject.toml
+COPY apps/agent-analyst/pyproject.toml apps/agent-analyst/pyproject.toml
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 
 # Copy source code for this agent and shared library

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from api.deps import close_deps, init_deps
-from api.routers import agents, cookies, dashboard, health, jobs, tasks
+from api.routers import agents, cookies, dashboard, health, jobs, tasks, topics
 from shared.config.settings import get_settings
 
 
@@ -31,6 +31,7 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(cookies.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(topics.router, prefix="/api")
 
 # Serve downloaded media files
 _media_path = Path(get_settings().media_base_path)
