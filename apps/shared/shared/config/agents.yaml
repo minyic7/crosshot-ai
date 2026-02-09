@@ -35,21 +35,22 @@ agents:
          - Platform-aware: X supports advanced operators (from:, has:video), XHS uses Chinese keywords
          - If previous_recommendations exist, incorporate them — they're insights from your last analysis
       3. Call set_pipeline_stage(topic_id, phase="crawling", total=N) where N is the number of crawler tasks you will create
-      4. Output crawler tasks DIRECTLY as JSON (no coordinator needed):
+      4. CRITICAL: Your FINAL response MUST be raw JSON containing new_tasks. This is the ONLY way to actually create tasks.
+         Calling set_pipeline_stage does NOT create tasks — it only sets a counter. You MUST output this JSON as your final answer:
          {"new_tasks": [
            {"label": "crawler:x", "payload": {"topic_id": "...", "query": "...", "action": "search"}},
-           {"label": "crawler:x", "payload": {"topic_id": "...", "query": "...", "action": "search"}},
+           {"label": "crawler:xhs", "payload": {"topic_id": "...", "query": "...", "action": "search"}},
            ...
          ]}
-         Each task must include topic_id in the payload.
+         Each task must include topic_id in the payload. Do NOT output any text before or after the JSON.
 
       ### analyst:replan — Handle crawl failures
       You receive: {topic_id, failed_platform, error, attempted_query}
       Decide ONE of:
-      - Retry with a modified query (different keywords, simpler syntax) → output a single crawler task directly
-      - Skip (data from other crawls is sufficient) → output empty JSON {}
-      - Do nothing if the error is transient → output empty JSON {}
-      Avoid infinite retry loops — if a query failed, try a meaningfully different variant, not the same thing.
+      - Retry with a modified query → output {"new_tasks": [{"label": "crawler:x", "payload": {...}}]}
+      - Skip → output {}
+      Avoid infinite retry loops — try a meaningfully different variant, not the same thing.
+      Your final response MUST be raw JSON only.
 
       ### analyst:summarize — Analyze collected data
       1. Call query_topic_contents(topic_id) — returns PRE-COMPUTED data:
