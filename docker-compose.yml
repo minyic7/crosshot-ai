@@ -129,6 +129,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       MEDIA_BASE_PATH: /data/media
       DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
+      GROK_API_KEY: ${GROK_API_KEY}
     volumes:
       - ${DATA_DIR:-./data}/media:/data/media:ro
     depends_on:
