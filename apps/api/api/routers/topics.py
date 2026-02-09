@@ -233,6 +233,34 @@ async def refresh_topic(topic_id: str) -> dict:
         return {"status": "refreshing", "plan_task_id": plan_task_id}
 
 
+@router.post("/topics/{topic_id}/reanalyze")
+async def reanalyze_topic(topic_id: str) -> dict:
+    """Re-run analysis on existing data without crawling."""
+    factory = get_session_factory()
+    async with factory() as session:
+        topic = await session.get(TopicRow, topic_id)
+        if topic is None:
+            return {"error": "Topic not found"}
+
+    queue = get_queue()
+    task = Task(
+        label="analyst:summarize",
+        priority=TaskPriority.MEDIUM,
+        payload={"topic_id": topic_id},
+    )
+    await queue.push(task)
+
+    redis = get_redis()
+    pipeline_key = f"topic:{topic_id}:pipeline"
+    await redis.hset(pipeline_key, mapping={
+        "phase": "summarizing",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await redis.expire(pipeline_key, 86400)
+
+    return {"status": "reanalyzing", "task_id": task.id}
+
+
 @router.post("/topics/reorder")
 async def reorder_topics(body: TopicReorder) -> dict:
     """Bulk update topic positions for drag-drop reordering."""
