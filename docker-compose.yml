@@ -40,11 +40,14 @@ services:
     environment:
       AGENT_NAME: crawler-xhs
       REDIS_URL: redis://redis:6379/0
+      DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
       MEDIA_BASE_PATH: /data/media
     volumes:
       - ${DATA_DIR:-./data}/media:/data/media
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     mem_limit: 1g
     logging:
@@ -59,11 +62,14 @@ services:
     environment:
       AGENT_NAME: crawler-x
       REDIS_URL: redis://redis:6379/0
+      DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
       MEDIA_BASE_PATH: /data/media
     volumes:
       - ${DATA_DIR:-./data}/media:/data/media
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     mem_limit: 1g
     logging:

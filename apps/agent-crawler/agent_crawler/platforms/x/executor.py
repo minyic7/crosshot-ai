@@ -270,7 +270,7 @@ class XExecutor(BasePlatformExecutor):
     async def _save_contents(
         self, task: Task, tweets: list[dict[str, Any]],
     ) -> list[str]:
-        """Save parsed tweets as Content objects in Redis."""
+        """Save parsed tweets to Redis + PostgreSQL."""
         content_ids = []
         for tweet in tweets:
             content = Content(
@@ -288,8 +288,65 @@ class XExecutor(BasePlatformExecutor):
             await self._redis.sadd("content:index:x", content.id)
             content_ids.append(content.id)
 
+        # Persist to PostgreSQL for analytics (non-fatal on failure)
+        if content_ids:
+            await self._save_to_pg(task, tweets, content_ids)
+
         logger.info("Saved %d content items for task %s", len(content_ids), task.id)
         return content_ids
+
+    async def _save_to_pg(
+        self,
+        task: Task,
+        tweets: list[dict[str, Any]],
+        content_ids: list[str],
+    ) -> None:
+        """Persist content rows to PostgreSQL for SQL-based analytics."""
+        try:
+            from shared.db.engine import get_session_factory
+            from shared.db.models import ContentRow, TaskRow
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            topic_id = task.payload.get("topic_id")
+            factory = get_session_factory()
+            async with factory() as session:
+                # Ensure task exists in PG (ContentRow FK requirement)
+                await session.execute(
+                    pg_insert(TaskRow).values(
+                        id=task.id,
+                        label=task.label,
+                        priority=task.priority,
+                        payload=task.payload,
+                    ).on_conflict_do_nothing(index_elements=["id"])
+                )
+
+                # Insert content rows (deduplicate by platform+content_id)
+                for i, tweet in enumerate(tweets):
+                    author = tweet.get("author", {})
+                    await session.execute(
+                        pg_insert(ContentRow).values(
+                            id=content_ids[i],
+                            task_id=task.id,
+                            topic_id=topic_id,
+                            platform="x",
+                            platform_content_id=tweet.get("tweet_id"),
+                            source_url=tweet.get("source_url", ""),
+                            author_uid=author.get("user_id"),
+                            author_username=author.get("username"),
+                            author_display_name=author.get("display_name"),
+                            text=tweet.get("text"),
+                            lang=tweet.get("lang"),
+                            hashtags=tweet.get("hashtags", []),
+                            metrics=tweet.get("metrics", {}),
+                            data=tweet,
+                        ).on_conflict_do_nothing(
+                            index_elements=["platform", "platform_content_id"]
+                        )
+                    )
+
+                await session.commit()
+        except Exception as e:
+            logger.warning("PG save failed (non-fatal): %s", e)
 
     async def _download_and_update_media(
         self, content_ids: list[str],
