@@ -234,8 +234,8 @@ function MasonryCard({
   const tweet = content.data as unknown as TweetData
   const media = tweet?.media ?? []
   const firstMedia = media[0]
-  const hasImage = firstMedia?.type === 'photo' && firstMedia?.url
-  const hasVideo = firstMedia?.type === 'video'
+  const hasMedia = firstMedia && (firstMedia.local_path || firstMedia.url)
+  const isVideo = firstMedia?.type === 'video' || firstMedia?.type === 'animated_gif'
   const metrics = tweet?.metrics
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
@@ -261,7 +261,7 @@ function MasonryCard({
       }}
     >
       {/* Media */}
-      {(hasImage || hasVideo) && !imgError && (
+      {hasMedia && !imgError && (
         <div className="relative overflow-hidden" style={{ background: 'rgba(100,116,139,0.05)' }}>
           {!imgLoaded && (
             <div className="skeleton" style={{ width: '100%', height: 180 }} />
@@ -273,12 +273,13 @@ function MasonryCard({
             onError={() => setImgError(true)}
             style={{
               width: '100%',
-              display: imgLoaded ? 'block' : 'none',
+              ...(imgLoaded
+                ? {}
+                : { position: 'absolute' as const, top: 0, left: 0, opacity: 0 }),
             }}
-            loading="lazy"
           />
           {/* Video overlay badge */}
-          {hasVideo && (
+          {isVideo && (
             <div
               className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold"
               style={{
@@ -332,7 +333,7 @@ function MasonryCard({
             style={{
               color: 'var(--foreground-muted)',
               display: '-webkit-box',
-              WebkitLineClamp: hasImage || hasVideo ? 3 : 6,
+              WebkitLineClamp: hasMedia ? 3 : 6,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
             }}
