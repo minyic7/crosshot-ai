@@ -299,21 +299,21 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, streamingReply])
 
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!open) {
-      setChatInput('')
-      setChatMessages([])
-      setStreamingReply('')
-      setIsAssisting(false)
-      setName('')
-      setIcon('📊')
-      setDescription('')
-      setPlatforms(['x'])
-      setKeywords('')
-      setInterval('6')
-    }
-  }, [open])
+  const resetForm = () => {
+    setChatInput('')
+    setChatMessages([])
+    setStreamingReply('')
+    setIsAssisting(false)
+    setName('')
+    setIcon('📊')
+    setDescription('')
+    setPlatforms(['x'])
+    setKeywords('')
+    setInterval('6')
+  }
+
+  // Derive emoji options: include AI-suggested icon if not in defaults
+  const emojiOptions = EMOJI_OPTIONS.includes(icon) ? EMOJI_OPTIONS : [icon, ...EMOJI_OPTIONS]
 
   const handleAsk = async () => {
     const q = chatInput.trim()
@@ -371,6 +371,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                 if (s.description) setDescription(s.description)
                 if (s.platforms?.length) setPlatforms(s.platforms)
                 if (s.keywords?.length) setKeywords(s.keywords.join(', '))
+                if (s.schedule_interval_hours) setInterval(String(s.schedule_interval_hours))
               }
             } else if (evt.error) {
               finalReply = `Error: ${evt.error}`
@@ -407,6 +408,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
       keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
       config: { schedule_interval_hours: Number(interval) || 6 },
     })
+    resetForm()
     onClose()
   }
 
@@ -469,7 +471,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         <div className="form-group">
           <label className="form-label">Icon</label>
           <div className="emoji-picker">
-            {EMOJI_OPTIONS.map((e) => (
+            {emojiOptions.map((e) => (
               <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
             ))}
           </div>
