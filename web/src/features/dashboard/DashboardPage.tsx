@@ -1,18 +1,15 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, GripVertical, Pin, RefreshCw, Clock,
+  Plus, GripVertical, Pin, RefreshCw,
   AlertTriangle, Info, AlertCircle,
 } from 'lucide-react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
-import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import {
-  useGetHealthQuery,
   useListTopicsQuery,
   useCreateTopicMutation,
   useUpdateTopicMutation,
@@ -24,7 +21,23 @@ import type { Topic, TopicAlert } from '@/types/models'
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
 
-// ─── Helpers ──────────────────────────────────────────────────────
+// ─── Animated Number ──────────────────────────────────────────
+
+function AnimatedNum({ to, dur = 950 }: { to: number; dur?: number }) {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    const s = performance.now()
+    const go = (n: number) => {
+      const p = Math.min((n - s) / dur, 1)
+      setV(Math.round((1 - Math.pow(1 - p, 4)) * to))
+      if (p < 1) requestAnimationFrame(go)
+    }
+    requestAnimationFrame(go)
+  }, [to, dur])
+  return <>{v}</>
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
 
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return 'Never'
@@ -48,12 +61,22 @@ function fmtNum(n: number): string {
   return String(n)
 }
 
-function extractCardMetrics(metrics: Record<string, unknown>): Array<{ label: string; value: string; color?: string }> {
-  const out: Array<{ label: string; value: string; color?: string }> = []
+interface CardMetric {
+  label: string
+  value: string | number
+  color?: string
+  sub?: string
+  subColor?: string
+  subBg?: string
+  animate?: boolean
+}
 
-  // Posts / contents count
+function extractCardMetrics(metrics: Record<string, unknown>): CardMetric[] {
+  const out: CardMetric[] = []
+
+  // Posts count
   const posts = metrics.total_posts_analyzed ?? metrics.total_contents
-  if (posts != null) out.push({ label: 'Posts', value: fmtNum(Number(posts)) })
+  if (posts != null) out.push({ label: 'Posts', value: Number(posts), animate: true })
 
   // Dominant sentiment
   const sentiment = metrics.sentiment_distribution as Record<string, number> | undefined
@@ -61,34 +84,111 @@ function extractCardMetrics(metrics: Record<string, unknown>): Array<{ label: st
     const entries = Object.entries(sentiment).sort(([, a], [, b]) => b - a)
     if (entries.length > 0) {
       const [name, pct] = entries[0]
-      const color = name === 'bullish' ? 'var(--success)' : name === 'bearish' ? 'var(--error)' : undefined
-      out.push({ label: 'Sentiment', value: `${Math.round(pct * 100)}% ${name}`, color })
+      const isBear = name === 'bearish'
+      const isBull = name === 'bullish'
+      out.push({
+        label: 'Sentiment',
+        value: `${Math.round(pct * 100)}%`,
+        color: isBear ? 'var(--negative)' : isBull ? 'var(--positive)' : undefined,
+        sub: name,
+        subColor: isBear ? 'var(--negative)' : isBull ? 'var(--positive)' : 'var(--ink-2)',
+        subBg: isBear ? 'var(--negative-surface)' : isBull ? 'var(--positive-surface)' : 'var(--glass)',
+      })
     }
+  }
+
+  // Engagement score
+  const engagement = metrics.engagement_score ?? metrics.engagement
+  if (engagement != null) out.push({ label: 'Score', value: Number(engagement).toFixed(1), color: 'var(--accent)' })
+
+  // Sources
+  const coverage = metrics.platforms_coverage as Record<string, unknown> | undefined
+  if (coverage && typeof coverage === 'object') {
+    out.push({ label: 'Sources', value: Object.keys(coverage).length })
   }
 
   // Average views
   const views = metrics.average_views_per_post
-  if (views != null) out.push({ label: 'Avg views', value: fmtNum(Number(views)) })
-
-  // Average likes
-  const likes = metrics.average_likes_per_post
-  if (likes != null && out.length < 3) out.push({ label: 'Avg likes', value: fmtNum(Number(likes)) })
-
-  // Engagement score
-  const engagement = metrics.engagement_score ?? metrics.engagement
-  if (engagement != null && out.length < 3) out.push({ label: 'Score', value: String(engagement) })
+  if (views != null && out.length < 4) out.push({ label: 'Avg Views', value: fmtNum(Number(views)), animate: true })
 
   // Trend velocity
   const velocity = metrics.trend_velocity
-  if (velocity != null && out.length < 3) {
-    const color = velocity === 'rising' ? 'var(--success)' : velocity === 'falling' ? 'var(--error)' : undefined
+  if (velocity != null && out.length < 4) {
+    const color = velocity === 'rising' ? 'var(--positive)' : velocity === 'falling' ? 'var(--negative)' : undefined
     out.push({ label: 'Trend', value: String(velocity), color })
   }
 
-  return out.slice(0, 3)
+  return out.slice(0, 4)
 }
 
-// ─── Topic Card ───────────────────────────────────────────────────
+function extractSentimentBars(metrics: Record<string, unknown>): { bull: number; neut: number; bear: number } | null {
+  const sentiment = metrics.sentiment_distribution as Record<string, number> | undefined
+  if (!sentiment || typeof sentiment !== 'object') return null
+  return {
+    bull: Math.round((sentiment.bullish ?? 0) * 100),
+    neut: Math.round((sentiment.neutral ?? 0) * 100),
+    bear: Math.round((sentiment.bearish ?? 0) * 100),
+  }
+}
+
+// ─── Sentiment Bar ────────────────────────────────────────────
+
+function SentimentBar({ bull, neut, bear, delay = 0 }: { bull: number; neut: number; bear: number; delay?: number }) {
+  const [on, setOn] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => setOn(true), delay + 350)
+    return () => clearTimeout(id)
+  }, [delay])
+
+  const segs = [
+    { p: bull, color: 'var(--positive)', label: 'Bullish' },
+    { p: neut, color: 'var(--ink-4)', label: 'Neutral' },
+    { p: bear, color: 'var(--negative)', label: 'Bearish' },
+  ]
+
+  return (
+    <div className="sentiment-bar-container">
+      <div className="sentiment-bar-track">
+        {segs.map((s, i) => (
+          <div
+            key={i}
+            className="sentiment-bar-segment"
+            style={{
+              width: `${s.p}%`,
+              background: s.color,
+              borderRadius: '100px',
+              transform: on ? 'scaleX(1)' : 'scaleX(0)',
+              transitionDelay: `${i * 0.14}s`,
+              boxShadow: on ? `0 0 8px ${s.color}30` : 'none',
+            }}
+          />
+        ))}
+      </div>
+      <div className="sentiment-bar-labels">
+        {segs.map((s, i) => (
+          <div
+            key={i}
+            className="sentiment-label"
+            style={{
+              opacity: on ? 1 : 0,
+              transform: on ? 'none' : 'translateY(4px)',
+              transitionDelay: `${0.5 + i * 0.1}s`,
+            }}
+          >
+            <span
+              className="sentiment-label-dot"
+              style={{ background: `${s.color}20`, borderColor: s.color }}
+            />
+            <span style={{ color: i === 1 ? 'var(--ink-3)' : s.color, fontWeight: 600 }}>{s.p}%</span>
+            <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Topic Card ───────────────────────────────────────────────
 
 function TopicCard({
   topic,
@@ -106,54 +206,99 @@ function TopicCard({
   const { ref, handleRef, isDragging } = useSortable({ id: topic.id, index })
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
   const cardMetrics = topic.summary_data?.metrics ? extractCardMetrics(topic.summary_data.metrics) : []
+  const sentBars = topic.summary_data?.metrics ? extractSentimentBars(topic.summary_data.metrics) : null
+  const d = index * 110
 
   return (
     <div
       ref={ref}
-      className={`topic-card${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''}${isDragging ? ' dragging' : ''}`}
+      className={`topic-card rise${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''}${isDragging ? ' dragging' : ''}`}
+      style={{ animationDelay: `${220 + d}ms` }}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest('button, .topic-drag-handle')) return
+        if ((e.target as HTMLElement).closest('button, .topic-drag-handle, .topic-card-refresh')) return
         onClick(topic.id)
       }}
     >
+      <div className="topic-card-shimmer" />
+
       {/* Header */}
       <div className="topic-card-header">
-        <span ref={handleRef} className="topic-drag-handle"><GripVertical size={14} /></span>
-        <span className="topic-card-icon">{topic.icon}</span>
-        <h3 className="topic-card-name">{topic.name}</h3>
-        <Badge variant={topic.status === 'active' ? 'success' : topic.status === 'paused' ? 'warning' : 'muted'}>
-          {topic.status}
-        </Badge>
-        <div style={{ flex: 1 }} />
-        <button
-          className={`topic-pin-btn${topic.is_pinned ? ' active' : ''}`}
-          onClick={() => onPin(topic.id, !topic.is_pinned)}
-          title={topic.is_pinned ? 'Unpin' : 'Pin'}
-        >
-          <Pin size={13} />
-        </button>
+        <div className="topic-card-title-area">
+          <span ref={handleRef} className="topic-drag-handle"><GripVertical size={14} /></span>
+          <div className="topic-card-icon-box">{topic.icon}</div>
+          <div className="topic-card-title-info">
+            <div className="topic-card-title-row">
+              <h3 className="topic-card-name">{topic.name}</h3>
+              <div className={`topic-status-pill ${topic.status === 'active' ? 'active' : 'paused'}`}>
+                <span className="topic-status-dot">
+                  <span className="topic-status-dot-inner" />
+                  {topic.status === 'active' && <span className="topic-status-dot-ring" />}
+                </span>
+                {topic.status === 'active' ? 'Live' : 'Paused'}
+              </div>
+            </div>
+            <p className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            className={`topic-pin-btn${topic.is_pinned ? ' active' : ''}`}
+            onClick={() => onPin(topic.id, !topic.is_pinned)}
+            title={topic.is_pinned ? 'Unpin' : 'Pin'}
+          >
+            <Pin size={13} />
+          </button>
+          <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
+            <RefreshCw size={11} />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Summary */}
+      {/* Description */}
       {topic.last_summary ? (
         <p className="topic-card-summary">{topic.last_summary}</p>
       ) : (
         <p className="topic-card-empty">Awaiting first analysis cycle...</p>
       )}
 
-      {/* Metrics mini-grid */}
+      {/* Metrics tiles */}
       {cardMetrics.length > 0 && (
         <div className="topic-metrics-row">
           {cardMetrics.map((m, i) => (
-            <div key={i} className="topic-metric-chip">
-              <span className="topic-metric-value" style={m.color ? { color: m.color } : undefined}>{m.value}</span>
+            <div
+              key={i}
+              className="topic-metric-chip pop"
+              style={{ animationDelay: `${340 + d + i * 70}ms` }}
+            >
               <span className="topic-metric-label">{m.label}</span>
+              <span
+                className="topic-metric-value"
+                style={m.color ? { color: m.color } : undefined}
+              >
+                {m.animate && typeof m.value === 'number' ? <AnimatedNum to={m.value} /> : m.value}
+              </span>
+              {m.sub && (
+                <span
+                  className="topic-metric-sub"
+                  style={{
+                    background: m.subBg,
+                    border: `1px solid ${m.subColor}18`,
+                    color: m.subColor,
+                  }}
+                >
+                  {m.sub === 'bearish' ? '▼' : '▲'} {m.sub}
+                </span>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Alert — show top 1 only in card */}
+      {/* Sentiment bar */}
+      {sentBars && <SentimentBar bull={sentBars.bull} neut={sentBars.neut} bear={sentBars.bear} delay={d} />}
+
+      {/* Alert — show top 1 only */}
       {alerts.length > 0 && (
         <div className={`topic-card-alert ${alerts[0].level}`}>
           {alerts[0].level === 'critical' ? <AlertCircle size={13} /> : alerts[0].level === 'warning' ? <AlertTriangle size={13} /> : <Info size={13} />}
@@ -162,35 +307,34 @@ function TopicCard({
         </div>
       )}
 
-      {/* Tags */}
-      <div className="topic-card-tags">
-        {topic.platforms.map((p) => (
-          <span key={p} className="topic-tag platform">{p.toUpperCase()}</span>
-        ))}
-        {topic.keywords.slice(0, 3).map((kw) => (
-          <span key={kw} className="topic-tag">{kw}</span>
-        ))}
-        {topic.keywords.length > 3 && (
-          <span className="topic-tag">+{topic.keywords.length - 3}</span>
-        )}
-      </div>
-
-      {/* Footer */}
+      {/* Footer: sources + tags */}
       <div className="topic-card-footer">
-        <span className="topic-card-time">
-          <Clock size={11} />
-          {timeAgo(topic.last_crawl_at)}
-        </span>
-        <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
-          <RefreshCw size={11} />
-          Refresh
-        </button>
+        <div className="topic-card-sources">
+          <span className="topic-card-sources-label">Sources</span>
+          {topic.platforms.map((p) => (
+            <div key={p} className="topic-source-icon" title={p.toUpperCase()}>
+              {p === 'x' ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="topic-card-tags">
+          {topic.keywords.slice(0, 3).map((kw) => (
+            <span key={kw} className="topic-tag">#{kw}</span>
+          ))}
+          {topic.keywords.length > 3 && (
+            <span className="topic-tag">+{topic.keywords.length - 3}</span>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-// ─── Create Topic Modal ───────────────────────────────────────────
+// ─── Create Topic Modal ───────────────────────────────────────
 
 function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState('')
@@ -244,12 +388,8 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
             {PLATFORM_OPTIONS.map((p) => (
               <button
                 key={p}
-                style={{
-                  padding: '6px 14px', cursor: 'pointer',
-                  border: platforms.includes(p) ? '1.5px solid var(--teal)' : '1px solid rgba(100,116,139,0.2)',
-                  background: platforms.includes(p) ? 'rgba(82,96,119,0.1)' : 'transparent',
-                  borderRadius: '6px', fontWeight: 500,
-                }}
+                className={`topic-tag${platforms.includes(p) ? ' platform' : ''}`}
+                style={{ padding: '6px 14px', cursor: 'pointer' }}
                 onClick={() => togglePlatform(p)}
               >{p.toUpperCase()}</button>
             ))}
@@ -257,22 +397,22 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
         <Input label="Keywords (comma-separated)" placeholder="e.g. Elon Musk, SpaceX, Tesla" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
         <Input label="Refresh Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-        <Button className="btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!name.trim() || platforms.length === 0 || isLoading} onClick={handleSubmit}>
+        <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!name.trim() || platforms.length === 0 || isLoading} onClick={handleSubmit}>
           <Plus size={16} />
           {isLoading ? 'Creating...' : 'Create Topic'}
-        </Button>
+        </button>
       </div>
     </Modal>
   )
 }
 
-// ─── Dashboard Page ───────────────────────────────────────────────
+// ─── Dashboard Page ───────────────────────────────────────────
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
+  const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
 
-  const { data: health } = useGetHealthQuery(undefined, { pollingInterval: 10000 })
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval: 10000 })
 
   const [updateTopic] = useUpdateTopicMutation()
@@ -298,36 +438,78 @@ export function DashboardPage() {
     reorderTopics({ ids: reordered })
   }, [topics, reorderTopics])
 
-  const sortedTopics = topics ?? []
+  const allTopics = topics ?? []
+  const filtered = filter === 'All' ? allTopics : filter === 'Active' ? allTopics.filter((t) => t.status === 'active') : allTopics.filter((t) => t.status === 'paused')
+  const totalPosts = allTopics.reduce((s, t) => s + t.total_contents, 0)
+  const avgScore = allTopics.length > 0
+    ? (allTopics.reduce((s, t) => {
+        const score = t.summary_data?.metrics?.engagement_score
+        return s + (typeof score === 'number' ? score : 0)
+      }, 0) / allTopics.length).toFixed(1)
+    : '0'
 
   return (
     <div className="dashboard">
-      {/* ── Header ────────────────────────────────── */}
-      <div className="dashboard-header">
-        <h1>Dashboard</h1>
-        <Badge variant={health?.status === 'ok' ? 'success' : 'error'}>
-          {health?.status === 'ok' ? 'Online' : 'Offline'}
-        </Badge>
-      </div>
-
-      {/* ── Topics ────────────────────────────────── */}
-      <div className="dashboard-topics-header">
-        <h2>Topics</h2>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
+      {/* Header */}
+      <div className="dashboard-header rise">
+        <div>
+          <h1>Dashboard</h1>
+          <p className="dashboard-subtitle">
+            Tracking {allTopics.length} topics · {totalPosts} posts collected
+          </p>
+        </div>
+        <button className="btn-accent" onClick={() => setShowCreate(true)}>
           <Plus size={15} />
           New Topic
-        </Button>
+        </button>
       </div>
 
+      {/* Stats */}
+      <div className="dashboard-stats rise" style={{ animationDelay: '80ms' }}>
+        {[
+          { label: 'Topics', value: allTopics.length, emoji: '📋' },
+          { label: 'Active', value: allTopics.filter((t) => t.status === 'active').length, emoji: '🟢' },
+          { label: 'Total Posts', value: totalPosts, emoji: '📊' },
+          { label: 'Avg Score', value: avgScore, emoji: '⭐' },
+        ].map((s, i) => (
+          <div key={i} className="dash-stat pop" style={{ animationDelay: `${130 + i * 70}ms` }}>
+            <span className="dash-stat-emoji">{s.emoji}</span>
+            <div className="dash-stat-content">
+              <span className="dash-stat-label">{s.label}</span>
+              <span className="dash-stat-value">
+                {typeof s.value === 'number' ? <AnimatedNum to={s.value} /> : s.value}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter bar */}
+      <div className="dashboard-filter-bar rise" style={{ animationDelay: '180ms' }}>
+        <span className="dashboard-topics-label">Topics</span>
+        <div className="filter-pills">
+          {(['All', 'Active', 'Paused'] as const).map((f) => (
+            <button
+              key={f}
+              className={`filter-pill${filter === f ? ' filter-pill-active' : ''}`}
+              onClick={() => setFilter(f)}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Topic cards */}
       {topicsLoading ? (
         <div className="topic-grid">
           <div style={{ minHeight: 280 }}><Skeleton className="w-full h-full" /></div>
           <div style={{ minHeight: 280 }}><Skeleton className="w-full h-full" /></div>
         </div>
-      ) : sortedTopics.length > 0 ? (
+      ) : filtered.length > 0 ? (
         <DragDropProvider onDragEnd={handleDragEnd}>
           <div className="topic-grid">
-            {sortedTopics.map((topic, index) => (
+            {filtered.map((topic, index) => (
               <TopicCard
                 key={topic.id}
                 topic={topic}
@@ -340,14 +522,14 @@ export function DashboardPage() {
           </div>
         </DragDropProvider>
       ) : (
-        <div className="topic-empty-state">
+        <div className="topic-empty-state pop">
           <span style={{ fontSize: '2.5rem' }}>📊</span>
-          <h3>No topics yet</h3>
+          <h3>No {filter.toLowerCase()} topics found</h3>
           <p>Create your first monitoring topic to get started</p>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
+          <button className="btn-accent" onClick={() => setShowCreate(true)}>
             <Plus size={15} />
             Create Topic
-          </Button>
+          </button>
         </div>
       )}
 

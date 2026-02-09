@@ -53,20 +53,20 @@ export function TopicDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="stack">
-        <Skeleton className="w-48 h-8" />
-        <Skeleton className="w-full h-64" />
+      <div className="stack rise">
+        <div style={{ height: 32 }}><Skeleton className="w-48 h-full" /></div>
+        <div style={{ height: 256 }}><Skeleton className="w-full h-full" /></div>
       </div>
     )
   }
 
   if (isError || !topic || ('error' in topic)) {
     return (
-      <div className="stack">
+      <div className="stack rise">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} className="mr-1" /> Back
+          <ArrowLeft size={16} /> Back
         </Button>
-        <p style={{ color: 'var(--error)' }}>Topic not found</p>
+        <p style={{ color: 'var(--negative)' }}>Topic not found</p>
       </div>
     )
   }
@@ -86,35 +86,41 @@ export function TopicDetailPage() {
   }
 
   return (
-    <div className="topic-detail">
+    <div className="topic-detail rise">
       {/* Header */}
       <div className="topic-detail-header">
         <div className="topic-detail-title">
           <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
             <ArrowLeft size={16} />
           </Button>
-          <span className="topic-detail-icon">{topic.icon}</span>
+          <div className="topic-card-icon-box" style={{ width: 40, height: 40, borderRadius: 12, fontSize: 18 }}>
+            {topic.icon}
+          </div>
           <h1>{topic.name}</h1>
-          <Badge variant={topic.status === 'active' ? 'success' : topic.status === 'paused' ? 'warning' : 'error'}>
-            {topic.status}
-          </Badge>
+          <div className={`topic-status-pill ${topic.status === 'active' ? 'active' : 'paused'}`}>
+            <span className="topic-status-dot">
+              <span className="topic-status-dot-inner" />
+              {topic.status === 'active' && <span className="topic-status-dot-ring" />}
+            </span>
+            {topic.status === 'active' ? 'Live' : 'Paused'}
+          </div>
         </div>
         <div className="topic-detail-actions">
-          <Button size="sm" variant="ghost" onClick={() => refreshTopic(topic.id)} disabled={isRefreshing || topic.status !== 'active'}>
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+          <button className="topic-card-refresh" onClick={() => refreshTopic(topic.id)} disabled={isRefreshing || topic.status !== 'active'}>
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
+          </button>
           <Button size="sm" variant="ghost" onClick={handleTogglePause}>
             {topic.status === 'active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
           </Button>
-          <Button size="sm" variant="ghost" onClick={handleDelete} style={{ color: 'var(--error)' }}>
+          <Button size="sm" variant="ghost" onClick={handleDelete} style={{ color: 'var(--negative)' }}>
             <Trash2 size={14} />
           </Button>
         </div>
       </div>
 
       {/* Info strip */}
-      <div className="topic-detail-info">
+      <div className="topic-detail-info pop" style={{ animationDelay: '80ms' }}>
         <div className="topic-detail-info-item">
           <span className="label">Created</span>
           <span>{formatDate(topic.created_at)}</span>
@@ -125,18 +131,22 @@ export function TopicDetailPage() {
         </div>
         <div className="topic-detail-info-item">
           <span className="label">Contents</span>
-          <span><strong>{topic.total_contents}</strong></span>
+          <span style={{ fontWeight: 800, fontSize: '1.125rem' }}>{topic.total_contents}</span>
         </div>
         <div className="topic-detail-info-item">
           <span className="label">Platforms</span>
-          <span>{topic.platforms.map((p) => <Badge key={p} variant="muted" style={{ marginRight: 4 }}>{p.toUpperCase()}</Badge>)}</span>
+          <span style={{ display: 'flex', gap: 4 }}>
+            {topic.platforms.map((p) => (
+              <span key={p} className="topic-tag platform">{p.toUpperCase()}</span>
+            ))}
+          </span>
         </div>
       </div>
 
       {/* Keywords */}
       {topic.keywords.length > 0 && (
         <div className="topic-card-tags" style={{ padding: 0 }}>
-          {topic.keywords.map((kw) => <span key={kw} className="topic-tag">{kw}</span>)}
+          {topic.keywords.map((kw) => <span key={kw} className="topic-tag">#{kw}</span>)}
         </div>
       )}
 
@@ -147,11 +157,11 @@ export function TopicDetailPage() {
             <CardHeader className="mb-3">
               <CardDescription>Summary</CardDescription>
             </CardHeader>
-            <div style={{ fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--foreground)', whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>
               {topic.last_summary}
             </div>
             {topic.summary_data?.cycle_id && (
-              <div style={{ marginTop: 12, fontSize: '0.75rem', color: 'var(--foreground-subtle)' }}>
+              <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>
                 <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
                 Cycle: {topic.summary_data.cycle_id}
               </div>
@@ -160,7 +170,7 @@ export function TopicDetailPage() {
         </Card>
       )}
 
-      {/* Metrics — render all dynamically */}
+      {/* Metrics */}
       {metricEntries.length > 0 && (
         <Card>
           <CardContent>
@@ -169,7 +179,7 @@ export function TopicDetailPage() {
             </CardHeader>
             <div className="topic-detail-metrics-grid">
               {metricEntries.map(([key, value]) => (
-                <div key={key} className="topic-detail-metric-item">
+                <div key={key} className="topic-detail-metric-item pop" style={{ animationDelay: '100ms' }}>
                   <span className="topic-detail-metric-value">{fmtMetricValue(value)}</span>
                   <span className="topic-detail-metric-label">{metricLabel(key)}</span>
                 </div>
@@ -208,8 +218,8 @@ export function TopicDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {recommendations.map((rec, i) => (
                 <div key={i} className="topic-detail-query-row">
-                  <Search size={13} style={{ color: 'var(--foreground-subtle)', flexShrink: 0 }} />
-                  <Badge variant="muted">{rec.platform.toUpperCase()}</Badge>
+                  <Search size={13} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
+                  <span className="topic-tag platform">{rec.platform.toUpperCase()}</span>
                   <span style={{ flex: 1, fontSize: '0.8125rem' }}>{rec.query}</span>
                   <Badge variant={rec.priority === 'high' ? 'error' : rec.priority === 'medium' ? 'warning' : 'muted'}>
                     {rec.priority}
@@ -224,8 +234,22 @@ export function TopicDetailPage() {
       {/* Raw data */}
       {topic.summary_data && (
         <details style={{ marginTop: 8 }}>
-          <summary className="text-xs cursor-pointer" style={{ color: 'var(--foreground-subtle)', padding: '8px 0' }}>Raw summary data</summary>
-          <pre className="text-xs overflow-auto p-3 mt-2" style={{ background: 'rgba(100,116,139,0.04)', borderRadius: 8, maxHeight: 400, border: '1px solid rgba(100,116,139,0.1)' }}>
+          <summary style={{ fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', cursor: 'pointer', color: 'var(--ink-3)', padding: '8px 0' }}>
+            Raw summary data
+          </summary>
+          <pre style={{
+            fontFamily: "'Space Mono', monospace",
+            fontSize: '0.6875rem',
+            overflow: 'auto',
+            padding: 16,
+            marginTop: 8,
+            background: 'var(--glass)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 14,
+            maxHeight: 400,
+            border: '1px solid var(--glass-border)',
+            color: 'var(--ink-2)',
+          }}>
             {JSON.stringify(topic.summary_data, null, 2)}
           </pre>
         </details>
