@@ -17,7 +17,7 @@ import {
   useRefreshTopicMutation,
   useReorderTopicsMutation,
 } from '@/store/api'
-import type { Topic, TopicAlert } from '@/types/models'
+import type { Topic, TopicAlert, TopicPipeline } from '@/types/models'
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
@@ -101,6 +101,56 @@ function extractCardMetrics(metrics: Record<string, unknown>): CardMetric[] {
   return out.slice(0, 4)
 }
 
+// ─── Pipeline Badge ──────────────────────────────────────────
+
+function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
+  const { phase, total, done } = pipeline
+
+  if (phase === 'planning') {
+    return (
+      <div className="pipeline-badge planning">
+        <Loader2 size={12} className="pipeline-spin" />
+        <span>Planning crawl strategy...</span>
+      </div>
+    )
+  }
+
+  if (phase === 'crawling') {
+    const t = Number(total) || 0
+    const d = Number(done) || 0
+    const pct = t > 0 ? Math.round((d / t) * 100) : 0
+    return (
+      <div className="pipeline-badge crawling">
+        <RefreshCw size={12} className="pipeline-spin" />
+        <span>Crawling {d}/{t}</span>
+        <div className="pipeline-bar">
+          <div className="pipeline-bar-fill" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'summarizing') {
+    return (
+      <div className="pipeline-badge summarizing">
+        <Sparkles size={12} className="pipeline-spin" />
+        <span>Analyzing data...</span>
+      </div>
+    )
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className="pipeline-badge error">
+        <AlertTriangle size={12} />
+        <span>{pipeline.error_msg || 'Pipeline error'}</span>
+      </div>
+    )
+  }
+
+  return null
+}
+
 // ─── Topic Card ───────────────────────────────────────────────
 
 function TopicCard({
@@ -167,12 +217,15 @@ function TopicCard({
         </div>
       </div>
 
+      {/* Pipeline progress */}
+      {topic.pipeline && <PipelineBadge pipeline={topic.pipeline} />}
+
       {/* Description */}
       {topic.last_summary ? (
         <p className="topic-card-summary">{topic.last_summary.split(/\n---\n/)[0]}</p>
-      ) : (
+      ) : !topic.pipeline ? (
         <p className="topic-card-empty">Awaiting first analysis cycle...</p>
-      )}
+      ) : null}
 
       {/* Metrics tiles */}
       {cardMetrics.length > 0 && (
@@ -512,7 +565,14 @@ export function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
 
-  const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval: 10000 })
+  // Poll faster when any topic has an active pipeline
+  const [pollingInterval, setPollingInterval] = useState(30_000)
+  const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval })
+
+  useEffect(() => {
+    const hasActivePipeline = topics?.some((t) => t.pipeline && t.pipeline.phase !== 'done')
+    setPollingInterval(hasActivePipeline ? 3_000 : 30_000)
+  }, [topics])
 
   const [updateTopic] = useUpdateTopicMutation()
   const [refreshTopic] = useRefreshTopicMutation()

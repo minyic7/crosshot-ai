@@ -1571,6 +1571,66 @@ h3 {
   font-style: italic;
 }
 
+/* Pipeline progress badge */
+.pipeline-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: 'Outfit', system-ui, sans-serif;
+}
+
+.pipeline-badge.planning {
+  background: rgba(139, 92, 246, 0.08);
+  color: #8b5cf6;
+  border-left: 2px solid #8b5cf6;
+}
+
+.pipeline-badge.crawling {
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--blue);
+  border-left: 2px solid var(--blue);
+}
+
+.pipeline-badge.summarizing {
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--warning);
+  border-left: 2px solid var(--warning);
+}
+
+.pipeline-badge.error {
+  background: var(--negative-surface);
+  color: var(--negative);
+  border-left: 2px solid var(--negative);
+}
+
+.pipeline-spin {
+  animation: spin 1.5s linear infinite;
+}
+
+.pipeline-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  min-width: 40px;
+}
+
+[data-theme="dark"] .pipeline-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pipeline-bar-fill {
+  height: 100%;
+  border-radius: 100px;
+  background: var(--blue);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Card metrics grid — 4 tiles */
 .topic-metrics-row {
   display: grid;

@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from api.deps import get_queue
+from api.deps import get_queue, get_redis
 from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
 from shared.db.models import TopicRow
@@ -83,7 +83,7 @@ def _topic_to_dict(t: TopicRow) -> dict:
 
 
 async def _dispatch_plan(topic: TopicRow) -> str:
-    """Push an analyst:plan task for the given topic. Returns task ID."""
+    """Push an analyst:plan task and set pipeline stage to 'planning'."""
     queue = get_queue()
     task = Task(
         label="analyst:plan",
@@ -97,6 +97,16 @@ async def _dispatch_plan(topic: TopicRow) -> str:
         },
     )
     await queue.push(task)
+
+    # Set initial pipeline stage
+    redis = get_redis()
+    pipeline_key = f"topic:{topic.id}:pipeline"
+    await redis.hset(pipeline_key, mapping={
+        "phase": "planning",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await redis.expire(pipeline_key, 86400)
+
     return task.id
 
 
@@ -145,8 +155,26 @@ async def list_topics(status: str | None = None) -> dict:
             stmt = stmt.where(TopicRow.status != "cancelled")
         result = await session.execute(stmt)
         topics = result.scalars().all()
+
+        # Batch read pipeline stages from Redis
+        redis = get_redis()
+        pipe = redis.pipeline()
+        for t in topics:
+            pipe.hgetall(f"topic:{t.id}:pipeline")
+        stages = await pipe.execute()
+
+        topic_list = []
+        for i, t in enumerate(topics):
+            d = _topic_to_dict(t)
+            stage = stages[i] if stages[i] else None
+            # Filter out 'done' — no need to show completed pipelines
+            if stage and stage.get("phase") == "done":
+                stage = None
+            d["pipeline"] = stage
+            topic_list.append(d)
+
         return {
-            "topics": [_topic_to_dict(t) for t in topics],
+            "topics": topic_list,
             "total": len(topics),
         }
 

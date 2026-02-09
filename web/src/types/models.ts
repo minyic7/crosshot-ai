@@ -110,6 +110,14 @@ export interface TopicSummaryData {
   recommended_next_queries?: { platform: string; query: string; priority: string }[]
 }
 
+export interface TopicPipeline {
+  phase: 'planning' | 'crawling' | 'summarizing' | 'done' | 'error'
+  total?: string
+  done?: string
+  error_msg?: string
+  updated_at?: string
+}
+
 export interface Topic {
   id: string
   name: string
@@ -125,6 +133,7 @@ export interface Topic {
   last_crawl_at: string | null
   last_summary: string | null
   summary_data: TopicSummaryData | null
+  pipeline: TopicPipeline | null
   created_at: string
   updated_at: string
 }

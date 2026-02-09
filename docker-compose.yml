@@ -72,25 +72,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  coordinator:
-    image: ghcr.io/minyic7/crosshot-ai-coordinator:latest
-    build:
-      context: .
-      dockerfile: apps/agent-coordinator/Dockerfile
-    restart: unless-stopped
-    environment:
-      AGENT_NAME: coordinator
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      redis:
-        condition: service_healthy
-    mem_limit: 256m
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   analyst:
     image: ghcr.io/minyic7/crosshot-ai-analyst:latest
     build:

@@ -7,6 +7,7 @@ import os
 from shared.agent.base import BaseAgent
 from shared.db.engine import get_session_factory
 
+from agent_analyst.tools.pipeline import make_set_pipeline_stage
 from agent_analyst.tools.query import make_query_topic_contents
 from agent_analyst.tools.summary import make_update_topic_summary
 from agent_analyst.tools.topic import make_get_topic_config
@@ -30,8 +31,9 @@ async def main() -> None:
 
     agent.tools = [
         make_get_topic_config(session_factory),
-        make_query_topic_contents(session_factory, redis_client),
+        make_query_topic_contents(session_factory),
         make_update_topic_summary(session_factory),
+        make_set_pipeline_stage(redis_client),
     ]
 
     await agent.run()

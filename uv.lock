@@ -5,7 +5,6 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "agent-analyst",
-    "agent-coordinator",
     "agent-crawler",
     "api",
     "shared",
@@ -15,21 +14,6 @@ members = [
 name = "agent-analyst"
 version = "0.1.0"
 source = { editable = "apps/agent-analyst" }
-dependencies = [
-    { name = "openai" },
-    { name = "shared" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "openai", specifier = ">=2.17.0" },
-    { name = "shared", editable = "apps/shared" },
-]
-
-[[package]]
-name = "agent-coordinator"
-version = "0.1.0"
-source = { editable = "apps/agent-coordinator" }
 dependencies = [
     { name = "openai" },
     { name = "shared" },

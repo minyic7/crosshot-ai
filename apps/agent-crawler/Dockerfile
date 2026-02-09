@@ -11,7 +11,6 @@ COPY pyproject.toml uv.lock ./
 # Copy all workspace member pyproject.toml files (needed for workspace resolution)
 COPY apps/shared/pyproject.toml apps/shared/pyproject.toml
 COPY apps/agent-crawler/pyproject.toml apps/agent-crawler/pyproject.toml
-COPY apps/agent-coordinator/pyproject.toml apps/agent-coordinator/pyproject.toml
 COPY apps/agent-analyst/pyproject.toml apps/agent-analyst/pyproject.toml
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 
