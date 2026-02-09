@@ -2,20 +2,17 @@ import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, GripVertical, Pin, RefreshCw, Clock,
-  AlertTriangle, Info, AlertCircle, ChevronDown, ChevronUp,
+  AlertTriangle, Info, AlertCircle,
 } from 'lucide-react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { Badge } from '@/components/ui/Badge'
-import { StatusDot } from '@/components/ui/StatusDot'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import {
   useGetHealthQuery,
-  useGetDashboardStatsQuery,
-  useListAgentsQuery,
   useListTopicsQuery,
   useCreateTopicMutation,
   useUpdateTopicMutation,
@@ -274,11 +271,8 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
 export function DashboardPage() {
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
-  const [agentsOpen, setAgentsOpen] = useState(false)
 
   const { data: health } = useGetHealthQuery(undefined, { pollingInterval: 10000 })
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStatsQuery(undefined, { pollingInterval: 5000 })
-  const { data: agents } = useListAgentsQuery(undefined, { pollingInterval: 5000 })
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval: 10000 })
 
   const [updateTopic] = useUpdateTopicMutation()
@@ -315,61 +309,6 @@ export function DashboardPage() {
           {health?.status === 'ok' ? 'Online' : 'Offline'}
         </Badge>
       </div>
-
-      {/* ── Stats Bar ─────────────────────────────── */}
-      <div className="dashboard-stats">
-        {statsLoading ? (
-          <div style={{ height: 56 }}><Skeleton className="w-full h-full" /></div>
-        ) : (
-          <>
-            <div className="dash-stat">
-              <span className="dash-stat-value" style={{ color: 'var(--warning)' }}>{stats?.total_pending ?? 0}</span>
-              <span className="dash-stat-label">Pending</span>
-            </div>
-            <div className="dash-stat-divider" />
-            <div className="dash-stat">
-              <span className="dash-stat-value" style={{ color: 'var(--blue)' }}>{stats?.agents_online ?? 0}</span>
-              <span className="dash-stat-label">Agents</span>
-            </div>
-            <div className="dash-stat-divider" />
-            <div className="dash-stat">
-              <span className="dash-stat-value" style={{ color: 'var(--success)' }}>{stats?.recent_completed ?? 0}</span>
-              <span className="dash-stat-label">Done</span>
-            </div>
-            <div className="dash-stat-divider" />
-            <div className="dash-stat">
-              <span className="dash-stat-value" style={{ color: 'var(--error)' }}>{stats?.recent_failed ?? 0}</span>
-              <span className="dash-stat-label">Failed</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Agents (collapsible) ──────────────────── */}
-      {agents && agents.length > 0 && (
-        <div className="dashboard-agents-section">
-          <button className="dashboard-agents-toggle" onClick={() => setAgentsOpen(!agentsOpen)}>
-            <span className="dashboard-agents-title">
-              Agents
-              <span className="dashboard-agents-count">{agents.length}</span>
-            </span>
-            {agentsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-          {agentsOpen && (
-            <div className="dashboard-agents-list">
-              {agents.map((a) => (
-                <div key={a.name} className="dashboard-agent-row">
-                  <StatusDot status={a.status === 'error' ? 'error' : 'running'} />
-                  <span className="dashboard-agent-name">{a.name}</span>
-                  {a.current_task_label && <Badge variant="warning">{a.current_task_label}</Badge>}
-                  <div style={{ flex: 1 }} />
-                  {a.labels.map((l) => <Badge key={l} variant="muted">{l}</Badge>)}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Topics ────────────────────────────────── */}
       <div className="dashboard-topics-header">
