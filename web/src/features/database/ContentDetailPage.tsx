@@ -58,7 +58,10 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
     <div className="stack-sm">
       {/* Video players */}
       {videos.map((v, i) => {
-        const hasLocalVideo = !!v.video_local_path
+        const videoSrc = v.video_local_path
+          ? mediaUrl(v.video_local_path)
+          : (v.video_url ?? v.url)
+        const posterSrc = mediaUrl(v.local_path, v.url)
         return (
           <div
             key={`video-${i}`}
@@ -68,56 +71,16 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
               background: '#000',
             }}
           >
-            {hasLocalVideo ? (
-              <video
-                src={mediaUrl(v.video_local_path)}
-                controls={v.type === 'video'}
-                autoPlay={v.type === 'animated_gif'}
-                loop={v.type === 'animated_gif'}
-                muted={v.type === 'animated_gif'}
-                playsInline
-                poster={mediaUrl(v.local_path, v.url)}
-                style={{ width: '100%', maxHeight: 480, display: 'block' }}
-              />
-            ) : (
-              /* No local file — show thumbnail with link to original */
-              <a
-                href={v.video_url ?? v.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ display: 'block', position: 'relative' }}
-              >
-                <img
-                  src={v.url}
-                  alt="Video thumbnail"
-                  style={{ width: '100%', maxHeight: 480, objectFit: 'contain', display: 'block' }}
-                />
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.35)',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: '50%',
-                      background: 'rgba(255,255,255,0.9)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
-                  </div>
-                </div>
-              </a>
-            )}
+            <video
+              src={videoSrc}
+              controls={v.type === 'video'}
+              autoPlay={v.type === 'animated_gif'}
+              loop={v.type === 'animated_gif'}
+              muted={v.type === 'animated_gif'}
+              playsInline
+              poster={posterSrc}
+              style={{ width: '100%', maxHeight: 480, display: 'block' }}
+            />
             <div
               style={{
                 padding: '6px 12px',
@@ -130,7 +93,7 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
               <Film size={12} style={{ color: '#94a3b8' }} />
               <span style={{ fontSize: '0.6875rem', color: '#94a3b8', fontWeight: 500 }}>
                 {v.type === 'animated_gif' ? 'GIF' : 'Video'}
-                {!hasLocalVideo && ' (not downloaded)'}
+                {!v.video_local_path && ' (not downloaded)'}
               </span>
               {v.video_url && (
                 <a
