@@ -7,6 +7,7 @@ import { useListContentsQuery } from '@/store/api'
 const PAGE_SIZE = 20
 const COLUMN_WIDTH = 280
 const GAP = 16
+const TEXT_CARD_HEIGHT = 180
 
 interface TweetData {
   tweet_id?: string
@@ -136,7 +137,8 @@ export function ContentGallery() {
   for (const content of allContents) {
     const tweet = content.data as unknown as TweetData
     const hasMedia = (tweet?.media?.length ?? 0) > 0
-    const estimatedHeight = hasMedia ? 340 : 200
+    // Media cards: image height (assume 16:9) + ~100 body; text cards: fixed
+    const estimatedHeight = hasMedia ? Math.round(COLUMN_WIDTH * 9 / 16) + 100 : TEXT_CARD_HEIGHT
     const shortestCol = columnHeights.indexOf(Math.min(...columnHeights))
     columnItems[shortestCol].push(content)
     columnHeights[shortestCol] += estimatedHeight + GAP
@@ -239,6 +241,14 @@ function MasonryCard({
   const metrics = tweet?.metrics
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [textOverflows, setTextOverflows] = useState(false)
+  const textRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    const el = textRef.current
+    if (el) setTextOverflows(el.scrollHeight > el.clientHeight)
+  }, [tweet?.text])
 
   return (
     <div
@@ -248,6 +258,7 @@ function MasonryCard({
         background: 'rgba(255, 255, 255, 0.85)',
         border: '1px solid rgba(100, 116, 139, 0.15)',
         boxShadow: '0 1px 4px rgba(100, 116, 139, 0.06)',
+        ...(!hasMedia && !expanded ? { height: TEXT_CARD_HEIGHT } : {}),
       }}
       onMouseEnter={e => {
         e.currentTarget.style.transform = 'translateY(-3px)'
@@ -310,7 +321,9 @@ function MasonryCard({
       )}
 
       {/* Content body */}
-      <div className="px-3 py-2.5">
+      <div className="px-3 py-2.5 flex flex-col" style={{
+        ...(!hasMedia && !expanded ? { height: TEXT_CARD_HEIGHT - 2, overflow: 'hidden' } : {}),
+      }}>
         {/* Author row */}
         {tweet?.author && (
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -329,22 +342,46 @@ function MasonryCard({
         {/* Text */}
         {tweet?.text && (
           <p
+            ref={textRef}
             className="text-xs leading-relaxed mb-2"
             style={{
               color: 'var(--foreground-muted)',
-              display: '-webkit-box',
-              WebkitLineClamp: hasMedia ? 3 : 6,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
+              ...(!expanded ? {
+                display: '-webkit-box',
+                WebkitLineClamp: hasMedia ? 3 : 5,
+                WebkitBoxOrient: 'vertical' as const,
+                overflow: 'hidden',
+              } : {}),
+              flex: '1 1 auto',
+              minHeight: 0,
             }}
           >
             {tweet.text}
           </p>
         )}
 
+        {/* Show more for text-only cards */}
+        {!hasMedia && textOverflows && !expanded && (
+          <button
+            onClick={e => { e.stopPropagation(); setExpanded(true) }}
+            className="text-xs font-medium mt-auto pt-1"
+            style={{
+              color: 'var(--blue)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
+              padding: 0,
+              flexShrink: 0,
+            }}
+          >
+            Show more
+          </button>
+        )}
+
         {/* Hashtags */}
         {tweet?.hashtags && tweet.hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
+          <div className="flex flex-wrap gap-1 mb-2" style={{ flexShrink: 0 }}>
             {tweet.hashtags.slice(0, 3).map(tag => (
               <span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(90,138,184,0.1)', color: 'var(--blue)', fontSize: '0.625rem' }}>
                 #{tag}
@@ -357,7 +394,7 @@ function MasonryCard({
         )}
 
         {/* Metrics + time footer */}
-        <div className="flex items-center justify-between pt-1.5" style={{ borderTop: '1px solid rgba(100,116,139,0.08)' }}>
+        <div className="flex items-center justify-between pt-1.5" style={{ borderTop: '1px solid rgba(100,116,139,0.08)', flexShrink: 0 }}>
           <div className="flex items-center gap-2.5">
             {metrics && (
               <>
