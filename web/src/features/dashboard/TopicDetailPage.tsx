@@ -139,17 +139,17 @@ export function TopicDetailPage() {
         <div className="topic-detail-info-item">
           <span className="label">Platforms</span>
           <span style={{ display: 'flex', gap: 4 }}>
-            {topic.platforms.map((p) => (
-              <span key={p} className="topic-tag platform">{p.toUpperCase()}</span>
+            {(topic.platforms ?? []).map((p) => (
+              <span key={p} className="topic-tag platform">{(p ?? '').toUpperCase()}</span>
             ))}
           </span>
         </div>
       </div>
 
       {/* Keywords */}
-      {topic.keywords.length > 0 && (
+      {(topic.keywords ?? []).length > 0 && (
         <div className="topic-card-tags" style={{ padding: 0 }}>
-          {topic.keywords.map((kw) => <span key={kw} className="topic-tag">#{kw}</span>)}
+          {(topic.keywords ?? []).map((kw) => <span key={kw} className="topic-tag">#{kw}</span>)}
         </div>
       )}
 
@@ -232,10 +232,10 @@ export function TopicDetailPage() {
               {recommendations.map((rec, i) => (
                 <div key={i} className="topic-detail-query-row">
                   <Search size={13} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
-                  <span className="topic-tag platform">{rec.platform.toUpperCase()}</span>
-                  <span style={{ flex: 1, fontSize: '0.8125rem' }}>{rec.query}</span>
+                  <span className="topic-tag platform">{(rec.platform ?? '').toUpperCase()}</span>
+                  <span style={{ flex: 1, fontSize: '0.8125rem' }}>{rec.query ?? ''}</span>
                   <Badge variant={rec.priority === 'high' ? 'error' : rec.priority === 'medium' ? 'warning' : 'muted'}>
-                    {rec.priority}
+                    {rec.priority ?? 'low'}
                   </Badge>
                 </div>
               ))}

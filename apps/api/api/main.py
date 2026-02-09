@@ -26,6 +26,7 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(health.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
