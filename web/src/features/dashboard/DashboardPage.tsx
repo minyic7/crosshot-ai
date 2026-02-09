@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, GripVertical, Pin, RefreshCw,
   AlertTriangle, Info, AlertCircle,
+  Sparkles, Send, Loader2,
 } from 'lucide-react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
@@ -15,6 +16,7 @@ import {
   useUpdateTopicMutation,
   useRefreshTopicMutation,
   useReorderTopicsMutation,
+  useAssistTopicMutation,
 } from '@/store/api'
 import type { Topic, TopicAlert } from '@/types/models'
 
@@ -244,6 +246,11 @@ function TopicCard({
 
 // ─── Create Topic Modal ───────────────────────────────────────
 
+interface ChatMsg {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('📊')
@@ -253,20 +260,77 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [interval, setInterval] = useState('6')
   const [createTopic, { isLoading }] = useCreateTopicMutation()
 
+  // AI assist state
+  const [chatInput, setChatInput] = useState('')
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
+  const [assistTopic, { isLoading: isAssisting }] = useAssistTopicMutation()
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!open) {
+      setChatInput('')
+      setChatMessages([])
+      setName('')
+      setIcon('📊')
+      setDescription('')
+      setPlatforms(['x'])
+      setKeywords('')
+      setInterval('6')
+    }
+  }, [open])
+
+  const handleAsk = async () => {
+    const q = chatInput.trim()
+    if (!q || isAssisting) return
+
+    const userMsg: ChatMsg = { role: 'user', content: q }
+    const newMessages = [...chatMessages, userMsg]
+    setChatMessages(newMessages)
+    setChatInput('')
+
+    const res = await assistTopic({ messages: newMessages }).unwrap()
+
+    if (res.error) {
+      setChatMessages([...newMessages, { role: 'assistant', content: `Error: ${res.error}` }])
+      return
+    }
+
+    setChatMessages([...newMessages, { role: 'assistant', content: res.reply }])
+
+    // Auto-fill form from suggestion
+    const s = res.suggestion
+    if (s) {
+      if (s.name) setName(s.name)
+      if (s.icon) setIcon(s.icon)
+      if (s.description) setDescription(s.description)
+      if (s.platforms?.length) setPlatforms(s.platforms)
+      if (s.keywords?.length) setKeywords(s.keywords.join(', '))
+    }
+  }
+
   const handleSubmit = async () => {
     if (!name.trim() || platforms.length === 0) return
+
+    // Build description: AI conversation summary + user description
+    let finalDesc = description.trim()
+    if (chatMessages.length > 0) {
+      const convo = chatMessages.map((m) => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')
+      finalDesc = finalDesc ? `${finalDesc}\n\n---\nAI Assist Log:\n${convo}` : `AI Assist Log:\n${convo}`
+    }
+
     await createTopic({
       name: name.trim(),
       icon,
-      description: description.trim() || undefined,
+      description: finalDesc || undefined,
       platforms,
       keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
       config: { schedule_interval_hours: Number(interval) || 6 },
     })
-    setName('')
-    setDescription('')
-    setKeywords('')
-    setInterval('6')
     onClose()
   }
 
@@ -277,6 +341,50 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   return (
     <Modal open={open} onClose={onClose} title="New Topic" className="create-topic-panel">
       <div className="stack-sm">
+        {/* AI Assist Chat */}
+        <div className="assist-section">
+          <div className="assist-label">
+            <Sparkles size={13} />
+            AI Assist
+          </div>
+          {chatMessages.length > 0 && (
+            <div className="assist-messages">
+              {chatMessages.map((m, i) => (
+                <div key={i} className={`assist-msg ${m.role}`}>
+                  <span className="assist-msg-text">{m.content}</span>
+                </div>
+              ))}
+              {isAssisting && (
+                <div className="assist-msg assistant">
+                  <Loader2 size={13} className="assist-spinner" />
+                  <span className="assist-msg-text">Thinking...</span>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+          )}
+          <div className="assist-input-row">
+            <input
+              className="form-input assist-input"
+              placeholder="Describe what you want to monitor..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAsk()}
+              disabled={isAssisting}
+            />
+            <button
+              className="assist-send"
+              onClick={handleAsk}
+              disabled={!chatInput.trim() || isAssisting}
+            >
+              {isAssisting ? <Loader2 size={14} className="assist-spinner" /> : <Send size={14} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="assist-divider" />
+
+        {/* Form fields */}
         <div className="form-group">
           <label className="form-label">Icon</label>
           <div className="emoji-picker">

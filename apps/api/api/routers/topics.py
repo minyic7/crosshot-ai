@@ -1,17 +1,21 @@
 """Topics CRUD API — create, list, update, delete monitoring topics."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from api.deps import get_queue
+from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
 from shared.db.models import TopicRow
 from shared.models.task import Task, TaskPriority
 from sqlalchemy import select
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["topics"])
 
 
@@ -41,6 +45,15 @@ class TopicUpdate(BaseModel):
 
 class TopicReorder(BaseModel):
     items: list[dict[str, Any]]
+
+
+class AssistMessage(BaseModel):
+    role: str
+    content: str
+
+
+class TopicAssistRequest(BaseModel):
+    messages: list[AssistMessage]
 
 
 # ── Helpers ─────────────────────────────────────────
@@ -201,3 +214,89 @@ async def reorder_topics(body: TopicReorder) -> dict:
                 topic.position = item["position"]
         await session.commit()
     return {"status": "ok"}
+
+
+# ── AI Assist ──────────────────────────────────────────
+
+
+_ASSIST_SYSTEM = """\
+You are a topic configuration assistant for CrossHot AI, a cross-platform social media monitoring system.
+
+The user wants to create a new monitoring topic. Help them define what to monitor.
+
+## Your job
+1. Understand what the user wants to monitor
+2. Suggest a structured topic configuration
+3. Refine based on user feedback
+
+## Supported platforms
+- **x** (Twitter/X) — English-dominant, supports hashtags, @mentions
+- **xhs** (小红书/Xiaohongshu) — Chinese-dominant, lifestyle/consumer platform
+
+## Guidelines for keywords
+- Suggest keywords that are GENERAL search terms, NOT platform-specific syntax
+- The system's coordinator handles platform-specific query syntax automatically
+- For multi-platform coverage, include BOTH English AND Chinese keywords where relevant
+- Include: exact names, aliases, abbreviations, related terms, hashtags (without #)
+- Aim for 5-10 diverse keywords for good coverage
+
+## Response format
+You MUST respond with valid JSON only, no markdown fences, with this exact structure:
+{
+  "reply": "Your conversational message to the user (1-3 sentences, can be bilingual)",
+  "suggestion": {
+    "name": "Short topic name",
+    "icon": "single emoji",
+    "description": "1-2 sentence description of what this topic monitors",
+    "platforms": ["x", "xhs"],
+    "keywords": ["keyword1", "keyword2", "..."]
+  }
+}
+
+Always include both "reply" and "suggestion" in every response.
+Refine the suggestion based on user feedback in follow-up messages.
+"""
+
+
+@router.post("/topics/assist")
+async def assist_topic(body: TopicAssistRequest) -> dict:
+    """Use AI to suggest topic configuration from natural language input."""
+    settings = get_settings()
+    if not settings.grok_api_key:
+        return {"error": "Grok API key not configured"}
+
+    client = AsyncOpenAI(
+        api_key=settings.grok_api_key,
+        base_url=settings.grok_base_url,
+    )
+
+    messages = [{"role": "system", "content": _ASSIST_SYSTEM}]
+    for m in body.messages:
+        messages.append({"role": m.role, "content": m.content})
+
+    try:
+        resp = await client.chat.completions.create(
+            model=settings.grok_model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        raw = resp.choices[0].message.content or "{}"
+
+        # Parse JSON response — strip markdown fences if present
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+        import json
+        data = json.loads(text)
+        return {
+            "reply": data.get("reply", ""),
+            "suggestion": data.get("suggestion", {}),
+        }
+    except json.JSONDecodeError:
+        logger.warning("AI assist returned non-JSON: %s", raw[:200])
+        return {"reply": raw, "suggestion": {}}
+    except Exception as e:
+        logger.exception("AI assist error")
+        return {"error": str(e)}
