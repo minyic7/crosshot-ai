@@ -441,12 +441,6 @@ export function DashboardPage() {
   const allTopics = topics ?? []
   const filtered = filter === 'All' ? allTopics : filter === 'Active' ? allTopics.filter((t) => t.status === 'active') : allTopics.filter((t) => t.status === 'paused')
   const totalPosts = allTopics.reduce((s, t) => s + t.total_contents, 0)
-  const avgScore = allTopics.length > 0
-    ? (allTopics.reduce((s, t) => {
-        const score = t.summary_data?.metrics?.engagement_score
-        return s + (typeof score === 'number' ? score : 0)
-      }, 0) / allTopics.length).toFixed(1)
-    : '0'
 
   return (
     <div className="dashboard">
@@ -469,8 +463,6 @@ export function DashboardPage() {
         {[
           { label: 'Topics', value: allTopics.length, emoji: '📋' },
           { label: 'Active', value: allTopics.filter((t) => t.status === 'active').length, emoji: '🟢' },
-          { label: 'Total Posts', value: totalPosts, emoji: '📊' },
-          { label: 'Avg Score', value: avgScore, emoji: '⭐' },
         ].map((s, i) => (
           <div key={i} className="dash-stat pop" style={{ animationDelay: `${130 + i * 70}ms` }}>
             <span className="dash-stat-emoji">{s.emoji}</span>
