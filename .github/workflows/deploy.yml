@@ -158,10 +158,7 @@ jobs:
             sleep 15
 
             # Run database migrations for existing tables
-            \$DOCKER exec -i \$(\$DOCKER ps -q -f name=postgres) psql -U \${DB_USER:-crosshot} -d crosshot <<'SQL' || true
-            ALTER TABLE contents ADD COLUMN IF NOT EXISTS topic_id UUID REFERENCES topics(id);
-            CREATE INDEX IF NOT EXISTS ix_contents_topic_id ON contents(topic_id);
-SQL
+            \$DOCKER exec \$(\$DOCKER ps -q -f name=postgres) psql -U \${DB_USER:-crosshot} -d crosshot -c "ALTER TABLE contents ADD COLUMN IF NOT EXISTS topic_id UUID REFERENCES topics(id); CREATE INDEX IF NOT EXISTS ix_contents_topic_id ON contents(topic_id);" || true
 
             # Health check
             curl -sf http://localhost:8000/health && echo "API deploy successful" || echo "API health check failed"
