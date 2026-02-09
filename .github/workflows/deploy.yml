@@ -121,6 +121,17 @@ jobs:
             mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/pgdata
             mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/media
 
+            # Clean up old named volumes (one-time migration)
+            for vol in redis_data pg_data media_data; do
+              full="\$(\$DOCKER volume ls -q | grep -E "(^|_)${vol}$" || true)"
+              if [ -n "\$full" ]; then
+                echo "Removing old named volume: \$full"
+                \$DOCKER volume rm "\$full" 2>/dev/null || true
+              fi
+            done
+            # Prune any other dangling volumes
+            \$DOCKER volume prune -f 2>/dev/null || true
+
             # Export DATA_DIR for docker-compose bind mounts
             export DATA_DIR="${{ env.NAS_DEPLOY_PATH }}/data"
 
