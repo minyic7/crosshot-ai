@@ -416,7 +416,7 @@ function MasonryCard({
             )}
           </div>
           <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>
-            {timeAgo(content.crawled_at)}
+            {tweet?.created_at ? timeAgo(tweet.created_at) : timeAgo(content.crawled_at)}
           </span>
         </div>
       </div>
