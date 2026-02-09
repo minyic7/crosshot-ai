@@ -36,6 +36,7 @@ def make_query_topic_contents(
                 continue
 
             data = content.get("data", {})
+            media = data.get("media", [])
             contents.append(
                 {
                     "id": content.get("id"),
@@ -45,6 +46,8 @@ def make_query_topic_contents(
                     "author": data.get("author", {}).get("display_name", ""),
                     "author_username": data.get("author", {}).get("username", ""),
                     "metrics": data.get("metrics", {}),
+                    "has_media": len(media) > 0,
+                    "media_types": list({m.get("type") for m in media if m.get("type")}),
                     "hashtags": data.get("hashtags", []),
                     "crawled_at": content.get("crawled_at"),
                 }

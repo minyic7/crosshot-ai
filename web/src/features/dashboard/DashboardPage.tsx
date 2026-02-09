@@ -75,117 +75,29 @@ function extractCardMetrics(metrics: Record<string, unknown>): CardMetric[] {
   const out: CardMetric[] = []
 
   // Posts count
-  const posts = metrics.total_posts_analyzed ?? metrics.total_contents
+  const posts = metrics.total_contents
   if (posts != null) out.push({ label: 'Posts', value: Number(posts), animate: true })
 
-  // Dominant sentiment
-  const sentiment = metrics.sentiment_distribution as Record<string, number> | undefined
-  if (sentiment && typeof sentiment === 'object') {
-    const entries = Object.entries(sentiment).sort(([, a], [, b]) => b - a)
-    if (entries.length > 0) {
-      const [name, pct] = entries[0]
-      const isBear = name === 'bearish'
-      const isBull = name === 'bullish'
-      out.push({
-        label: 'Sentiment',
-        value: `${Math.round(pct * 100)}%`,
-        color: isBear ? 'var(--negative)' : isBull ? 'var(--positive)' : undefined,
-        sub: name,
-        subColor: isBear ? 'var(--negative)' : isBull ? 'var(--positive)' : 'var(--ink-2)',
-        subBg: isBear ? 'var(--negative-surface)' : isBull ? 'var(--positive-surface)' : 'var(--glass)',
-      })
-    }
-  }
+  // Total engagement (likes + retweets + replies)
+  const likes = Number(metrics.total_likes ?? 0)
+  const retweets = Number(metrics.total_retweets ?? 0)
+  const replies = Number(metrics.total_replies ?? 0)
+  const totalEngagement = likes + retweets + replies
+  if (totalEngagement > 0) out.push({ label: 'Engagement', value: fmtNum(totalEngagement), color: 'var(--accent)' })
 
-  // Engagement score
-  const engagement = metrics.engagement_score ?? metrics.engagement
-  if (engagement != null) out.push({ label: 'Score', value: Number(engagement).toFixed(1), color: 'var(--accent)' })
+  // Total views
+  const views = metrics.total_views
+  if (views != null && Number(views) > 0) out.push({ label: 'Views', value: fmtNum(Number(views)) })
 
-  // Sources
-  const coverage = metrics.platforms_coverage as Record<string, unknown> | undefined
-  if (coverage && typeof coverage === 'object') {
-    out.push({ label: 'Sources', value: Object.keys(coverage).length })
-  }
+  // Media percentage
+  const mediaPct = metrics.with_media_pct
+  if (mediaPct != null && out.length < 4) out.push({ label: 'Media', value: `${mediaPct}%` })
 
-  // Average views
-  const views = metrics.average_views_per_post
-  if (views != null && out.length < 4) out.push({ label: 'Avg Views', value: fmtNum(Number(views)), animate: true })
-
-  // Trend velocity
-  const velocity = metrics.trend_velocity
-  if (velocity != null && out.length < 4) {
-    const color = velocity === 'rising' ? 'var(--positive)' : velocity === 'falling' ? 'var(--negative)' : undefined
-    out.push({ label: 'Trend', value: String(velocity), color })
-  }
+  // Top author fallback
+  const topAuthor = metrics.top_author as string | undefined
+  if (topAuthor && out.length < 4) out.push({ label: 'Top Author', value: `@${topAuthor}` })
 
   return out.slice(0, 4)
-}
-
-function extractSentimentBars(metrics: Record<string, unknown>): { bull: number; neut: number; bear: number } | null {
-  const sentiment = metrics.sentiment_distribution as Record<string, number> | undefined
-  if (!sentiment || typeof sentiment !== 'object') return null
-  return {
-    bull: Math.round((sentiment.bullish ?? 0) * 100),
-    neut: Math.round((sentiment.neutral ?? 0) * 100),
-    bear: Math.round((sentiment.bearish ?? 0) * 100),
-  }
-}
-
-// ─── Sentiment Bar ────────────────────────────────────────────
-
-function SentimentBar({ bull, neut, bear, delay = 0 }: { bull: number; neut: number; bear: number; delay?: number }) {
-  const [on, setOn] = useState(false)
-  useEffect(() => {
-    const id = setTimeout(() => setOn(true), delay + 350)
-    return () => clearTimeout(id)
-  }, [delay])
-
-  const segs = [
-    { p: bull, color: 'var(--positive)', label: 'Bullish' },
-    { p: neut, color: 'var(--ink-4)', label: 'Neutral' },
-    { p: bear, color: 'var(--negative)', label: 'Bearish' },
-  ]
-
-  return (
-    <div className="sentiment-bar-container">
-      <div className="sentiment-bar-track">
-        {segs.map((s, i) => (
-          <div
-            key={i}
-            className="sentiment-bar-segment"
-            style={{
-              width: `${s.p}%`,
-              background: s.color,
-              borderRadius: '100px',
-              transform: on ? 'scaleX(1)' : 'scaleX(0)',
-              transitionDelay: `${i * 0.14}s`,
-              boxShadow: on ? `0 0 8px ${s.color}30` : 'none',
-            }}
-          />
-        ))}
-      </div>
-      <div className="sentiment-bar-labels">
-        {segs.map((s, i) => (
-          <div
-            key={i}
-            className="sentiment-label"
-            style={{
-              opacity: on ? 1 : 0,
-              transform: on ? 'none' : 'translateY(4px)',
-              transitionDelay: `${0.5 + i * 0.1}s`,
-            }}
-          >
-            <span
-              className="sentiment-label-dot"
-              style={{ background: `${s.color}20`, borderColor: s.color }}
-            />
-            <span style={{ color: i === 1 ? 'var(--ink-3)' : s.color, fontWeight: 600 }}>{s.p}%</span>
-            <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>{s.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 // ─── Topic Card ───────────────────────────────────────────────
@@ -206,7 +118,6 @@ function TopicCard({
   const { ref, handleRef, isDragging } = useSortable({ id: topic.id, index })
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
   const cardMetrics = topic.summary_data?.metrics ? extractCardMetrics(topic.summary_data.metrics) : []
-  const sentBars = topic.summary_data?.metrics ? extractSentimentBars(topic.summary_data.metrics) : null
   const d = index * 110
 
   return (
@@ -294,9 +205,6 @@ function TopicCard({
           ))}
         </div>
       )}
-
-      {/* Sentiment bar */}
-      {sentBars && <SentimentBar bull={sentBars.bull} neut={sentBars.neut} bear={sentBars.bear} delay={d} />}
 
       {/* Alert — show top 1 only */}
       {alerts.length > 0 && (

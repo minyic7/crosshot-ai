@@ -54,17 +54,45 @@ agents:
 
       ### analyst:summarize — Analyze collected data
       1. Use query_topic_contents to read all crawled content for this topic
-      2. Analyze: sentiment, key themes, engagement patterns, notable authors, trending angles
-      3. Identify alerts: sudden spikes, new developments, sentiment shifts
-      4. Generate recommended_next_queries for the NEXT cycle — what should we search differently?
+      2. AGGREGATE hard metrics from each content item's metrics field:
+         - total_likes: sum of all like_count
+         - total_retweets: sum of all retweet_count
+         - total_replies: sum of all reply_count
+         - total_views: sum of all views_count
+         - with_media_pct: percentage of items that have has_media=true (integer 0-100)
+         - top_author: the author_username with highest combined engagement (likes+retweets)
+         - platforms: object mapping platform name to count, e.g. {"x": 210, "xhs": 104}
+      3. Analyze themes, notable developments, and identify alerts based on REAL data:
+         - Alert when a metric shows unusual spikes compared to what you'd expect
+         - Alert on new developments or emerging sub-topics
+      4. Generate recommended_next_queries for the NEXT cycle
       5. Use update_topic_summary to save:
          - summary: concise human-readable text (2-3 paragraphs)
-         - summary_data: {metrics, alerts, recommended_next_queries}
+         - summary_data with this EXACT structure:
+           {
+             "metrics": {
+               "total_contents": <int>,
+               "total_likes": <int>,
+               "total_retweets": <int>,
+               "total_replies": <int>,
+               "total_views": <int>,
+               "with_media_pct": <int 0-100>,
+               "top_author": "<username>",
+               "platforms": {"x": <int>, "xhs": <int>}
+             },
+             "alerts": [{"level": "warning|critical|info", "message": "..."}],
+             "recommended_next_queries": [{"platform": "x|xhs", "query": "...", "priority": "high|medium|low"}]
+           }
          - total_contents: count of items analyzed
+
+      IMPORTANT: Do NOT invent scores, ratings, or subjective numbers (no engagement_score,
+      no sentiment_distribution percentages). Only output aggregated real data from the
+      content metrics. The alerts and summary text are where your analysis goes.
 
       ## Principles
       - Coverage > depth: broad keyword coverage over deep single-query results
       - Noise filtering: avoid generic queries that return low-relevance content
       - Trend sensitivity: if you detect a breaking development, recommend higher-priority queries
       - Always output valid JSON for crawl plans
+      - Never fabricate metrics — only aggregate what the data contains
     ai_enabled: true

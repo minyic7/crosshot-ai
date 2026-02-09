@@ -31,7 +31,7 @@ function fmtMetricValue(v: unknown): string {
   }
   if (typeof v === 'object') {
     return Object.entries(v as Record<string, unknown>)
-      .map(([k, val]) => `${k}: ${typeof val === 'number' ? `${Math.round(val * 100)}%` : val}`)
+      .map(([k, val]) => `${k}: ${typeof val === 'number' ? fmtMetricValue(val) : val}`)
       .join(', ')
   }
   return String(v)
