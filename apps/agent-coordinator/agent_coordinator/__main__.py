@@ -30,12 +30,22 @@ async def handle_dispatch(
         logger.warning("coord:dispatch for topic %s has empty crawl_plan", topic_id)
         return Result(data={"error": "empty crawl_plan", "topic_id": topic_id})
 
+    # Currently supported crawler platforms
+    supported_platforms = {"x"}
+
     new_tasks = []
+    skipped = 0
     for plan_item in crawl_plan:
         platform = plan_item.get("platform", "x")
+        if platform not in supported_platforms:
+            logger.info("Skipping unsupported platform '%s' for topic %s", platform, topic_id)
+            skipped += 1
+            continue
+
         label = f"crawler:{platform}"
 
         crawler_payload = {
+            "action": plan_item.get("action", "search"),
             **plan_item,
             "topic_id": topic_id,
         }
