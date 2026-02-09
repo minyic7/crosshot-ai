@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Grok LLM API (OpenAI-compatible)
     grok_api_key: str = ""
     grok_base_url: str = "https://api.x.ai/v1"
-    grok_model: str = "grok-beta"
+    grok_model: str = "grok-3"
 
     # Media storage
     media_base_path: str = "/data/media"
