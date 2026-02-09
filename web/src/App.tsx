@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { TimezoneProvider } from '@/hooks/useTimezone'
 import { Layout } from '@/components/layout/Layout'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { DatabasePage } from '@/features/database/DatabasePage'
@@ -12,6 +13,7 @@ import { TopicDetailPage } from '@/features/dashboard/TopicDetailPage'
 
 export function App() {
   return (
+    <TimezoneProvider>
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
@@ -25,5 +27,6 @@ export function App() {
         <Route path="chat" element={<ChatPage />} />
       </Route>
     </Routes>
+    </TimezoneProvider>
   )
 }

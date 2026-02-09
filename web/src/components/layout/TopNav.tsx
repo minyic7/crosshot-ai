@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Database, Bot, ListTodo, Cookie, MessageSquare, Sun, Moon } from 'lucide-react'
+import { LayoutDashboard, Database, Bot, ListTodo, Cookie, MessageSquare, Sun, Moon, Globe } from 'lucide-react'
 import { useGetHealthQuery } from '@/store/api'
+import { useTimezone } from '@/hooks/useTimezone'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,6 +15,7 @@ const navItems = [
 export function TopNav({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {
   const { data: health } = useGetHealthQuery(undefined, { pollingInterval: 10000 })
   const online = health?.status === 'ok'
+  const { tz, options, setTz, tzLabel } = useTimezone()
 
   return (
     <nav className="topnav">
@@ -56,6 +58,16 @@ export function TopNav({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onTo
               {theme === 'light' ? <Sun size={13} color="#fff" strokeWidth={2.5} /> : <Moon size={13} color="#fff" strokeWidth={2.5} />}
             </div>
           </button>
+
+          <div className="tz-selector">
+            <Globe size={13} />
+            <select value={tz} onChange={(e) => setTz(e.target.value as typeof tz)}>
+              {options.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <span className="tz-label">{tzLabel}</span>
+          </div>
 
           <div className={`connection-pill ${online ? 'online' : 'offline'}`}>
             <span className="connection-dot">

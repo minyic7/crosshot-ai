@@ -482,6 +482,31 @@ h3 {
   transform: translateY(-1px);
 }
 
+/* Timezone Selector */
+.tz-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.tz-selector select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px; /* prevent iOS zoom */
+}
+
+.tz-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
 /* Connection Status Pill */
 .connection-pill {
   display: flex;

@@ -11,15 +11,11 @@ import {
   useDeleteTopicMutation,
 } from '@/store/api'
 import type { TopicAlert } from '@/types/models'
+import { useTimezone } from '@/hooks/useTimezone'
 
 function normalizeAlert(alert: TopicAlert): { level: string; message: string } {
   if (typeof alert === 'string') return { level: 'info', message: alert }
   return alert
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
 }
 
 function fmtMetricValue(v: unknown): string {
@@ -50,6 +46,7 @@ export function TopicDetailPage() {
   const [refreshTopic, { isLoading: isRefreshing }] = useRefreshTopicMutation()
   const [updateTopic] = useUpdateTopicMutation()
   const [deleteTopic] = useDeleteTopicMutation()
+  const { fmt } = useTimezone()
 
   if (isLoading) {
     return (
@@ -123,11 +120,11 @@ export function TopicDetailPage() {
       <div className="topic-detail-info pop" style={{ animationDelay: '80ms' }}>
         <div className="topic-detail-info-item">
           <span className="label">Created</span>
-          <span>{formatDate(topic.created_at)}</span>
+          <span>{fmt(topic.created_at)}</span>
         </div>
         <div className="topic-detail-info-item">
           <span className="label">Last Crawl</span>
-          <span>{formatDate(topic.last_crawl_at)}</span>
+          <span>{fmt(topic.last_crawl_at)}</span>
         </div>
         <div className="topic-detail-info-item">
           <span className="label">Contents</span>
@@ -151,15 +148,24 @@ export function TopicDetailPage() {
       )}
 
       {/* Summary */}
-      {topic.last_summary && (
+      {topic.last_summary && (() => {
+        const parts = topic.last_summary.split(/\n---\n/)
+        const zhPart = parts[0]?.trim()
+        const enPart = parts[1]?.trim()
+        return (
         <Card>
           <CardContent>
             <CardHeader className="mb-3">
               <CardDescription>Summary</CardDescription>
             </CardHeader>
             <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>
-              {topic.last_summary}
+              {zhPart}
             </div>
+            {enPart && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--glass-border)', fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.8125rem', lineHeight: 1.8, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
+                {enPart}
+              </div>
+            )}
             {topic.summary_data?.cycle_id && (
               <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>
                 <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
@@ -168,7 +174,8 @@ export function TopicDetailPage() {
             )}
           </CardContent>
         </Card>
-      )}
+        )
+      })()}
 
       {/* Metrics */}
       {metricEntries.length > 0 && (
