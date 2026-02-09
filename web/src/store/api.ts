@@ -86,6 +86,7 @@ export const apiSlice = createApi({
     // Topics
     listTopics: builder.query<Topic[], void>({
       query: () => '/topics',
+      transformResponse: (res: { topics: Topic[] }) => res.topics,
       providesTags: ['Topic'],
     }),
     getTopic: builder.query<Topic, string>({
@@ -94,6 +95,7 @@ export const apiSlice = createApi({
     }),
     createTopic: builder.mutation<Topic, { name: string; icon?: string; description?: string; platforms: string[]; keywords: string[]; config?: Record<string, unknown> }>({
       query: (body) => ({ url: '/topics', method: 'POST', body }),
+      transformResponse: (res: { topic: Topic }) => res.topic,
       invalidatesTags: ['Topic'],
     }),
     updateTopic: builder.mutation<Topic, { id: string } & Partial<{ name: string; icon: string; description: string; platforms: string[]; keywords: string[]; config: Record<string, unknown>; status: string; is_pinned: boolean }>>({
@@ -108,8 +110,12 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/topics/${id}/refresh`, method: 'POST' }),
       invalidatesTags: ['Topic'],
     }),
-    reorderTopics: builder.mutation<{ updated: number }, { ids: string[] }>({
-      query: (body) => ({ url: '/topics/reorder', method: 'POST', body }),
+    reorderTopics: builder.mutation<{ status: string }, { ids: string[] }>({
+      query: ({ ids }) => ({
+        url: '/topics/reorder',
+        method: 'POST',
+        body: { items: ids.map((id, i) => ({ id, position: i })) },
+      }),
       invalidatesTags: ['Topic'],
     }),
   }),
