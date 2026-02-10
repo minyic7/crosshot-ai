@@ -18,6 +18,7 @@ def make_update_topic_summary(
         summary: str,
         summary_data: dict | None = None,
         total_contents: int | None = None,
+        is_preliminary: bool = False,
     ) -> dict:
         async with session_factory() as session:
             topic = await session.get(TopicRow, topic_id)
@@ -29,7 +30,9 @@ def make_update_topic_summary(
                 topic.summary_data = summary_data
             if total_contents is not None:
                 topic.total_contents = total_contents
-            topic.last_crawl_at = datetime.now(timezone.utc)
+            # Only update last_crawl_at for final reports (not preliminary)
+            if not is_preliminary:
+                topic.last_crawl_at = datetime.now(timezone.utc)
             topic.updated_at = datetime.now(timezone.utc)
 
             await session.commit()
@@ -61,6 +64,13 @@ def make_update_topic_summary(
                 "total_contents": {
                     "type": "integer",
                     "description": "Total number of content items analyzed",
+                },
+                "is_preliminary": {
+                    "type": "boolean",
+                    "description": (
+                        "True for preliminary reports (before crawling finishes). "
+                        "Preliminary reports don't update last_crawl_at, preserving scheduler timing."
+                    ),
                 },
             },
             "required": ["topic_id", "summary"],

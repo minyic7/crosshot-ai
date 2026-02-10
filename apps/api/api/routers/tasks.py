@@ -1,12 +1,14 @@
 """Task query and creation endpoints."""
 
-import json
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from sqlalchemy import func, select
 
-from api.deps import get_queue, get_redis
+from api.deps import get_queue
+from shared.db.engine import get_session_factory
+from shared.db.models import ContentRow
 from shared.models.task import Task, TaskPriority
 
 router = APIRouter(tags=["tasks"])
@@ -82,36 +84,72 @@ async def get_task(task_id: str) -> dict:
 @router.get("/contents")
 async def list_contents(
     platform: str | None = None,
+    topic_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
-    """List crawled content items."""
-    redis = get_redis()
-    platforms = [platform] if platform else ["x", "xhs"]
-    all_ids: list[str] = []
-    for p in platforms:
-        ids = await redis.smembers(f"content:index:{p}")
-        all_ids.extend(ids)
+    """List crawled content items from PostgreSQL."""
+    factory = get_session_factory()
+    async with factory() as session:
+        stmt = select(ContentRow).order_by(ContentRow.crawled_at.desc())
+        count_stmt = select(func.count()).select_from(ContentRow)
 
-    total = len(all_ids)
-    # Fetch all to sort by crawled_at
-    contents = []
-    for cid in all_ids:
-        raw = await redis.get(f"content:{cid}")
-        if raw:
-            contents.append(json.loads(raw))
+        if platform:
+            stmt = stmt.where(ContentRow.platform == platform)
+            count_stmt = count_stmt.where(ContentRow.platform == platform)
+        if topic_id:
+            stmt = stmt.where(ContentRow.topic_id == topic_id)
+            count_stmt = count_stmt.where(ContentRow.topic_id == topic_id)
 
-    contents.sort(key=lambda c: c.get("crawled_at", ""), reverse=True)
-    page = contents[offset : offset + limit]
+        total = (await session.execute(count_stmt)).scalar() or 0
+        rows = (await session.execute(stmt.offset(offset).limit(limit))).scalars().all()
 
-    return {"contents": page, "total": total}
+    contents = [
+        {
+            "id": str(row.id),
+            "task_id": str(row.task_id),
+            "topic_id": str(row.topic_id) if row.topic_id else None,
+            "platform": row.platform,
+            "platform_content_id": row.platform_content_id,
+            "source_url": row.source_url,
+            "crawled_at": row.crawled_at.isoformat() if row.crawled_at else None,
+            "author_username": row.author_username,
+            "author_display_name": row.author_display_name,
+            "text": row.text,
+            "lang": row.lang,
+            "hashtags": row.hashtags or [],
+            "media_downloaded": row.media_downloaded,
+            "metrics": row.metrics or {},
+            "data": row.data or {},
+        }
+        for row in rows
+    ]
+
+    return {"contents": contents, "total": total}
 
 
 @router.get("/content/{content_id}")
 async def get_content(content_id: str) -> dict:
     """Get a crawled content item by ID."""
-    redis = get_redis()
-    raw = await redis.get(f"content:{content_id}")
-    if raw is None:
+    factory = get_session_factory()
+    async with factory() as session:
+        row = await session.get(ContentRow, content_id)
+    if row is None:
         return {"error": "Content not found", "content_id": content_id}
-    return json.loads(raw)
+    return {
+        "id": str(row.id),
+        "task_id": str(row.task_id),
+        "topic_id": str(row.topic_id) if row.topic_id else None,
+        "platform": row.platform,
+        "platform_content_id": row.platform_content_id,
+        "source_url": row.source_url,
+        "crawled_at": row.crawled_at.isoformat() if row.crawled_at else None,
+        "author_username": row.author_username,
+        "author_display_name": row.author_display_name,
+        "text": row.text,
+        "lang": row.lang,
+        "hashtags": row.hashtags or [],
+        "media_downloaded": row.media_downloaded,
+        "metrics": row.metrics or {},
+        "data": row.data or {},
+    }

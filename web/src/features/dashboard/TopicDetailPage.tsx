@@ -1,5 +1,6 @@
+import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Clock, AlertCircle, AlertTriangle, Info, Search, Trash2, Pause, Play } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Clock, AlertCircle, AlertTriangle, Info, Search, Trash2, Pause, Play, MessageCircle, Send } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -38,6 +39,138 @@ function metricLabel(key: string): string {
   return key
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+interface ChatMsg {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+function TopicChat({ topicId }: { topicId: string }) {
+  const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [input, setInput] = useState('')
+  const [streaming, setStreaming] = useState(false)
+  const [open, setOpen] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [])
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || streaming) return
+    setInput('')
+
+    const userMsg: ChatMsg = { role: 'user', content: text }
+    const allMessages = [...messages, userMsg]
+    setMessages([...allMessages, { role: 'assistant', content: '' }])
+    setStreaming(true)
+    setTimeout(scrollToBottom, 50)
+
+    try {
+      const res = await fetch(`/api/topics/${topicId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      })
+
+      if (!res.body) throw new Error('No response body')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let accumulated = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()!
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const evt = JSON.parse(line.slice(6))
+            if (evt.t) {
+              accumulated += evt.t
+              setMessages((prev) => {
+                const copy = [...prev]
+                copy[copy.length - 1] = { role: 'assistant', content: accumulated }
+                return copy
+              })
+              scrollToBottom()
+            }
+            if (evt.error) {
+              accumulated += `\n\n[Error: ${evt.error}]`
+              setMessages((prev) => {
+                const copy = [...prev]
+                copy[copy.length - 1] = { role: 'assistant', content: accumulated }
+                return copy
+              })
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch (err) {
+      setMessages((prev) => {
+        const copy = [...prev]
+        copy[copy.length - 1] = { role: 'assistant', content: `Error: ${err}` }
+        return copy
+      })
+    } finally {
+      setStreaming(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="topic-chat-toggle" onClick={() => setOpen(true)}>
+        <MessageCircle size={15} />
+        Ask about this topic
+      </button>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <CardHeader className="mb-3">
+          <CardDescription style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MessageCircle size={14} /> Topic Chat
+          </CardDescription>
+        </CardHeader>
+        <div ref={scrollRef} className="topic-chat-messages">
+          {messages.length === 0 && (
+            <div className="topic-chat-empty">
+              Ask a question about this topic's data, trends, or insights...
+            </div>
+          )}
+          {messages.map((msg, i) => (
+            <div key={i} className={`topic-chat-msg ${msg.role}`}>
+              <div className="topic-chat-msg-content">{msg.content || (streaming && i === messages.length - 1 ? '...' : '')}</div>
+            </div>
+          ))}
+        </div>
+        <div className="topic-chat-input-row">
+          <input
+            className="topic-chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder="Ask a question..."
+            disabled={streaming}
+          />
+          <Button size="sm" onClick={send} disabled={streaming || !input.trim()}>
+            <Send size={14} />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function TopicDetailPage() {
@@ -243,6 +376,9 @@ export function TopicDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Topic Chat */}
+      <TopicChat topicId={topic.id} />
 
       {/* Raw data */}
       {topic.summary_data && (

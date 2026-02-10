@@ -111,7 +111,7 @@ export interface TopicSummaryData {
 }
 
 export interface TopicPipeline {
-  phase: 'planning' | 'crawling' | 'summarizing' | 'done' | 'error'
+  phase: 'analyzing' | 'crawling' | 'summarizing' | 'done' | 'error'
   total?: string
   done?: string
   error_msg?: string

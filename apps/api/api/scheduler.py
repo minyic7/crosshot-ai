@@ -45,9 +45,9 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
         if topic.last_crawl_at and (now - topic.last_crawl_at) < interval:
             continue
 
-        # Push analyst:plan task with low priority (scheduled = background)
+        # Push analyst:analyze task with low priority (scheduled = background)
         task = Task(
-            label="analyst:plan",
+            label="analyst:analyze",
             priority=TaskPriority.LOW,
             payload={
                 "topic_id": str(topic.id),

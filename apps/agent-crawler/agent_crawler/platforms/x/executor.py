@@ -13,12 +13,12 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+from uuid import uuid4
 
 import redis.asyncio as aioredis
 from openai import AsyncOpenAI
 
 from shared.config import get_settings
-from shared.models.content import Content
 from shared.models.task import Task
 from shared.services.cookies_service import CookiesService
 
@@ -270,25 +270,9 @@ class XExecutor(BasePlatformExecutor):
     async def _save_contents(
         self, task: Task, tweets: list[dict[str, Any]],
     ) -> list[str]:
-        """Save parsed tweets to Redis + PostgreSQL."""
-        content_ids = []
-        for tweet in tweets:
-            content = Content(
-                task_id=task.id,
-                platform="x",
-                source_url=tweet.get("source_url", ""),
-                data=tweet,
-            )
-            await self._redis.set(
-                f"content:{content.id}",
-                content.model_dump_json(),
-                ex=604800,  # 7 days
-            )
-            # Index by platform
-            await self._redis.sadd("content:index:x", content.id)
-            content_ids.append(content.id)
+        """Save parsed tweets to PostgreSQL."""
+        content_ids = [str(uuid4()) for _ in tweets]
 
-        # Persist to PostgreSQL for analytics (non-fatal on failure)
         if content_ids:
             await self._save_to_pg(task, tweets, content_ids)
 
@@ -351,7 +335,7 @@ class XExecutor(BasePlatformExecutor):
     async def _download_and_update_media(
         self, content_ids: list[str],
     ) -> None:
-        """Download media for saved content items, update their records.
+        """Download media for saved content items, update PG records.
 
         Best-effort: logs errors but never raises.
         """
@@ -360,34 +344,40 @@ class XExecutor(BasePlatformExecutor):
         if not base_path:
             return
 
+        try:
+            from shared.db.engine import get_session_factory
+            from shared.db.models import ContentRow
+        except Exception:
+            logger.warning("PG not available for media update")
+            return
+
         downloaded = 0
+        factory = get_session_factory()
         for cid in content_ids:
             try:
-                raw = await self._redis.get(f"content:{cid}")
-                if not raw:
-                    continue
-                content = Content.model_validate_json(raw)
-                media_items = content.data.get("media", [])
-                if not media_items:
-                    continue
+                async with factory() as session:
+                    row = await session.get(ContentRow, cid)
+                    if not row:
+                        continue
+                    media_items = row.data.get("media", [])
+                    if not media_items:
+                        continue
 
-                crawled_date = content.crawled_at.strftime("%Y-%m-%d")
-                updated_media = await download_media_batch(
-                    media_items=media_items,
-                    platform=content.platform,
-                    content_id=content.id,
-                    crawled_date=crawled_date,
-                    base_path=base_path,
-                )
+                    crawled_date = row.crawled_at.strftime("%Y-%m-%d")
+                    updated_media = await download_media_batch(
+                        media_items=media_items,
+                        platform=row.platform,
+                        content_id=str(row.id),
+                        crawled_date=crawled_date,
+                        base_path=base_path,
+                    )
 
-                content.data["media"] = updated_media
-                content.data["media_downloaded"] = True
-                await self._redis.set(
-                    f"content:{content.id}",
-                    content.model_dump_json(),
-                    ex=604800,  # 7 days
-                )
-                downloaded += 1
+                    # Update PG row
+                    new_data = {**row.data, "media": updated_media, "media_downloaded": True}
+                    row.data = new_data
+                    row.media_downloaded = True
+                    await session.commit()
+                    downloaded += 1
             except Exception as e:
                 logger.warning("Media download failed for content %s: %s", cid, e)
 

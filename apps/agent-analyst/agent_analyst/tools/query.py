@@ -137,11 +137,58 @@ def make_query_topic_contents(
             if topic.last_summary:
                 prev_summary = topic.last_summary
 
+            # 6. Data status — all-time coverage + per-platform freshness
+            now = datetime.now(timezone.utc)
+            coverage_result = await session.execute(
+                text("""
+                    SELECT
+                        platform,
+                        COUNT(*) as count,
+                        MAX(crawled_at) as newest_at
+                    FROM contents
+                    WHERE topic_id = :topic_id
+                    GROUP BY platform
+                """),
+                {"topic_id": topic_id},
+            )
+            platform_coverage = {}
+            total_all_time = 0
+            newest_overall = None
+            for row in coverage_result:
+                platform_coverage[row.platform] = {
+                    "count": row.count,
+                    "newest_at": row.newest_at.isoformat() if row.newest_at else None,
+                }
+                total_all_time += row.count
+                if row.newest_at and (newest_overall is None or row.newest_at > newest_overall):
+                    newest_overall = row.newest_at
+
+            hours_since_newest = (
+                round((now - newest_overall).total_seconds() / 3600, 1)
+                if newest_overall else None
+            )
+            hours_since_last_crawl = (
+                round((now - topic.last_crawl_at).total_seconds() / 3600, 1)
+                if topic.last_crawl_at else None
+            )
+            configured_interval = topic.config.get("schedule_interval_hours", 6)
+
+            data_status = {
+                "total_contents_all_time": total_all_time,
+                "hours_since_newest_content": hours_since_newest,
+                "hours_since_last_crawl": hours_since_last_crawl,
+                "configured_interval_hours": configured_interval,
+                "has_previous_summary": bool(topic.last_summary),
+                "platform_coverage": platform_coverage,
+                "configured_platforms": topic.platforms or [],
+            }
+
             return {
                 "time_window": {
                     "since": since_dt.isoformat(),
-                    "until": datetime.now(timezone.utc).isoformat(),
+                    "until": now.isoformat(),
                 },
+                "data_status": data_status,
                 "metrics": {
                     "total_contents": grand_total,
                     "total_likes": grand_likes,
@@ -165,7 +212,8 @@ def make_query_topic_contents(
         name="query_topic_contents",
         description=(
             "Query all crawled content for a topic with pre-computed metrics. "
-            "Returns SQL-aggregated statistics, top posts by engagement "
+            "Returns: data_status (all-time coverage, per-platform freshness, configured_platforms), "
+            "SQL-aggregated statistics, top posts by engagement "
             "(selected by token budget), top authors, and previous cycle data for comparison."
         ),
         parameters={

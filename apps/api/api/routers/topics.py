@@ -82,19 +82,25 @@ def _topic_to_dict(t: TopicRow) -> dict:
     }
 
 
-async def _dispatch_plan(topic: TopicRow) -> str:
-    """Push an analyst:plan task and set pipeline stage to 'planning'."""
+async def _dispatch_analyze(
+    topic: TopicRow, *, force_crawl: bool = False,
+) -> str:
+    """Push an analyst:analyze task and set pipeline stage to 'analyzing'."""
     queue = get_queue()
+    payload: dict[str, Any] = {
+        "topic_id": str(topic.id),
+        "name": topic.name,
+        "platforms": topic.platforms,
+        "keywords": topic.keywords,
+        "config": topic.config,
+    }
+    if force_crawl:
+        payload["force_crawl"] = True
+
     task = Task(
-        label="analyst:plan",
+        label="analyst:analyze",
         priority=TaskPriority.MEDIUM,
-        payload={
-            "topic_id": str(topic.id),
-            "name": topic.name,
-            "platforms": topic.platforms,
-            "keywords": topic.keywords,
-            "config": topic.config,
-        },
+        payload=payload,
     )
     await queue.push(task)
 
@@ -102,7 +108,7 @@ async def _dispatch_plan(topic: TopicRow) -> str:
     redis = get_redis()
     pipeline_key = f"topic:{topic.id}:pipeline"
     await redis.hset(pipeline_key, mapping={
-        "phase": "planning",
+        "phase": "analyzing",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
     await redis.expire(pipeline_key, 86400)
@@ -115,7 +121,7 @@ async def _dispatch_plan(topic: TopicRow) -> str:
 
 @router.post("/topics")
 async def create_topic(body: TopicCreate) -> dict:
-    """Create a new topic and immediately trigger analyst:plan."""
+    """Create a new topic and immediately trigger analyst:analyze."""
     factory = get_session_factory()
 
     async with factory() as session:
@@ -131,11 +137,11 @@ async def create_topic(body: TopicCreate) -> dict:
         await session.commit()
         await session.refresh(topic)
 
-        plan_task_id = await _dispatch_plan(topic)
+        task_id = await _dispatch_analyze(topic, force_crawl=True)
 
         return {
             "topic": _topic_to_dict(topic),
-            "plan_task_id": plan_task_id,
+            "task_id": task_id,
         }
 
 
@@ -220,7 +226,7 @@ async def delete_topic(topic_id: str) -> dict:
 
 @router.post("/topics/{topic_id}/refresh")
 async def refresh_topic(topic_id: str) -> dict:
-    """Manually trigger a new crawl cycle for a topic."""
+    """Manually trigger a full re-crawl for a topic."""
     factory = get_session_factory()
     async with factory() as session:
         topic = await session.get(TopicRow, topic_id)
@@ -229,36 +235,21 @@ async def refresh_topic(topic_id: str) -> dict:
         if topic.status != "active":
             return {"error": "Topic is not active"}
 
-        plan_task_id = await _dispatch_plan(topic)
-        return {"status": "refreshing", "plan_task_id": plan_task_id}
+        task_id = await _dispatch_analyze(topic, force_crawl=True)
+        return {"status": "refreshing", "task_id": task_id}
 
 
 @router.post("/topics/{topic_id}/reanalyze")
 async def reanalyze_topic(topic_id: str) -> dict:
-    """Re-run analysis on existing data without crawling."""
+    """Re-run analysis — analyst decides if new data is needed."""
     factory = get_session_factory()
     async with factory() as session:
         topic = await session.get(TopicRow, topic_id)
         if topic is None:
             return {"error": "Topic not found"}
 
-    queue = get_queue()
-    task = Task(
-        label="analyst:summarize",
-        priority=TaskPriority.MEDIUM,
-        payload={"topic_id": topic_id},
-    )
-    await queue.push(task)
-
-    redis = get_redis()
-    pipeline_key = f"topic:{topic_id}:pipeline"
-    await redis.hset(pipeline_key, mapping={
-        "phase": "summarizing",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    })
-    await redis.expire(pipeline_key, 86400)
-
-    return {"status": "reanalyzing", "task_id": task.id}
+        task_id = await _dispatch_analyze(topic)
+        return {"status": "reanalyzing", "task_id": task_id}
 
 
 @router.post("/topics/reorder")
@@ -375,6 +366,127 @@ async def assist_topic(body: TopicAssistRequest):
             yield _sse({"done": True, "reply": full, "suggestion": {}})
         except Exception as e:
             logger.exception("AI assist stream error")
+            yield _sse({"error": str(e)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Topic Chat ─────────────────────────────────────────
+
+
+class TopicChatRequest(BaseModel):
+    messages: list[AssistMessage]
+
+
+@router.post("/topics/{topic_id}/chat")
+async def chat_topic(topic_id: str, body: TopicChatRequest):
+    """Conversational analysis — ask questions about topic data. Streams SSE."""
+    settings = get_settings()
+    if not settings.grok_api_key:
+        return {"error": "Grok API key not configured"}
+
+    factory = get_session_factory()
+    async with factory() as session:
+        topic = await session.get(TopicRow, topic_id)
+        if topic is None:
+            return {"error": "Topic not found"}
+
+        # Build context from PG data
+        from sqlalchemy import text as sql_text
+
+        # Recent top posts (by engagement, last 7 days max)
+        top_result = await session.execute(
+            sql_text("""
+                SELECT text, author_username, metrics, source_url, platform
+                FROM contents
+                WHERE topic_id = :tid
+                ORDER BY (
+                    COALESCE((metrics->>'like_count')::int, 0) +
+                    COALESCE((metrics->>'retweet_count')::int, 0)
+                ) DESC
+                LIMIT 20
+            """),
+            {"tid": topic_id},
+        )
+        top_posts = []
+        for r in top_result:
+            likes = (r.metrics or {}).get("like_count", 0)
+            retweets = (r.metrics or {}).get("retweet_count", 0)
+            views = (r.metrics or {}).get("views_count", 0)
+            top_posts.append(
+                f"[{r.platform}] @{r.author_username or '?'}: "
+                f"{(r.text or '')[:200]} "
+                f"(likes:{likes} rt:{retweets} views:{views})"
+            )
+
+        # Metrics summary
+        agg_result = await session.execute(
+            sql_text("""
+                SELECT platform, COUNT(*) as cnt,
+                       COALESCE(SUM((metrics->>'like_count')::int), 0) as likes,
+                       COALESCE(SUM((metrics->>'views_count')::int), 0) as views
+                FROM contents WHERE topic_id = :tid
+                GROUP BY platform
+            """),
+            {"tid": topic_id},
+        )
+        platform_stats = [
+            f"{r.platform}: {r.cnt} posts, {r.likes} likes, {r.views} views"
+            for r in agg_result
+        ]
+
+    # Build system prompt with injected data
+    posts_text = "\n".join(top_posts[:15]) if top_posts else "(no posts yet)"
+    stats_text = "; ".join(platform_stats) if platform_stats else "(no data)"
+    summary_text = topic.last_summary or "(no previous summary)"
+
+    system_prompt = f"""\
+You are a social media analyst for the topic "{topic.name}".
+You speak the same language as the user (Chinese if they write Chinese, English for English).
+Be concise, insightful, and data-driven. Reference specific posts when relevant.
+
+## Current Data
+- Platforms monitored: {', '.join(topic.platforms or [])}
+- Keywords: {', '.join(topic.keywords or [])}
+- Stats: {stats_text}
+- Last analysis: {topic.last_crawl_at.isoformat() if topic.last_crawl_at else 'never'}
+
+## Previous Summary
+{summary_text[:1000]}
+
+## Top Posts (by engagement)
+{posts_text}
+"""
+
+    client = AsyncOpenAI(
+        api_key=settings.grok_api_key,
+        base_url=settings.grok_base_url,
+    )
+
+    messages_list: list[dict] = [{"role": "system", "content": system_prompt}]
+    for m in body.messages:
+        messages_list.append({"role": m.role, "content": m.content})
+
+    async def generate():
+        try:
+            stream = await client.chat.completions.create(
+                model=settings.grok_model,
+                messages=messages_list,
+                temperature=0.7,
+                max_tokens=2048,
+                stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    yield _sse({"t": delta})
+            yield _sse({"done": True})
+        except Exception as e:
+            logger.exception("Topic chat stream error")
             yield _sse({"error": str(e)})
 
     return StreamingResponse(

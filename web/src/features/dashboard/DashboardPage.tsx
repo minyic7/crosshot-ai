@@ -106,11 +106,11 @@ function extractCardMetrics(metrics: Record<string, unknown>): CardMetric[] {
 function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
   const { phase, total, done } = pipeline
 
-  if (phase === 'planning') {
+  if (phase === 'analyzing') {
     return (
-      <div className="pipeline-badge planning">
+      <div className="pipeline-badge analyzing">
         <Loader2 size={12} className="pipeline-spin" />
-        <span>Planning crawl strategy...</span>
+        <span>Analyzing topic data...</span>
       </div>
     )
   }

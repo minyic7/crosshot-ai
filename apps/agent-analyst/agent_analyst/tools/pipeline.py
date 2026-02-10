@@ -43,8 +43,8 @@ def make_set_pipeline_stage(redis_client: aioredis.Redis) -> Tool:
         name="set_pipeline_stage",
         description=(
             "Update the pipeline progress stage for a topic. "
-            "Call with phase='crawling' and total=N after creating N crawler tasks. "
-            "Call with phase='done' after completing summarization."
+            "Use phase='analyzing' when starting analysis, 'crawling' with total=N when dispatching crawlers, "
+            "'summarizing' for post-crawl analysis, 'done' when complete."
         ),
         parameters={
             "type": "object",
@@ -55,7 +55,7 @@ def make_set_pipeline_stage(redis_client: aioredis.Redis) -> Tool:
                 },
                 "phase": {
                     "type": "string",
-                    "enum": ["planning", "crawling", "summarizing", "done", "error"],
+                    "enum": ["analyzing", "crawling", "summarizing", "done", "error"],
                     "description": "The current pipeline phase",
                 },
                 "total": {
