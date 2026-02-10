@@ -18,5 +18,5 @@ export function CardDescription({ className, ...props }: HTMLAttributes<HTMLPara
 }
 
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('', className)} {...props} />
+  return <div className={cn('card-content', className)} {...props} />
 }
