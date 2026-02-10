@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -42,14 +43,32 @@ async def _try_dismiss_content_gate(session: XBrowserSession) -> bool:
     for selector in _CONTENT_GATE_SELECTORS:
         try:
             btn = session.page.locator(selector).first
-            if await btn.is_visible(timeout=2000):
-                await btn.click()
-                logger.info("Clicked content gate button: %s", selector)
-                await session.random_delay(2.0, 3.0)
-                return True
+            # wait_for actually waits unlike is_visible() which returns instantly
+            await btn.wait_for(state="visible", timeout=3000)
+            await btn.click()
+            logger.info("Clicked content gate button: %s", selector)
+            await session.random_delay(2.0, 3.0)
+            return True
         except Exception:
             continue
     return False
+
+
+async def _debug_empty_results(session: XBrowserSession, query: str) -> None:
+    """Capture debugging info when search returns 0 results on page 1."""
+    assert session.page is not None
+    try:
+        # Save screenshot to /tmp for inspection via docker exec
+        ts = int(time.time())
+        path = f"/tmp/x_search_empty_{ts}.png"
+        await session.page.screenshot(path=path, full_page=True)
+        logger.warning("0 results for query=%r — screenshot saved: %s", query, path)
+
+        # Log truncated page text to see what X is showing
+        body_text = await session.page.inner_text("body")
+        logger.warning("Page body text (first 500 chars): %.500s", body_text)
+    except Exception as e:
+        logger.warning("Failed to capture debug info: %s", e)
 
 
 async def search_tweets(
@@ -109,6 +128,7 @@ async def search_tweets(
         # Handle X's sensitive content gate: if page 1 returns 0 tweets,
         # check for a "Show" button and click through it.
         if page_num == 0 and len(tweets) == 0:
+            await _debug_empty_results(session, query)
             clicked = await _try_dismiss_content_gate(session)
             if clicked:
                 session.interceptor.clear("SearchTimeline")
