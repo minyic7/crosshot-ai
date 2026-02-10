@@ -35,9 +35,9 @@ async def main() -> None:
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
     executors = create_executors(redis_client, settings)
 
-    # Override execute to use platform dispatcher (with redis for fan-in)
+    # Override execute to use platform dispatcher
     async def _execute(task):
-        return await execute_task(task, executors, redis_client)
+        return await execute_task(task, executors)
 
     agent.execute = _execute
 

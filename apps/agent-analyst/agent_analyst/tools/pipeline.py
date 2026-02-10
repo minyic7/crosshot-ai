@@ -1,5 +1,6 @@
 """set_pipeline_stage tool — update topic pipeline progress in Redis."""
 
+import json
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
@@ -32,10 +33,16 @@ def make_set_pipeline_stage(redis_client: aioredis.Redis) -> Tool:
         await redis_client.hset(pipeline_key, mapping=mapping)
         await redis_client.expire(pipeline_key, PIPELINE_TTL)
 
-        # When entering crawling phase, set the pending counter
+        # When entering crawling phase, set pending counter + on_complete trigger
         if phase == "crawling" and total is not None:
             pending_key = f"topic:{topic_id}:pending"
+            on_complete_key = f"topic:{topic_id}:on_complete"
             await redis_client.set(pending_key, total, ex=PIPELINE_TTL)
+            await redis_client.set(on_complete_key, json.dumps({
+                "label": "analyst:summarize",
+                "payload": {"topic_id": topic_id},
+                "next_phase": "summarizing",
+            }), ex=PIPELINE_TTL)
 
         return {"status": "ok", "topic_id": topic_id, "phase": phase}
 

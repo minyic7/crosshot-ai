@@ -15,7 +15,7 @@ import json
 import logging
 import signal
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -60,12 +60,14 @@ class BaseAgent:
         tools: list[Tool] | None = None,
         system_prompt: str = "",
         ai_enabled: bool = False,
+        fan_in_enabled: bool = False,
     ) -> None:
         self.name = name
         self.labels = labels
         self.tools = tools or []
         self.system_prompt = system_prompt
         self.ai_enabled = ai_enabled
+        self.fan_in_enabled = fan_in_enabled
 
         self._shutdown_event = asyncio.Event()
         self._settings = get_settings()
@@ -105,6 +107,7 @@ class BaseAgent:
             labels=agent_config["labels"],
             system_prompt=agent_config.get("system_prompt", ""),
             ai_enabled=agent_config.get("ai_enabled", False),
+            fan_in_enabled=agent_config.get("fan_in", False),
         )
 
     # ──────────────────────────────────────────────
@@ -134,6 +137,46 @@ class BaseAgent:
             except Exception:
                 logger.warning("Failed to write heartbeat", exc_info=True)
             await asyncio.sleep(10)
+
+    # ──────────────────────────────────────────────
+    # Fan-in (generic topic pipeline countdown)
+    # ──────────────────────────────────────────────
+
+    async def _handle_fan_in(self, task: Task) -> None:
+        """Decrement topic pending counter; trigger on_complete task if last."""
+        topic_id = task.payload.get("topic_id")
+        if not topic_id:
+            return
+
+        pending_key = f"topic:{topic_id}:pending"
+        pipeline_key = f"topic:{topic_id}:pipeline"
+
+        # Atomic: decrement pending + update progress
+        pipe = self._redis.pipeline()
+        pipe.decr(pending_key)
+        pipe.hincrby(pipeline_key, "done", 1)
+        pipe.hset(pipeline_key, "updated_at", datetime.now(timezone.utc).isoformat())
+        results = await pipe.execute()
+        remaining = results[0]
+
+        logger.info("Topic %s: task done, remaining=%s", topic_id, max(remaining, 0))
+
+        if remaining <= 0:
+            on_complete_raw = await self._redis.get(f"topic:{topic_id}:on_complete")
+            if on_complete_raw:
+                cfg = json.loads(on_complete_raw)
+                next_task = Task(
+                    label=cfg["label"],
+                    payload=cfg.get("payload", {}),
+                    parent_job_id=task.parent_job_id,
+                )
+                await self._queue.push(next_task)
+                next_phase = cfg.get("next_phase", "summarizing")
+                await self._redis.hset(pipeline_key, "phase", next_phase)
+                await self._redis.delete(f"topic:{topic_id}:on_complete")
+                logger.info(
+                    "Topic %s: fan-in complete, triggered %s", topic_id, next_task.label
+                )
 
     # ──────────────────────────────────────────────
     # Main loop
@@ -195,6 +238,11 @@ class BaseAgent:
                     await self._queue.mark_failed(task, str(e))
                     self._tasks_failed += 1
                 finally:
+                    if self.fan_in_enabled:
+                        try:
+                            await self._handle_fan_in(task)
+                        except Exception:
+                            logger.warning("Fan-in failed for task %s", task.id, exc_info=True)
                     self._current_task = None
 
         except asyncio.CancelledError:

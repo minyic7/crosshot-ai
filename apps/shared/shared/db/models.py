@@ -133,35 +133,6 @@ class ContentMediaRow(Base):
     __table_args__ = (Index("ix_content_media_content_id", "content_id"),)
 
 
-class CookieRow(Base):
-    """Cookie pool entry — cross-platform credential management."""
-
-    __tablename__ = "cookies"
-
-    id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    platform: Mapped[str] = mapped_column(String(16), nullable=False)
-    name: Mapped[str] = mapped_column(String(128), nullable=False)
-    cookies: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    use_count_today: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    fail_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
-    cooldown_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-    )
-
-    __table_args__ = (Index("ix_cookies_platform_active", "platform", "is_active"),)
-
-
 class TopicRow(Base):
     """A monitored topic — the top-level entity users create and track."""
 
