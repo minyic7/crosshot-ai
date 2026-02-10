@@ -1,20 +1,28 @@
-"""query_topic_contents tool — SQL aggregation + token-budget sampling from PG."""
+"""query_topic_contents tool — SQL aggregation + classification + token-budget sampling."""
 
+import json
+import logging
+import math
 from datetime import datetime, timezone
 
+from openai import AsyncOpenAI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.db.models import TopicRow
 from shared.tools.base import Tool
 
-TOKEN_BUDGET = 8000
+logger = logging.getLogger(__name__)
+
+TOKEN_BUDGET = 16000
 
 
 def make_query_topic_contents(
     session_factory: async_sessionmaker[AsyncSession],
+    llm_client: AsyncOpenAI,
+    fast_model: str,
 ) -> Tool:
-    """Factory: create tool that queries and pre-processes topic content from PG."""
+    """Factory: create tool that queries, classifies, and pre-processes topic content."""
 
     async def _query_topic_contents(topic_id: str) -> dict:
         async with session_factory() as session:
@@ -69,34 +77,36 @@ def make_query_topic_contents(
             with_media = media_result.scalar() or 0
             media_pct = round(with_media * 100 / grand_total) if grand_total > 0 else 0
 
-            # 3. Top posts by engagement — fetch candidates, trim by token budget
+            # 3. Top posts by engagement — with media info via LEFT JOIN
             top_result = await session.execute(
                 text("""
-                    SELECT id, platform, source_url, text,
-                           author_display_name, author_username,
-                           metrics, hashtags, crawled_at
-                    FROM contents
-                    WHERE topic_id = :topic_id AND crawled_at > :since
+                    SELECT c.id, c.platform, c.source_url, c.text,
+                           c.author_display_name, c.author_username,
+                           c.metrics, c.hashtags, c.crawled_at,
+                           array_agg(DISTINCT cm.media_type)
+                               FILTER (WHERE cm.id IS NOT NULL) as media_types,
+                           COUNT(cm.id) as media_count
+                    FROM contents c
+                    LEFT JOIN content_media cm ON cm.content_id = c.id
+                    WHERE c.topic_id = :topic_id AND c.crawled_at > :since
+                    GROUP BY c.id
                     ORDER BY (
-                        COALESCE((metrics->>'like_count')::int, 0) +
-                        COALESCE((metrics->>'retweet_count')::int, 0)
+                        COALESCE((c.metrics->>'like_count')::int, 0) +
+                        COALESCE((c.metrics->>'retweet_count')::int, 0)
                     ) DESC
                     LIMIT 100
                 """),
                 {"topic_id": topic_id, "since": since_dt},
             )
 
-            posts = []
-            used_tokens = 0
+            # Build raw post list (all 100 candidates)
+            raw_posts = []
             for row in top_result:
                 post_text = row.text or ""
-                est_tokens = len(post_text) // 3
-                if used_tokens + est_tokens > TOKEN_BUDGET and posts:
-                    break
                 likes = (row.metrics or {}).get("like_count", 0)
                 retweets = (row.metrics or {}).get("retweet_count", 0)
                 views = (row.metrics or {}).get("views_count", 0)
-                posts.append({
+                raw_posts.append({
                     "platform": row.platform,
                     "author": row.author_username or row.author_display_name or "",
                     "text": post_text,
@@ -105,10 +115,26 @@ def make_query_topic_contents(
                     "views": views,
                     "hashtags": row.hashtags or [],
                     "url": row.source_url,
+                    "media_types": row.media_types or [],
+                    "media_count": row.media_count or 0,
                 })
+
+            # 4. Classify posts for relevance (batch LLM call)
+            classified_posts = await _classify_posts(
+                raw_posts, topic.name, topic.keywords or [],
+            )
+
+            # 5. Apply token budget to classified + filtered posts
+            posts = []
+            used_tokens = 0
+            for post in classified_posts:
+                est_tokens = len(post["text"]) // 3
+                if used_tokens + est_tokens > TOKEN_BUDGET and posts:
+                    break
+                posts.append(post)
                 used_tokens += est_tokens
 
-            # 4. Top authors by engagement
+            # 6. Top authors by engagement
             authors_result = await session.execute(
                 text("""
                     SELECT author_username as username,
@@ -129,7 +155,7 @@ def make_query_topic_contents(
                 for r in authors_result
             ]
 
-            # 5. Previous cycle data for trend comparison
+            # 7. Previous cycle data for trend comparison
             prev_metrics = {}
             prev_summary = ""
             if topic.summary_data and isinstance(topic.summary_data, dict):
@@ -137,7 +163,7 @@ def make_query_topic_contents(
             if topic.last_summary:
                 prev_summary = topic.last_summary
 
-            # 6. Data status — all-time coverage + per-platform freshness
+            # 8. Data status — all-time coverage + per-platform freshness
             now = datetime.now(timezone.utc)
             coverage_result = await session.execute(
                 text("""
@@ -201,6 +227,11 @@ def make_query_topic_contents(
                 "top_posts": posts,
                 "top_posts_count": len(posts),
                 "total_in_window": grand_total,
+                "classification_stats": {
+                    "total_candidates": len(raw_posts),
+                    "after_filter": len(classified_posts),
+                    "in_budget": len(posts),
+                },
                 "top_authors": top_authors,
                 "previous_cycle": {
                     "metrics": prev_metrics,
@@ -208,13 +239,99 @@ def make_query_topic_contents(
                 },
             }
 
+    async def _classify_posts(
+        posts: list[dict],
+        topic_name: str,
+        keywords: list[str],
+    ) -> list[dict]:
+        """Batch-classify posts by relevance using a fast LLM call.
+
+        Adds 'relevance' (1-10) and 'category' fields to each post.
+        Filters out irrelevant posts (relevance < 3).
+        Returns posts sorted by relevance * log(engagement).
+        """
+        if not posts:
+            return posts
+
+        # Build compact representation for classification
+        compact = []
+        for i, p in enumerate(posts):
+            compact.append({
+                "i": i,
+                "text": p["text"][:200],
+                "author": p["author"],
+                "likes": p["likes"],
+                "media": p["media_types"],
+            })
+
+        prompt = (
+            f'Topic: "{topic_name}" | Keywords: {json.dumps(keywords, ensure_ascii=False)}\n\n'
+            f"Classify each post's relevance to this topic.\n"
+            f"Return a JSON array (same order, same length={len(compact)}):\n"
+            f'[{{"r": 1-10, "c": "discussion|news|meme|spam|promo|unrelated"}}, ...]\n\n'
+            f"r = relevance to the topic (10=perfectly on-topic, 1=completely unrelated)\n"
+            f"c = content category\n\n"
+            f"Posts:\n{json.dumps(compact, ensure_ascii=False)}"
+        )
+
+        try:
+            response = await llm_client.chat.completions.create(
+                model=fast_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+            )
+            raw = response.choices[0].message.content or "[]"
+            # Strip markdown code fences if present
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
+
+            classifications = json.loads(raw)
+
+            if not isinstance(classifications, list) or len(classifications) != len(posts):
+                logger.warning(
+                    "Classification length mismatch: got %d, expected %d. Using unclassified.",
+                    len(classifications) if isinstance(classifications, list) else 0,
+                    len(posts),
+                )
+                return posts
+
+            # Attach classification to posts
+            for post, cls in zip(posts, classifications):
+                post["relevance"] = cls.get("r", 5)
+                post["category"] = cls.get("c", "unknown")
+
+            # Filter low-relevance
+            before = len(posts)
+            filtered = [p for p in posts if p.get("relevance", 5) >= 3]
+            logger.info(
+                "Classification: %d posts → %d after filtering (removed %d irrelevant)",
+                before, len(filtered), before - len(filtered),
+            )
+
+            # Sort by relevance * log(engagement + 1) — relevant AND popular first
+            def sort_key(p):
+                engagement = p["likes"] + p["retweets"]
+                return p.get("relevance", 5) * math.log(max(engagement, 1) + 1)
+
+            filtered.sort(key=sort_key, reverse=True)
+            return filtered
+
+        except Exception as e:
+            logger.warning("Classification failed (%s), using unclassified posts", e)
+            # Fallback: return posts as-is without classification
+            return posts
+
     return Tool(
         name="query_topic_contents",
         description=(
             "Query all crawled content for a topic with pre-computed metrics. "
             "Returns: data_status (all-time coverage, per-platform freshness, configured_platforms), "
-            "SQL-aggregated statistics, top posts by engagement "
-            "(selected by token budget), top authors, and previous cycle data for comparison."
+            "SQL-aggregated statistics, top posts by engagement with relevance classification "
+            "and media info, top authors, and previous cycle data for comparison."
         ),
         parameters={
             "type": "object",

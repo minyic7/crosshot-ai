@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     # Grok LLM API (OpenAI-compatible)
     grok_api_key: str = ""
     grok_base_url: str = "https://api.x.ai/v1"
-    grok_model: str = "grok-3"
+    grok_model: str = "grok-4-1-fast-reasoning"
+    grok_fast_model: str = "grok-4-1-fast-non-reasoning"
 
     # Media storage
     media_base_path: str = "/data/media"
