@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { Markdown } from '@/components/ui/Markdown'
 import {
   useGetTopicQuery,
   useReanalyzeTopicMutation,
@@ -150,7 +151,11 @@ function TopicChat({ topicId }: { topicId: string }) {
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`topic-chat-msg ${msg.role}`}>
-              <div className="topic-chat-msg-content">{msg.content || (streaming && i === messages.length - 1 ? '...' : '')}</div>
+              <div className="topic-chat-msg-content">
+                {msg.role === 'assistant'
+                  ? <Markdown>{msg.content || (streaming && i === messages.length - 1 ? '...' : '')}</Markdown>
+                  : (msg.content || (streaming && i === messages.length - 1 ? '...' : ''))}
+              </div>
             </div>
           ))}
         </div>
@@ -332,8 +337,8 @@ export function TopicDetailPage() {
                 </button>
               </div>
             </CardHeader>
-            <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>
-              {translated || topic.last_summary}
+            <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)' }}>
+              <Markdown>{translated || topic.last_summary!}</Markdown>
             </div>
             {topic.summary_data?.cycle_id && (
               <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>
