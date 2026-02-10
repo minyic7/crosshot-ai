@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Clock, AlertCircle, AlertTriangle, Info, Search, Trash2, Pause, Play, MessageCircle, Send } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Clock, AlertCircle, AlertTriangle, Info, Search, Trash2, Pause, Play, MessageCircle, Send, Languages, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -180,6 +180,40 @@ export function TopicDetailPage() {
   const [updateTopic] = useUpdateTopicMutation()
   const [deleteTopic] = useDeleteTopicMutation()
   const { fmt } = useTimezone()
+  const [translated, setTranslated] = useState('')
+  const [translating, setTranslating] = useState(false)
+
+  const handleTranslate = useCallback(async (text: string) => {
+    if (translating || translated) { setTranslated(''); return }
+    setTranslating(true)
+    setTranslated('')
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, target: 'zh' }),
+      })
+      if (!res.body) return
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = '', acc = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop()!
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const evt = JSON.parse(line.slice(6))
+            if (evt.t) { acc += evt.t; setTranslated(acc) }
+          } catch { /* skip */ }
+        }
+      }
+    } catch { setTranslated('Translation failed.') }
+    finally { setTranslating(false) }
+  }, [translating, translated])
 
   if (isLoading) {
     return (
@@ -285,10 +319,21 @@ export function TopicDetailPage() {
         <Card>
           <CardContent>
             <CardHeader className="mb-3">
-              <CardDescription>Summary</CardDescription>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <CardDescription>Summary</CardDescription>
+                <button
+                  className="topic-card-refresh"
+                  style={{ fontSize: '0.6875rem', padding: '3px 8px', gap: 4 }}
+                  onClick={() => handleTranslate(topic.last_summary!)}
+                  disabled={translating}
+                >
+                  {translating ? <Loader2 size={11} className="animate-spin" /> : <Languages size={11} />}
+                  {translated ? 'Original' : '翻译'}
+                </button>
+              </div>
             </CardHeader>
             <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>
-              {topic.last_summary}
+              {translated || topic.last_summary}
             </div>
             {topic.summary_data?.cycle_id && (
               <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>

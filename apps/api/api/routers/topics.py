@@ -479,3 +479,47 @@ Be concise, insightful, and data-driven. Reference specific posts when relevant.
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    target: str = "zh"
+
+
+@router.post("/translate")
+async def translate_text(body: TranslateRequest):
+    """Translate text via Grok. Streams SSE tokens."""
+    settings = get_settings()
+    if not settings.grok_api_key:
+        return {"error": "Grok API key not configured"}
+
+    lang_name = "Chinese" if body.target == "zh" else "English"
+    client = AsyncOpenAI(
+        api_key=settings.grok_api_key,
+        base_url=settings.grok_base_url,
+    )
+
+    async def stream():
+        try:
+            resp = await client.chat.completions.create(
+                model=settings.grok_model,
+                messages=[
+                    {"role": "system", "content": f"Translate the following text to {lang_name}. Output only the translation, nothing else."},
+                    {"role": "user", "content": body.text},
+                ],
+                stream=True,
+            )
+            async for chunk in resp:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield _sse({"t": delta.content})
+            yield _sse({"done": True})
+        except Exception as e:
+            logger.exception("Translate stream error")
+            yield _sse({"error": str(e)})
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
