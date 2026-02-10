@@ -108,9 +108,17 @@ def parse_tweet_result(result: dict[str, Any]) -> dict[str, Any] | None:
         or is_reply
     )
 
+    # Prefer note_tweet (long-form) text over legacy.full_text (truncated ~280 chars)
+    note_text = (
+        result.get("note_tweet", {})
+        .get("note_tweet_results", {})
+        .get("result", {})
+        .get("text")
+    )
+
     return {
         "tweet_id": tweet_id,
-        "text": legacy.get("full_text", ""),
+        "text": note_text or legacy.get("full_text", ""),
         "created_at": legacy.get("created_at", ""),
         "author": author,
         "metrics": metrics,
