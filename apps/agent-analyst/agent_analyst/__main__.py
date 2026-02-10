@@ -1,4 +1,4 @@
-"""Analyst agent entry point — AI-driven topic planning and data analysis."""
+"""Analyst agent entry point — deterministic pipeline with targeted LLM calls."""
 
 import asyncio
 import logging
@@ -10,10 +10,7 @@ from shared.agent.base import BaseAgent
 from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
 
-from agent_analyst.tools.pipeline import make_set_pipeline_stage
-from agent_analyst.tools.query import make_query_topic_contents
-from agent_analyst.tools.summary import make_update_topic_summary
-from agent_analyst.tools.topic import make_get_topic_config
+from agent_analyst.pipeline import make_pipeline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +25,6 @@ async def main() -> None:
 
     agent = BaseAgent.from_config(agent_name)
 
-    # Create tools with DB/Redis/LLM access via closures
     settings = get_settings()
     session_factory = get_session_factory()
     redis_client = agent._redis  # reuse agent's redis connection
@@ -37,12 +33,14 @@ async def main() -> None:
         base_url=settings.grok_base_url,
     )
 
-    agent.tools = [
-        make_get_topic_config(session_factory),
-        make_query_topic_contents(session_factory, llm_client, settings.grok_fast_model),
-        make_update_topic_summary(session_factory),
-        make_set_pipeline_stage(redis_client),
-    ]
+    # Override execute with deterministic pipeline (bypasses ReAct loop)
+    agent.execute = make_pipeline(
+        session_factory=session_factory,
+        redis_client=redis_client,
+        llm_client=llm_client,
+        model=settings.grok_model,
+        fast_model=settings.grok_fast_model,
+    )
 
     await agent.run()
 
