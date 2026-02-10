@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import redis.asyncio as aioredis
 
@@ -70,6 +70,13 @@ class CookiesService:
                 continue
             cookie = CookiesPool.model_validate_json(data)
 
+            # Auto-reset daily counter when date changes
+            today = date.today()
+            if cookie.use_count_date != today:
+                cookie.use_count_today = 0
+                cookie.use_count_date = today
+                await self._save(cookie)
+
             # Skip inactive
             if not cookie.is_active:
                 continue
@@ -82,16 +89,15 @@ class CookiesService:
             if cookie.cooldown_until and cookie.cooldown_until > now:
                 continue
 
-            # TODO: re-enable rate limits for production
-            # # Skip if daily limit reached
-            # if cookie.use_count_today >= config.daily_limit:
-            #     continue
+            # Skip if daily limit reached
+            if cookie.use_count_today >= config.daily_limit:
+                continue
 
-            # # Skip if minimum interval not elapsed
-            # if cookie.last_used_at:
-            #     elapsed = (now - cookie.last_used_at).total_seconds()
-            #     if elapsed < config.min_interval_seconds:
-            #         continue
+            # Skip if minimum interval not elapsed
+            if cookie.last_used_at:
+                elapsed = (now - cookie.last_used_at).total_seconds()
+                if elapsed < config.min_interval_seconds:
+                    continue
 
             candidates.append(cookie)
 
@@ -104,6 +110,7 @@ class CookiesService:
         # Update last_used_at and use_count_today
         best.last_used_at = now
         best.use_count_today += 1
+        best.use_count_date = date.today()
         await self._save(best)
 
         logger.info(

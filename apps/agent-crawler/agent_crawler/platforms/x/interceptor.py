@@ -46,9 +46,14 @@ class GraphQLInterceptor:
     def __init__(self) -> None:
         self._captured: dict[str, list[dict[str, Any]]] = {}
         self._events: dict[str, asyncio.Event] = {}
+        self._error: AuthError | RateLimitError | None = None
 
     async def on_response(self, response: Response) -> None:
-        """Playwright response handler. Attach via page.on("response", ...)."""
+        """Playwright response handler. Attach via page.on("response", ...).
+
+        NOTE: Exceptions raised inside Playwright event handlers are swallowed.
+        Instead, we store errors and re-raise them in wait_for().
+        """
         url = response.url
         if "/i/api/graphql/" not in url:
             return
@@ -66,17 +71,23 @@ class GraphQLInterceptor:
 
         status = response.status
 
-        # Auth errors
+        # Auth errors — store and signal waiters
         if status in (401, 403):
             logger.error("Auth error (%d) for %s", status, operation)
-            raise AuthError(f"HTTP {status} on {operation}")
+            self._error = AuthError(f"HTTP {status} on {operation}")
+            if operation in self._events:
+                self._events[operation].set()
+            return
 
-        # Rate limit
+        # Rate limit — store and signal waiters
         if status == 429:
             retry_after = response.headers.get("retry-after")
             retry_secs = int(retry_after) if retry_after else None
             logger.warning("Rate limited on %s (retry_after=%s)", operation, retry_secs)
-            raise RateLimitError(retry_secs)
+            self._error = RateLimitError(retry_secs)
+            if operation in self._events:
+                self._events[operation].set()
+            return
 
         if status != 200:
             logger.warning("Unexpected status %d for %s", status, operation)
@@ -104,8 +115,12 @@ class GraphQLInterceptor:
         """Wait for a specific GraphQL operation response.
 
         Returns the first captured response for this operation,
-        or None if timeout is reached.
+        or None if timeout is reached. Raises stored errors (429, 401/403).
         """
+        # Check for stored errors first
+        if self._error is not None:
+            raise self._error
+
         # Already captured?
         if operation in self._captured and self._captured[operation]:
             return self._captured[operation][-1]
@@ -115,6 +130,9 @@ class GraphQLInterceptor:
         self._events[operation] = event
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
+            # Check for errors that arrived while waiting
+            if self._error is not None:
+                raise self._error
             results = self._captured.get(operation, [])
             return results[-1] if results else None
         except asyncio.TimeoutError:
@@ -133,3 +151,4 @@ class GraphQLInterceptor:
             self._captured.pop(operation, None)
         else:
             self._captured.clear()
+            self._error = None

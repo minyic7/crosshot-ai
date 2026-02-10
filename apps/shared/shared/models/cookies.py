@@ -1,6 +1,6 @@
 """Cookies pool model for managing platform credentials."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -24,5 +24,6 @@ class CookiesPool(BaseModel):
     is_active: bool = True
     last_used_at: datetime | None = None
     use_count_today: int = 0
+    use_count_date: date | None = None
     fail_count: int = 0
     cooldown_until: datetime | None = None
