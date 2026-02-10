@@ -14,7 +14,7 @@ import {
   useListTopicsQuery,
   useCreateTopicMutation,
   useUpdateTopicMutation,
-  useRefreshTopicMutation,
+  useReanalyzeTopicMutation,
   useReorderTopicsMutation,
 } from '@/store/api'
 import type { Topic, TopicAlert, TopicPipeline } from '@/types/models'
@@ -212,7 +212,7 @@ function TopicCard({
           </button>
           <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
             <RefreshCw size={11} />
-            Refresh
+            Reanalyze
           </button>
         </div>
       </div>
@@ -575,11 +575,11 @@ export function DashboardPage() {
   }, [topics])
 
   const [updateTopic] = useUpdateTopicMutation()
-  const [refreshTopic] = useRefreshTopicMutation()
+  const [reanalyzeTopic] = useReanalyzeTopicMutation()
   const [reorderTopics] = useReorderTopicsMutation()
 
   const handlePin = useCallback((id: string, pinned: boolean) => { updateTopic({ id, is_pinned: pinned }) }, [updateTopic])
-  const handleRefresh = useCallback((id: string) => { refreshTopic(id) }, [refreshTopic])
+  const handleRefresh = useCallback((id: string) => { reanalyzeTopic(id) }, [reanalyzeTopic])
   const handleTopicClick = useCallback((id: string) => { navigate(`/topic/${id}`) }, [navigate])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import {
   useGetTopicQuery,
-  useRefreshTopicMutation,
   useReanalyzeTopicMutation,
   useUpdateTopicMutation,
   useDeleteTopicMutation,
@@ -177,7 +176,6 @@ export function TopicDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: topic, isLoading, isError } = useGetTopicQuery(id ?? '', { skip: !id, pollingInterval: 10000 })
-  const [refreshTopic, { isLoading: isRefreshing }] = useRefreshTopicMutation()
   const [reanalyzeTopic, { isLoading: isReanalyzing }] = useReanalyzeTopicMutation()
   const [updateTopic] = useUpdateTopicMutation()
   const [deleteTopic] = useDeleteTopicMutation()
@@ -238,10 +236,6 @@ export function TopicDetailPage() {
           </div>
         </div>
         <div className="topic-detail-actions">
-          <button className="topic-card-refresh" onClick={() => refreshTopic(topic.id)} disabled={isRefreshing || topic.status !== 'active'}>
-            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
           <button className="topic-card-refresh" onClick={() => reanalyzeTopic(topic.id)} disabled={isReanalyzing}>
             <RefreshCw size={13} className={isReanalyzing ? 'animate-spin' : ''} />
             {isReanalyzing ? 'Analyzing...' : 'Reanalyze'}

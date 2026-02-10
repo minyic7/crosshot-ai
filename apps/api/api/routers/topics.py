@@ -224,21 +224,6 @@ async def delete_topic(topic_id: str) -> dict:
         return {"status": "cancelled", "topic_id": topic_id}
 
 
-@router.post("/topics/{topic_id}/refresh")
-async def refresh_topic(topic_id: str) -> dict:
-    """Manually trigger a full re-crawl for a topic."""
-    factory = get_session_factory()
-    async with factory() as session:
-        topic = await session.get(TopicRow, topic_id)
-        if topic is None:
-            return {"error": "Topic not found"}
-        if topic.status != "active":
-            return {"error": "Topic is not active"}
-
-        task_id = await _dispatch_analyze(topic, force_crawl=True)
-        return {"status": "refreshing", "task_id": task_id}
-
-
 @router.post("/topics/{topic_id}/reanalyze")
 async def reanalyze_topic(topic_id: str) -> dict:
     """Re-run analysis — analyst decides if new data is needed."""

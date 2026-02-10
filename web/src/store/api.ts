@@ -106,10 +106,6 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/topics/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Topic'],
     }),
-    refreshTopic: builder.mutation<{ task_id: string }, string>({
-      query: (id) => ({ url: `/topics/${id}/refresh`, method: 'POST' }),
-      invalidatesTags: ['Topic'],
-    }),
     reanalyzeTopic: builder.mutation<{ task_id: string }, string>({
       query: (id) => ({ url: `/topics/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['Topic'],
@@ -147,7 +143,6 @@ export const {
   useCreateTopicMutation,
   useUpdateTopicMutation,
   useDeleteTopicMutation,
-  useRefreshTopicMutation,
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
 } = apiSlice
