@@ -62,32 +62,29 @@ async def query_topic_contents(
             grand_replies += row.total_replies
             grand_views += row.total_views
 
-        # 2. Media count
+        # 2. Media count — media is stored in contents.data->'media' JSON array
         media_result = await session.execute(
             text("""
-                SELECT COUNT(DISTINCT c.id) as with_media
-                FROM contents c
-                JOIN content_media cm ON cm.content_id = c.id
-                WHERE c.topic_id = :topic_id AND c.crawled_at > :since
+                SELECT COUNT(*) as with_media
+                FROM contents
+                WHERE topic_id = :topic_id AND crawled_at > :since
+                  AND data->'media' IS NOT NULL
+                  AND jsonb_array_length(data->'media') > 0
             """),
             {"topic_id": topic_id, "since": since_dt},
         )
         with_media = media_result.scalar() or 0
         media_pct = round(with_media * 100 / grand_total) if grand_total > 0 else 0
 
-        # 3. Top posts by engagement — with media info via LEFT JOIN
+        # 3. Top posts by engagement — extract media info from JSON
         top_result = await session.execute(
             text("""
                 SELECT c.id, c.platform, c.source_url, c.text,
                        c.author_display_name, c.author_username,
                        c.metrics, c.hashtags, c.crawled_at,
-                       array_agg(DISTINCT cm.media_type)
-                           FILTER (WHERE cm.id IS NOT NULL) as media_types,
-                       COUNT(cm.id) as media_count
+                       c.data->'media' as media_json
                 FROM contents c
-                LEFT JOIN content_media cm ON cm.content_id = c.id
                 WHERE c.topic_id = :topic_id AND c.crawled_at > :since
-                GROUP BY c.id
                 ORDER BY (
                     COALESCE((c.metrics->>'like_count')::int, 0) +
                     COALESCE((c.metrics->>'retweet_count')::int, 0)
@@ -104,6 +101,9 @@ async def query_topic_contents(
             likes = (row.metrics or {}).get("like_count", 0)
             retweets = (row.metrics or {}).get("retweet_count", 0)
             views = (row.metrics or {}).get("views_count", 0)
+            # Extract media types from JSON data
+            media_items = row.media_json or []
+            media_types = list({m.get("type", "unknown") for m in media_items}) if media_items else []
             raw_posts.append({
                 "platform": row.platform,
                 "author": row.author_username or row.author_display_name or "",
@@ -113,8 +113,8 @@ async def query_topic_contents(
                 "views": views,
                 "hashtags": row.hashtags or [],
                 "url": row.source_url,
-                "media_types": row.media_types or [],
-                "media_count": row.media_count or 0,
+                "media_types": media_types,
+                "media_count": len(media_items),
             })
 
         # 4. Classify posts for relevance (batch LLM call)

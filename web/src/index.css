@@ -118,7 +118,7 @@
 }
 
 html {
-  font-size: 16px;
+  font-size: 17px;
 }
 
 body {
@@ -237,7 +237,7 @@ h3 {
   flex: 1;
   padding: 40px 28px 100px;
   padding-top: 100px; /* 60px topnav + 40px gap */
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
   position: relative;
@@ -324,7 +324,7 @@ h3 {
 }
 
 .topnav-inner {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 28px;
   height: 100%;
@@ -526,7 +526,7 @@ h3 {
   border-radius: 100px;
   backdrop-filter: blur(12px);
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: default;
   transition: all 0.3s ease;
@@ -1181,7 +1181,7 @@ h3 {
 
 .dash-stat-label {
   font-family: 'Space Mono', monospace;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
@@ -1208,7 +1208,7 @@ h3 {
 
 .dashboard-topics-label {
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
@@ -1308,7 +1308,7 @@ h3 {
 
 .dashboard-topics-header h2 {
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
@@ -1443,7 +1443,7 @@ h3 {
   padding: 3px 11px 3px 7px;
   border-radius: 100px;
   font-family: 'Space Mono', monospace;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1490,7 +1490,7 @@ h3 {
 
 .topic-card-updated {
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-3);
   margin-top: 4px;
 }
@@ -1685,7 +1685,7 @@ h3 {
 
 .topic-metric-label {
   font-family: 'Space Mono', monospace;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
@@ -1709,7 +1709,7 @@ h3 {
   margin-top: 8px;
   padding: 2px 9px;
   border-radius: 100px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   font-family: 'Space Mono', monospace;
   text-transform: capitalize;
@@ -1742,7 +1742,7 @@ h3 {
   display: flex;
   justify-content: space-between;
   font-family: 'Space Mono', monospace;
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .sentiment-label {
@@ -1818,7 +1818,7 @@ h3 {
 
 .topic-card-sources-label {
   font-family: 'Space Mono', monospace;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-4);
   text-transform: uppercase;
@@ -1861,7 +1861,7 @@ h3 {
   backdrop-filter: blur(6px);
   border: 1px solid var(--glass-border);
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-3);
   cursor: pointer;
@@ -1887,7 +1887,7 @@ h3 {
   align-items: center;
   gap: 4px;
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 
@@ -2003,7 +2003,7 @@ h3 {
 
 .topic-detail-info-item .label {
   font-family: 'Space Mono', monospace;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -2059,7 +2059,7 @@ h3 {
 
 .topic-detail-metric-label {
   font-family: 'Space Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
