@@ -68,7 +68,7 @@ def build_analyze_prompt(topic: dict, data: dict, gaps: dict) -> str:
 1. **Read every top post carefully.** Understand what the content ACTUALLY is about — not just the keywords.
 2. **Write a summary** in Chinese (中文), structured as:
    - **内容本质** (1 paragraph): What is this content ACTUALLY about?
-   - **关键发现** (1 paragraph): What stands out? Quote specific posts when illuminating.
+   - **关键发现** (1 paragraph): What stands out? Quote specific posts with their URL as markdown link, e.g. [@username](url).
    - **趋势与建议** (1 paragraph): What changed vs last cycle? What should we watch next?
 3. **If data gaps exist** (missing platforms, stale data, low volume, or you see angles the keywords miss):
    construct targeted crawl tasks. Use X search operators to filter noise.
@@ -121,7 +121,7 @@ def build_summarize_prompt(topic: dict, data: dict) -> str:
 2. **Compare with previous_cycle** — what's new? What changed?
 3. **Write a comprehensive summary** in Chinese (中文), structured as:
    - **内容本质** (1 paragraph): What is this content ACTUALLY about? Be specific and honest.
-   - **关键发现** (1 paragraph): Top posts, notable authors, trending angles. Cite specific examples.
+   - **关键发现** (1 paragraph): Top posts, notable authors, trending angles. Cite specific posts with their URL as markdown link, e.g. [@username](url).
    - **趋势与建议** (1 paragraph): Changes vs last cycle, what to watch next, suggested queries.
 
 Return **only** a JSON object:
