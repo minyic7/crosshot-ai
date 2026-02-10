@@ -21,6 +21,36 @@ _TAB_PARAM = {
     "Lists": "f=list",
 }
 
+# X shows these content gate buttons for sensitive/NSFW search results.
+# We try each selector in order and click the first one found.
+_CONTENT_GATE_SELECTORS = [
+    # "Show" button inside search results sensitive content warning
+    '[data-testid="empty_state_button_text"]',
+    # Generic "Show" button text
+    'button:has-text("Show")',
+    # Older X UI variants
+    '[role="button"]:has-text("Show")',
+]
+
+
+async def _try_dismiss_content_gate(session: XBrowserSession) -> bool:
+    """Try to click through X's sensitive content warning gate.
+
+    Returns True if a gate was found and clicked.
+    """
+    assert session.page is not None
+    for selector in _CONTENT_GATE_SELECTORS:
+        try:
+            btn = session.page.locator(selector).first
+            if await btn.is_visible(timeout=2000):
+                await btn.click()
+                logger.info("Clicked content gate button: %s", selector)
+                await session.random_delay(2.0, 3.0)
+                return True
+        except Exception:
+            continue
+    return False
+
 
 async def search_tweets(
     session: XBrowserSession,
@@ -75,6 +105,19 @@ async def search_tweets(
             break
 
         tweets = parse_search_timeline(data)
+
+        # Handle X's sensitive content gate: if page 1 returns 0 tweets,
+        # check for a "Show" button and click through it.
+        if page_num == 0 and len(tweets) == 0:
+            clicked = await _try_dismiss_content_gate(session)
+            if clicked:
+                session.interceptor.clear("SearchTimeline")
+                data = await session.interceptor.wait_for(
+                    "SearchTimeline", timeout=GRAPHQL_WAIT_TIMEOUT,
+                )
+                if data:
+                    tweets = parse_search_timeline(data)
+
         new_count = 0
         for tweet in tweets:
             tid = tweet["tweet_id"]

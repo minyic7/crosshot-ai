@@ -139,6 +139,13 @@ def parse_search_timeline(data: dict[str, Any]) -> list[dict[str, Any]]:
             .get("timeline", {})
         )
         instructions = timeline.get("instructions", [])
+
+        # Debug: log instruction types so we can spot content gates / empty responses
+        instr_types = [i.get("type", "?") for i in instructions]
+        logger.debug("SearchTimeline instructions: %s", instr_types)
+        if not instructions:
+            logger.warning("SearchTimeline response has no instructions (possible content gate or empty result)")
+
         entries = _extract_entries(instructions)
 
         for entry in entries:
