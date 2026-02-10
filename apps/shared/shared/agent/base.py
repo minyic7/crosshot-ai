@@ -238,7 +238,13 @@ class BaseAgent:
                     await self._queue.mark_failed(task, str(e))
                     self._tasks_failed += 1
                 finally:
-                    if self.fan_in_enabled:
+                    # Only fire fan-in when task is truly finished (success
+                    # or permanent failure), NOT on retries — otherwise each
+                    # retry attempt decrements the pending counter again.
+                    if self.fan_in_enabled and task.status in (
+                        TaskStatus.COMPLETED,
+                        TaskStatus.FAILED,
+                    ):
                         try:
                             await self._handle_fan_in(task)
                         except Exception:

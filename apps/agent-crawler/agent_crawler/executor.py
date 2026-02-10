@@ -46,10 +46,11 @@ async def execute_task(
     """Dispatch a task to the appropriate platform executor."""
     executor = executors.get(task.label)
     if executor is None:
-        raise ValueError(
-            f"No executor for label '{task.label}'. "
-            f"Available: {list(executors.keys())}"
+        logger.warning(
+            "No executor for label '%s' (task %s), skipping. Available: %s",
+            task.label, task.id, list(executors.keys()),
         )
+        return Result(data={"status": "skipped", "reason": f"No executor for {task.label}"})
 
     logger.info(
         "Dispatching task %s (label=%s) to %s executor",

@@ -4,6 +4,9 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+import redis.asyncio as aioredis
+
+from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
 from shared.db.models import TopicRow
 from shared.models.task import Task, TaskPriority
@@ -34,28 +37,39 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
         result = await session.execute(stmt)
         topics = result.scalars().all()
 
+    settings = get_settings()
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+
     now = datetime.now(timezone.utc)
-    for topic in topics:
-        interval_hours = topic.config.get(
-            "schedule_interval_hours", DEFAULT_INTERVAL_HOURS
-        )
-        interval = timedelta(hours=interval_hours)
+    try:
+        for topic in topics:
+            interval_hours = topic.config.get(
+                "schedule_interval_hours", DEFAULT_INTERVAL_HOURS
+            )
+            interval = timedelta(hours=interval_hours)
 
-        # Skip if recently crawled
-        if topic.last_crawl_at and (now - topic.last_crawl_at) < interval:
-            continue
+            # Skip if recently crawled
+            if topic.last_crawl_at and (now - topic.last_crawl_at) < interval:
+                continue
 
-        # Push analyst:analyze task with low priority (scheduled = background)
-        task = Task(
-            label="analyst:analyze",
-            priority=TaskPriority.LOW,
-            payload={
-                "topic_id": str(topic.id),
-                "name": topic.name,
-                "platforms": topic.platforms,
-                "keywords": topic.keywords,
-                "config": topic.config,
-            },
-        )
-        await queue.push(task)
-        logger.info("Scheduled re-crawl for topic '%s' (%s)", topic.name, topic.id)
+            # Skip if topic already has an active pipeline (analyzing/crawling/summarizing)
+            pipeline = await redis_client.hgetall(f"topic:{topic.id}:pipeline")
+            if pipeline and pipeline.get("phase") not in (None, "", "done"):
+                continue
+
+            # Push analyst:analyze task with low priority (scheduled = background)
+            task = Task(
+                label="analyst:analyze",
+                priority=TaskPriority.LOW,
+                payload={
+                    "topic_id": str(topic.id),
+                    "name": topic.name,
+                    "platforms": topic.platforms,
+                    "keywords": topic.keywords,
+                    "config": topic.config,
+                },
+            )
+            await queue.push(task)
+            logger.info("Scheduled re-crawl for topic '%s' (%s)", topic.name, topic.id)
+    finally:
+        await redis_client.aclose()
