@@ -222,7 +222,7 @@ function TopicCard({
 
       {/* Description */}
       {topic.last_summary ? (
-        <p className="topic-card-summary">{topic.last_summary.split(/\n---\n/)[0]}</p>
+        <p className="topic-card-summary">{topic.last_summary}</p>
       ) : !topic.pipeline ? (
         <p className="topic-card-empty">Awaiting first analysis cycle...</p>
       ) : null}

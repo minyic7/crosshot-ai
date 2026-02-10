@@ -281,24 +281,15 @@ export function TopicDetailPage() {
       )}
 
       {/* Summary */}
-      {topic.last_summary && (() => {
-        const parts = topic.last_summary.split(/\n---\n/)
-        const zhPart = parts[0]?.trim()
-        const enPart = parts[1]?.trim()
-        return (
+      {topic.last_summary && (
         <Card>
           <CardContent>
             <CardHeader className="mb-3">
               <CardDescription>Summary</CardDescription>
             </CardHeader>
             <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>
-              {zhPart}
+              {topic.last_summary}
             </div>
-            {enPart && (
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--glass-border)', fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.8125rem', lineHeight: 1.8, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
-                {enPart}
-              </div>
-            )}
             {topic.summary_data?.cycle_id && (
               <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>
                 <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
@@ -307,8 +298,7 @@ export function TopicDetailPage() {
             )}
           </CardContent>
         </Card>
-        )
-      })()}
+      )}
 
       {/* Metrics */}
       {metricEntries.length > 0 && (

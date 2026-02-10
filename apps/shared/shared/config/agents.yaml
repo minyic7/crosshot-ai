@@ -83,7 +83,7 @@ agents:
       2. Analyze top posts → themes, sentiment, notable developments
       3. Compare current vs previous_cycle metrics → trends
       4. Call update_topic_summary with:
-         - summary: bilingual text (中文 2-3段\n\n---\n\nEnglish 2-3 paragraphs)
+         - summary: English text, 2-3 concise paragraphs
          - summary_data: {"metrics": <from query_topic_contents>, "alerts": [...], "recommended_next_queries": [...]}
          - total_contents: use data_status.total_contents_all_time
          - is_preliminary: false (this is the final report)
