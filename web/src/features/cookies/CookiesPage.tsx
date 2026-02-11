@@ -167,8 +167,8 @@ function CookieCard({
           style={{
             padding: '8px 12px',
             borderRadius: 8,
-            background: 'rgba(100, 116, 139, 0.04)',
-            border: '1px solid rgba(100, 116, 139, 0.08)',
+            background: 'var(--surface-muted)',
+            border: '1px solid var(--border-default)',
           }}
         >
           {cookie.use_count_today > 0 && (
@@ -220,7 +220,7 @@ function CookieCard({
         {expanded && (
           <div className="mt-2 overflow-auto" style={{ maxHeight: '300px' }}>
             <div className="table-compact">
-              <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: '0.75rem' }}>
+              <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid var(--border-default)', fontSize: '0.75rem' }}>
                 <span style={{ flex: 1.2 }}>Name</span>
                 <span style={{ flex: 1 }}>Domain</span>
                 <span style={{ flex: 1 }}>Expires</span>

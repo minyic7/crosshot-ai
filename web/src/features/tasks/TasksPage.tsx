@@ -66,7 +66,7 @@ export function TasksPage() {
                   onClick={() => navigate(`/task/${task.id}`)}
                   className="flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors duration-150"
                   style={{ cursor: 'pointer', marginLeft: '-0.75rem', marginRight: '-0.75rem' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(100, 116, 139, 0.06)')}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-muted)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   {STATUS_ICON[task.status as keyof typeof STATUS_ICON] ?? STATUS_ICON.pending}

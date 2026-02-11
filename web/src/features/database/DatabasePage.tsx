@@ -21,7 +21,7 @@ export function DatabasePage() {
           <h1 className="text-xl font-semibold">Database</h1>
         </div>
 
-        <div className="flex gap-1 p-1 rounded-lg" style={{ background: 'rgba(100, 116, 139, 0.08)' }}>
+        <div className="flex gap-1 p-1 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
           {tabs.map(t => (
             <button
               key={t.key}

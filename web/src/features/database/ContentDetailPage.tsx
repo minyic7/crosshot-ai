@@ -265,8 +265,8 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
           style={{
             padding: '10px 14px',
             borderRadius: 10,
-            background: 'rgba(100, 116, 139, 0.05)',
-            border: '1px solid rgba(100, 116, 139, 0.1)',
+            background: 'var(--surface-muted)',
+            border: '1px solid var(--border-default)',
           }}
         >
           {[
@@ -300,7 +300,7 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
         {/* Footer */}
         <div
           className="flex items-center gap-3 mt-3 pt-2 flex-wrap"
-          style={{ borderTop: '1px solid rgba(100, 116, 139, 0.12)', color: 'var(--foreground-subtle)' }}
+          style={{ borderTop: '1px solid var(--border-default)', color: 'var(--foreground-subtle)' }}
         >
           <span className="text-xs">{tweet.created_at}</span>
           <span className="text-xs">lang: {tweet.lang}</span>

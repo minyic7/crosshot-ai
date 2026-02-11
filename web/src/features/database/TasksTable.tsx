@@ -40,7 +40,7 @@ export function TasksTable() {
           </div>
         ) : (
           <div className="table-compact">
-            <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid #e5e7eb' }}>
+            <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid var(--border-default)' }}>
               <span style={{ flex: 1 }}>ID</span>
               <span style={{ flex: 1 }}>Label</span>
               <span style={{ flex: 0.7 }}>Agent</span>

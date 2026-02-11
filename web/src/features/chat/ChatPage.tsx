@@ -98,7 +98,7 @@ export function ChatPage() {
           </div>
 
           {/* Input */}
-          <div className="flex gap-2" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
+          <div className="flex gap-2" style={{ borderTop: '1px solid var(--border-default)', paddingTop: '1rem' }}>
             <textarea
               className="form-textarea"
               placeholder="Type a message..."

@@ -39,7 +39,7 @@ export function ContentsTable() {
           </div>
         ) : (
           <div className="table-compact">
-            <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid #e5e7eb' }}>
+            <div className="table-compact-row" style={{ fontWeight: 600, borderBottom: '2px solid var(--border-default)' }}>
               <span style={{ flex: 0.5 }}>Platform</span>
               <span style={{ flex: 2 }}>Author</span>
               <span style={{ flex: 3 }}>Text</span>

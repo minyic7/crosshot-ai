@@ -153,7 +153,7 @@ export function ContentGallery() {
         <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--foreground-subtle)', textTransform: 'uppercase' }}>
           Platform
         </span>
-        <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(100, 116, 139, 0.08)' }}>
+        <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
           {platforms.map(p => (
             <button
               key={p}
@@ -255,25 +255,25 @@ function MasonryCard({
       onClick={onClick}
       className="group rounded-xl overflow-hidden transition-all duration-300 cursor-pointer"
       style={{
-        background: 'rgba(255, 255, 255, 0.85)',
-        border: '1px solid rgba(100, 116, 139, 0.15)',
-        boxShadow: '0 1px 4px rgba(100, 116, 139, 0.06)',
+        background: 'var(--surface-card)',
+        border: '1px solid var(--border-default)',
+        boxShadow: 'var(--shadow-card)',
         ...(!hasMedia && !expanded ? { height: TEXT_CARD_HEIGHT } : {}),
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = 'translateY(-3px)'
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(100, 116, 139, 0.14), 0 2px 8px rgba(0,0,0,0.04)'
-        e.currentTarget.style.borderColor = 'rgba(100, 116, 139, 0.25)'
+        e.currentTarget.style.transform = 'translateY(-1px)'
+        e.currentTarget.style.boxShadow = 'var(--shadow-card-hover)'
+        e.currentTarget.style.borderColor = 'var(--border-hover)'
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = '0 1px 4px rgba(100, 116, 139, 0.06)'
-        e.currentTarget.style.borderColor = 'rgba(100, 116, 139, 0.15)'
+        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
+        e.currentTarget.style.borderColor = 'var(--border-default)'
       }}
     >
       {/* Media */}
       {hasMedia && !imgError && (
-        <div className="relative overflow-hidden" style={{ background: 'rgba(100,116,139,0.05)' }}>
+        <div className="relative overflow-hidden" style={{ background: 'var(--surface-muted)' }}>
           {!imgLoaded && (
             <div className="skeleton" style={{ width: '100%', height: 180 }} />
           )}
@@ -394,7 +394,7 @@ function MasonryCard({
         )}
 
         {/* Metrics + time footer */}
-        <div className="flex items-center justify-between pt-1.5" style={{ borderTop: '1px solid rgba(100,116,139,0.08)', flexShrink: 0 }}>
+        <div className="flex items-center justify-between pt-1.5" style={{ borderTop: '1px solid var(--border-default)', flexShrink: 0 }}>
           <div className="flex items-center gap-2.5">
             {metrics && (
               <>

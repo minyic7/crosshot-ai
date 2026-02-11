@@ -86,7 +86,7 @@ export function CreateTaskForm() {
     <Card>
       <CardContent>
         {/* Action selector tabs */}
-        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'rgba(100, 116, 139, 0.08)' }}>
+        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
           {actions.map(a => (
             <button
               key={a.key}
@@ -132,7 +132,7 @@ export function CreateTaskForm() {
                     onClick={() => toggleHasFilter(f.key)}
                     className="px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150"
                     style={{
-                      background: hasFilters.includes(f.key) ? 'var(--teal)' : 'rgba(100, 116, 139, 0.08)',
+                      background: hasFilters.includes(f.key) ? 'var(--teal)' : 'var(--surface-hover)',
                       color: hasFilters.includes(f.key) ? 'white' : 'var(--foreground-muted)',
                       border: 'none',
                       cursor: 'pointer',
@@ -153,7 +153,7 @@ export function CreateTaskForm() {
                     onClick={() => setSearchTab(t)}
                     className="px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150"
                     style={{
-                      background: searchTab === t ? 'var(--teal)' : 'rgba(100, 116, 139, 0.08)',
+                      background: searchTab === t ? 'var(--teal)' : 'var(--surface-hover)',
                       color: searchTab === t ? 'white' : 'var(--foreground-muted)',
                       border: 'none',
                       cursor: 'pointer',
