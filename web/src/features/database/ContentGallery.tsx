@@ -383,12 +383,12 @@ function MasonryCard({
         {tweet?.hashtags && tweet.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2" style={{ flexShrink: 0 }}>
             {tweet.hashtags.slice(0, 3).map(tag => (
-              <span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(90,138,184,0.1)', color: 'var(--blue)', fontSize: '0.625rem' }}>
+              <span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(90,138,184,0.1)', color: 'var(--blue)', fontSize: '0.6875rem' }}>
                 #{tag}
               </span>
             ))}
             {tweet.hashtags.length > 3 && (
-              <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>+{tweet.hashtags.length - 3}</span>
+              <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>+{tweet.hashtags.length - 3}</span>
             )}
           </div>
         )}
@@ -398,24 +398,24 @@ function MasonryCard({
           <div className="flex items-center gap-2.5">
             {metrics && (
               <>
-                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>
+                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
                   <Heart size={10} /> {formatNumber(metrics.like_count ?? 0)}
                 </span>
-                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>
+                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
                   <Repeat2 size={10} /> {formatNumber(metrics.retweet_count ?? 0)}
                 </span>
-                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>
+                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
                   <MessageCircle size={10} /> {formatNumber(metrics.reply_count ?? 0)}
                 </span>
                 {metrics.views_count ? (
-                  <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>
+                  <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
                     <Eye size={10} /> {formatNumber(metrics.views_count)}
                   </span>
                 ) : null}
               </>
             )}
           </div>
-          <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.625rem' }}>
+          <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
             {tweet?.created_at ? timeAgo(tweet.created_at) : timeAgo(content.crawled_at)}
           </span>
         </div>

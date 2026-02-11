@@ -90,8 +90,8 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
                 background: 'rgba(0,0,0,0.85)',
               }}
             >
-              <Film size={12} style={{ color: '#94a3b8' }} />
-              <span style={{ fontSize: '0.6875rem', color: '#94a3b8', fontWeight: 500 }}>
+              <Film size={12} style={{ color: 'var(--ink-3)' }} />
+              <span style={{ fontSize: '0.6875rem', color: 'var(--ink-3)', fontWeight: 500 }}>
                 {v.type === 'animated_gif' ? 'GIF' : 'Video'}
                 {!v.video_local_path && ' (not downloaded)'}
               </span>
@@ -101,7 +101,7 @@ function MediaGrid({ media }: { media: TweetData['media'] }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ml-auto flex items-center gap-1"
-                  style={{ fontSize: '0.6875rem', color: '#64748b', textDecoration: 'none' }}
+                  style={{ fontSize: '0.6875rem', color: 'var(--ink-3)', textDecoration: 'none' }}
                 >
                   <ExternalLink size={10} /> Open on X
                 </a>
@@ -188,7 +188,7 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
                 {tweet.author.display_name}
               </span>
               {tweet.author.verified && (
-                <Badge variant="success" style={{ fontSize: '0.625rem', padding: '1px 6px' }}>
+                <Badge variant="success" style={{ fontSize: '0.6875rem', padding: '1px 6px' }}>
                   Verified
                 </Badge>
               )}
