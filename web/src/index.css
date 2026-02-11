@@ -10,10 +10,10 @@
   --canvas: #0F172A;
   --canvas-rgb: 15, 23, 42;
 
-  /* Glass layers — solid in dark mode */
-  --glass: #1E293B;
-  --glass-strong: #1E293B;
-  --glass-hover: #283548;
+  /* Glass layers — solid in dark mode, subtle blue tint */
+  --glass: #1B2640;
+  --glass-strong: #1B2640;
+  --glass-hover: #243050;
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.14);
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -61,7 +61,7 @@
   --border-hover: rgba(255, 255, 255, 0.14);
   --surface-muted: rgba(255, 255, 255, 0.03);
   --surface-hover: rgba(255, 255, 255, 0.06);
-  --surface-card: #1E293B;
+  --surface-card: #1B2640;
 
   /* Backward compat mappings */
   --foreground: var(--ink);
@@ -79,9 +79,9 @@
   --canvas: #F8FAFC;
   --canvas-rgb: 248, 250, 252;
 
-  --glass: rgba(255, 255, 255, 0.80);
-  --glass-strong: rgba(255, 255, 255, 0.90);
-  --glass-hover: rgba(255, 255, 255, 0.95);
+  --glass: rgba(240, 245, 255, 0.82);
+  --glass-strong: rgba(240, 245, 255, 0.90);
+  --glass-hover: rgba(240, 245, 255, 0.96);
   --glass-border: rgba(0, 0, 0, 0.06);
   --glass-border-hover: rgba(0, 0, 0, 0.10);
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -124,7 +124,7 @@
   --border-hover: rgba(0, 0, 0, 0.14);
   --surface-muted: rgba(0, 0, 0, 0.03);
   --surface-hover: rgba(0, 0, 0, 0.05);
-  --surface-card: #FFFFFF;
+  --surface-card: #F8FAFF;
 
   --blue: #3B82F6;
   --lavender: #8B5CF6;
