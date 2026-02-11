@@ -1224,6 +1224,24 @@ h3 {
   backdrop-filter: var(--frost);
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-card), var(--glass-inner);
+  position: relative;
+}
+
+.filter-pill-slider {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 100px;
+  background: var(--ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.2s ease;
+  z-index: 0;
+}
+
+[data-theme="dark"] .filter-pill-slider {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .filter-pill {
@@ -1236,22 +1254,19 @@ h3 {
   font-weight: 400;
   background: transparent;
   color: var(--ink-3);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              font-weight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 1;
 }
 
 .filter-pill:hover:not(.filter-pill-active) {
-  background: var(--glass);
+  color: var(--foreground);
 }
 
 .filter-pill-active {
-  background: var(--ink);
   color: var(--canvas);
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="dark"] .filter-pill-active {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 /* ── New Topic Button ──────────────────────────── */
@@ -1954,6 +1969,7 @@ h3 {
 }
 
 .topic-card.drag-flying {
+  animation: none;
   border-color: var(--accent);
   box-shadow: 0 16px 48px rgba(82, 96, 119, 0.25);
   opacity: 0.95;

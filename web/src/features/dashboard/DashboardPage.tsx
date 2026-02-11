@@ -627,6 +627,15 @@ export function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
 
+  // Sliding indicator for filter pills
+  const pillsRef = useRef<HTMLDivElement>(null)
+  const [slider, setSlider] = useState({ left: 0, width: 0, ready: false })
+  useEffect(() => {
+    if (!pillsRef.current) return
+    const btn = pillsRef.current.querySelector('.filter-pill-active') as HTMLElement | null
+    if (btn) setSlider({ left: btn.offsetLeft, width: btn.offsetWidth, ready: true })
+  }, [filter])
+
   // Poll faster when any topic has an active pipeline
   const [pollingInterval, setPollingInterval] = useState(30_000)
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval })
@@ -821,7 +830,11 @@ export function DashboardPage() {
       {/* Filter bar */}
       <div className="dashboard-filter-bar rise" style={{ animationDelay: '180ms' }}>
         <span className="dashboard-topics-label">Topics</span>
-        <div className="filter-pills">
+        <div className="filter-pills" ref={pillsRef}>
+          <div
+            className="filter-pill-slider"
+            style={{ left: slider.left, width: slider.width, opacity: slider.ready ? 1 : 0 }}
+          />
           {(['All', 'Active', 'Paused'] as const).map((f) => (
             <button
               key={f}
