@@ -27,6 +27,44 @@ from agent_analyst.tools.topic import get_topic_config
 logger = logging.getLogger(__name__)
 
 
+def _normalize_insights(analysis: dict) -> list[dict]:
+    """Convert LLM output to uniform insight format.
+
+    Handles both new format (insights: [{text, sentiment}])
+    and legacy format (alerts: [str | {level, message}]).
+    """
+    # New format: insights with sentiment
+    if "insights" in analysis:
+        raw = analysis["insights"]
+        if isinstance(raw, list):
+            result = []
+            for item in raw:
+                if isinstance(item, dict) and "text" in item:
+                    result.append({
+                        "text": item["text"],
+                        "sentiment": item.get("sentiment", "neutral"),
+                    })
+                elif isinstance(item, str):
+                    result.append({"text": item, "sentiment": "neutral"})
+            return result
+
+    # Legacy format: alerts with severity levels
+    if "alerts" in analysis:
+        raw = analysis["alerts"]
+        if isinstance(raw, list):
+            result = []
+            for item in raw:
+                if isinstance(item, dict) and "message" in item:
+                    level = item.get("level", "info")
+                    sentiment = "negative" if level in ("critical", "warning") else "neutral"
+                    result.append({"text": item["message"], "sentiment": sentiment})
+                elif isinstance(item, str):
+                    result.append({"text": item, "sentiment": "neutral"})
+            return result
+
+    return []
+
+
 def make_pipeline(
     session_factory: async_sessionmaker[AsyncSession],
     redis_client: aioredis.Redis,
@@ -86,7 +124,7 @@ def make_pipeline(
             summary=analysis.get("summary", ""),
             summary_data={
                 "metrics": data["metrics"],
-                "alerts": analysis.get("alerts", []),
+                "insights": _normalize_insights(analysis),
                 "recommended_next_queries": analysis.get("recommended_next_queries", []),
             },
             total_contents=data["data_status"]["total_contents_all_time"],
@@ -130,7 +168,7 @@ def make_pipeline(
             summary=analysis.get("summary", ""),
             summary_data={
                 "metrics": data["metrics"],
-                "alerts": analysis.get("alerts", []),
+                "insights": _normalize_insights(analysis),
                 "recommended_next_queries": analysis.get("recommended_next_queries", []),
             },
             total_contents=data["data_status"]["total_contents_all_time"],
@@ -172,10 +210,10 @@ def make_pipeline(
             return result
         except json.JSONDecodeError as e:
             logger.error("Failed to parse LLM JSON response: %s", e)
-            return {"summary": raw, "crawl_tasks": [], "alerts": [f"JSON parse error: {e}"]}
+            return {"summary": raw, "crawl_tasks": [], "insights": [{"text": f"JSON parse error: {e}", "sentiment": "negative"}]}
         except Exception as e:
             logger.error("LLM call failed: %s", e)
-            return {"summary": "", "crawl_tasks": [], "alerts": [f"LLM error: {e}"]}
+            return {"summary": "", "crawl_tasks": [], "insights": [{"text": f"LLM error: {e}", "sentiment": "negative"}]}
 
     return execute
 

@@ -1,44 +1,57 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Clock, AlertCircle, AlertTriangle, Info, Search, Trash2, Pause, Play, MessageCircle, Send, Languages, Loader2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Markdown } from '@/components/ui/Markdown'
 import {
   useGetTopicQuery,
+  useGetTopicTrendQuery,
   useReanalyzeTopicMutation,
   useUpdateTopicMutation,
   useDeleteTopicMutation,
 } from '@/store/api'
-import type { TopicAlert } from '@/types/models'
+import type { TopicInsight } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
 
-function normalizeAlert(alert: TopicAlert): { level: string; message: string } {
-  if (typeof alert === 'string') return { level: 'info', message: alert }
-  return alert
+function normalizeInsights(data: { alerts?: unknown[]; insights?: unknown[] } | null): TopicInsight[] {
+  const result: TopicInsight[] = []
+  // New format: insights with sentiment
+  if (data?.insights && Array.isArray(data.insights)) {
+    for (const item of data.insights) {
+      if (typeof item === 'object' && item !== null && 'text' in item) {
+        const i = item as { text: string; sentiment?: string }
+        result.push({ text: i.text, sentiment: (i.sentiment as TopicInsight['sentiment']) ?? 'neutral' })
+      } else if (typeof item === 'string') {
+        result.push({ text: item, sentiment: 'neutral' })
+      }
+    }
+    return result
+  }
+  // Legacy format: alerts
+  if (data?.alerts && Array.isArray(data.alerts)) {
+    for (const item of data.alerts) {
+      if (typeof item === 'object' && item !== null && 'message' in item) {
+        const a = item as { level?: string; message: string }
+        result.push({ text: a.message, sentiment: (a.level === 'critical' || a.level === 'warning') ? 'negative' : 'neutral' })
+      } else if (typeof item === 'string') {
+        result.push({ text: item, sentiment: 'neutral' })
+      }
+    }
+    return result
+  }
+  return result
 }
 
-function fmtMetricValue(v: unknown): string {
-  if (v == null) return '-'
-  if (typeof v === 'number') {
-    if (v >= 100_000) return `${(v / 1000).toFixed(0)}k`
-    if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
-    return String(v)
-  }
-  if (typeof v === 'object') {
-    return Object.entries(v as Record<string, unknown>)
-      .map(([k, val]) => `${k}: ${typeof val === 'number' ? fmtMetricValue(val) : val}`)
-      .join(', ')
-  }
+function fmtNum(n: unknown): string {
+  if (n == null) return '-'
+  const v = Number(n)
+  if (isNaN(v)) return '-'
+  if (v >= 100_000) return `${(v / 1000).toFixed(0)}k`
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
   return String(v)
-}
-
-function metricLabel(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 interface ChatMsg {
@@ -46,16 +59,37 @@ interface ChatMsg {
   content: string
 }
 
-function TopicChat({ topicId }: { topicId: string }) {
+/** Summary card with integrated chat — summary is the first "assistant" turn */
+function SummaryChat({
+  topicId,
+  summary,
+  translated,
+  translating,
+  onTranslate,
+  cycleId,
+  insights,
+}: {
+  topicId: string
+  summary: string
+  translated: string
+  translating: boolean
+  onTranslate: () => void
+  cycleId?: string
+  insights: TopicInsight[]
+}) {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
-  const [open, setOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [])
+
+  // auto-scroll when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0) scrollToBottom()
+  }, [messages, scrollToBottom])
 
   const send = async () => {
     const text = input.trim()
@@ -63,17 +97,21 @@ function TopicChat({ topicId }: { topicId: string }) {
     setInput('')
 
     const userMsg: ChatMsg = { role: 'user', content: text }
-    const allMessages = [...messages, userMsg]
-    setMessages([...allMessages, { role: 'assistant', content: '' }])
+    // Include the summary as the initial assistant context
+    const contextMessages: ChatMsg[] = [
+      { role: 'assistant', content: summary },
+      ...messages,
+      userMsg,
+    ]
+    setMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '' }])
     setStreaming(true)
-    setTimeout(scrollToBottom, 50)
 
     try {
       const res = await fetch(`/api/topics/${topicId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+          messages: contextMessages.map((m) => ({ role: m.role, content: m.content })),
         }),
       })
 
@@ -102,7 +140,6 @@ function TopicChat({ topicId }: { topicId: string }) {
                 copy[copy.length - 1] = { role: 'assistant', content: accumulated }
                 return copy
               })
-              scrollToBottom()
             }
             if (evt.error) {
               accumulated += `\n\n[Error: ${evt.error}]`
@@ -126,27 +163,56 @@ function TopicChat({ topicId }: { topicId: string }) {
     }
   }
 
-  if (!open) {
-    return (
-      <button className="topic-chat-toggle" onClick={() => setOpen(true)}>
-        <MessageCircle size={15} />
-        Ask about this topic
-      </button>
-    )
-  }
+  const hasChat = messages.length > 0
 
   return (
     <Card>
-      <CardContent>
+      <CardContent className="summary-chat-card">
         <CardHeader className="mb-3">
-          <CardDescription style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <MessageCircle size={14} /> Topic Chat
-          </CardDescription>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <CardDescription>Summary</CardDescription>
+            <button
+              className="topic-card-refresh"
+              style={{ fontSize: '0.6875rem', padding: '3px 8px', gap: 4 }}
+              onClick={onTranslate}
+              disabled={translating}
+            >
+              {translating ? <Loader2 size={11} className="animate-spin" /> : <Languages size={11} />}
+              {translated ? 'Original' : '翻译'}
+            </button>
+          </div>
         </CardHeader>
-        <div ref={scrollRef} className="topic-chat-messages">
-          {messages.length === 0 && (
-            <div className="topic-chat-empty">
-              Ask a question about this topic's data, trends, or insights...
+
+        {/* Scrollable area: insights + summary + chat messages */}
+        <div ref={scrollRef} className="summary-chat-scroll">
+          {/* Insights — above the summary */}
+          {insights.length > 0 && (
+            <div className="summary-insights">
+              {insights.map((insight, i) => (
+                <div key={i} className={`summary-insight ${insight.sentiment}`}>
+                  {insight.sentiment === 'positive' ? <TrendingUp size={12} /> : insight.sentiment === 'negative' ? <TrendingDown size={12} /> : <Minus size={12} />}
+                  <span>{insight.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Summary = first assistant turn */}
+          <div className="summary-chat-summary">
+            <Markdown>{translated || summary}</Markdown>
+          </div>
+
+          {cycleId && (
+            <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>
+              <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+              Cycle: {cycleId}
+            </div>
+          )}
+
+          {/* Chat messages */}
+          {hasChat && (
+            <div className="summary-chat-divider">
+              <span>Conversation</span>
             </div>
           )}
           {messages.map((msg, i) => (
@@ -159,18 +225,92 @@ function TopicChat({ topicId }: { topicId: string }) {
             </div>
           ))}
         </div>
-        <div className="topic-chat-input-row">
+
+        {/* Chat input — always visible at the bottom */}
+        <div className="summary-chat-input-row">
           <input
             className="topic-chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
-            placeholder="Ask a question..."
+            placeholder="Ask about this analysis..."
             disabled={streaming}
           />
           <Button size="sm" onClick={send} disabled={streaming || !input.trim()}>
             <Send size={14} />
           </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function formatDay(day: string): string {
+  const d = new Date(day + 'T00:00:00')
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; dataKey: string }[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="trend-tooltip">
+      <div className="trend-tooltip-date">{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} className="trend-tooltip-row">
+          <span className="trend-tooltip-label">{p.dataKey}</span>
+          <span className="trend-tooltip-value">{fmtNum(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EngagementTrend({ topicId }: { topicId: string }) {
+  const { data: trend, isLoading } = useGetTopicTrendQuery(topicId)
+
+  if (isLoading) return <div style={{ height: 200 }}><Skeleton className="w-full h-full" /></div>
+  if (!trend || trend.length < 2) return null
+
+  const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
+
+  return (
+    <Card>
+      <CardContent>
+        <CardHeader className="mb-3">
+          <CardDescription style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BarChart3 size={14} /> Activity Trend
+          </CardDescription>
+        </CardHeader>
+        <div style={{ width: '100%', height: 200 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradPosts" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradLikes" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--positive)" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="var(--positive)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" strokeOpacity={0.5} />
+              <XAxis
+                dataKey="day"
+                tick={{ fill: 'var(--ink-3)', fontSize: 11 }}
+                axisLine={{ stroke: 'var(--border-default)' }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: 'var(--ink-3)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip content={<TrendTooltip />} />
+              <Area type="monotone" dataKey="posts" stroke="var(--accent)" strokeWidth={2} fill="url(#gradPosts)" />
+              <Area type="monotone" dataKey="likes" stroke="var(--positive)" strokeWidth={1.5} fill="url(#gradLikes)" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </CardContent>
     </Card>
@@ -240,10 +380,8 @@ export function TopicDetailPage() {
     )
   }
 
-  const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
-  const metrics = topic.summary_data?.metrics ?? {}
-  const metricEntries = Object.entries(metrics)
-  const recommendations = topic.summary_data?.recommended_next_queries ?? []
+  const insights = normalizeInsights(topic.summary_data)
+  const metrics = (topic.summary_data?.metrics ?? {}) as Record<string, unknown>
 
   const handleTogglePause = async () => {
     await updateTopic({ id: topic.id, status: topic.status === 'active' ? 'paused' : 'active' })
@@ -288,28 +426,77 @@ export function TopicDetailPage() {
         </div>
       </div>
 
-      {/* Info strip */}
-      <div className="topic-detail-info pop" style={{ animationDelay: '80ms' }}>
-        <div className="topic-detail-info-item">
-          <span className="label">Created</span>
-          <span>{fmt(topic.created_at)}</span>
+      {/* Compact info + metrics bar */}
+      <div className="topic-detail-stats pop" style={{ animationDelay: '80ms' }}>
+        <div className="topic-detail-stat">
+          <span className="topic-detail-stat-label">Created</span>
+          <span className="topic-detail-stat-value">{fmt(topic.created_at)}</span>
         </div>
-        <div className="topic-detail-info-item">
-          <span className="label">Last Crawl</span>
-          <span>{fmt(topic.last_crawl_at)}</span>
+        <div className="topic-detail-stat-sep" />
+        <div className="topic-detail-stat">
+          <span className="topic-detail-stat-label">Last Crawl</span>
+          <span className="topic-detail-stat-value">{fmt(topic.last_crawl_at)}</span>
         </div>
-        <div className="topic-detail-info-item">
-          <span className="label">Contents</span>
-          <span style={{ fontWeight: 800, fontSize: '1.125rem' }}>{topic.total_contents}</span>
-        </div>
-        <div className="topic-detail-info-item">
-          <span className="label">Platforms</span>
+        <div className="topic-detail-stat-sep" />
+        <div className="topic-detail-stat">
+          <span className="topic-detail-stat-label">Platforms</span>
           <span style={{ display: 'flex', gap: 4 }}>
             {(topic.platforms ?? []).map((p) => (
               <span key={p} className="topic-tag platform">{(p ?? '').toUpperCase()}</span>
             ))}
           </span>
         </div>
+        <div className="topic-detail-stat-sep" />
+        <div className="topic-detail-stat highlight">
+          <BarChart3 size={13} />
+          <span className="topic-detail-stat-num">{fmtNum(topic.total_contents)}</span>
+          <span className="topic-detail-stat-label">posts</span>
+        </div>
+        {metrics.total_likes != null && (
+          <>
+            <div className="topic-detail-stat-sep" />
+            <div className="topic-detail-stat highlight">
+              <Heart size={12} />
+              <span className="topic-detail-stat-num">{fmtNum(metrics.total_likes)}</span>
+            </div>
+          </>
+        )}
+        {metrics.total_views != null && (
+          <>
+            <div className="topic-detail-stat-sep" />
+            <div className="topic-detail-stat highlight">
+              <Eye size={12} />
+              <span className="topic-detail-stat-num">{fmtNum(metrics.total_views)}</span>
+            </div>
+          </>
+        )}
+        {metrics.total_retweets != null && (
+          <>
+            <div className="topic-detail-stat-sep" />
+            <div className="topic-detail-stat highlight">
+              <Repeat2 size={12} />
+              <span className="topic-detail-stat-num">{fmtNum(metrics.total_retweets)}</span>
+            </div>
+          </>
+        )}
+        {metrics.total_replies != null && (
+          <>
+            <div className="topic-detail-stat-sep" />
+            <div className="topic-detail-stat highlight">
+              <MessageSquare size={12} />
+              <span className="topic-detail-stat-num">{fmtNum(metrics.total_replies)}</span>
+            </div>
+          </>
+        )}
+        {metrics.with_media_pct != null && (
+          <>
+            <div className="topic-detail-stat-sep" />
+            <div className="topic-detail-stat highlight">
+              <Image size={12} />
+              <span className="topic-detail-stat-num">{fmtNum(metrics.with_media_pct)}%</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Keywords */}
@@ -319,100 +506,21 @@ export function TopicDetailPage() {
         </div>
       )}
 
-      {/* Summary */}
+      {/* Summary + Chat (integrated) */}
       {topic.last_summary && (
-        <Card>
-          <CardContent>
-            <CardHeader className="mb-3">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <CardDescription>Summary</CardDescription>
-                <button
-                  className="topic-card-refresh"
-                  style={{ fontSize: '0.6875rem', padding: '3px 8px', gap: 4 }}
-                  onClick={() => handleTranslate(topic.last_summary!)}
-                  disabled={translating}
-                >
-                  {translating ? <Loader2 size={11} className="animate-spin" /> : <Languages size={11} />}
-                  {translated ? 'Original' : '翻译'}
-                </button>
-              </div>
-            </CardHeader>
-            <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", lineHeight: 1.8, color: 'var(--ink)' }}>
-              <Markdown>{translated || topic.last_summary!}</Markdown>
-            </div>
-            {topic.summary_data?.cycle_id && (
-              <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)' }}>
-                <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                Cycle: {topic.summary_data.cycle_id}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <SummaryChat
+          topicId={topic.id}
+          summary={topic.last_summary}
+          translated={translated}
+          translating={translating}
+          onTranslate={() => handleTranslate(topic.last_summary!)}
+          cycleId={topic.summary_data?.cycle_id}
+          insights={insights}
+        />
       )}
 
-      {/* Metrics */}
-      {metricEntries.length > 0 && (
-        <Card>
-          <CardContent>
-            <CardHeader className="mb-3">
-              <CardDescription>Metrics</CardDescription>
-            </CardHeader>
-            <div className="topic-detail-metrics-grid">
-              {metricEntries.map(([key, value]) => (
-                <div key={key} className="topic-detail-metric-item pop" style={{ animationDelay: '100ms' }}>
-                  <span className="topic-detail-metric-value">{fmtMetricValue(value)}</span>
-                  <span className="topic-detail-metric-label">{metricLabel(key)}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Alerts */}
-      {alerts.length > 0 && (
-        <Card>
-          <CardContent>
-            <CardHeader className="mb-3">
-              <CardDescription>Alerts ({alerts.length})</CardDescription>
-            </CardHeader>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {alerts.map((alert, i) => (
-                <div key={i} className={`topic-card-alert ${alert.level}`} style={{ margin: 0 }}>
-                  {alert.level === 'critical' ? <AlertCircle size={14} /> : alert.level === 'warning' ? <AlertTriangle size={14} /> : <Info size={14} />}
-                  <span>{alert.message}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recommended Next Queries */}
-      {recommendations.length > 0 && (
-        <Card>
-          <CardContent>
-            <CardHeader className="mb-3">
-              <CardDescription>Recommended Queries</CardDescription>
-            </CardHeader>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {recommendations.map((rec, i) => (
-                <div key={i} className="topic-detail-query-row">
-                  <Search size={13} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
-                  <span className="topic-tag platform">{(rec.platform ?? '').toUpperCase()}</span>
-                  <span style={{ flex: 1, fontSize: '0.8125rem' }}>{rec.query ?? ''}</span>
-                  <Badge variant={rec.priority === 'high' ? 'error' : rec.priority === 'medium' ? 'warning' : 'muted'}>
-                    {rec.priority ?? 'low'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Topic Chat */}
-      <TopicChat topicId={topic.id} />
+      {/* Engagement Trend */}
+      <EngagementTrend topicId={topic.id} />
 
       {/* Raw data */}
       {topic.summary_data && (

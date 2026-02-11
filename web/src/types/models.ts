@@ -103,6 +103,11 @@ export type TopicStatus = 'active' | 'paused' | 'cancelled'
 
 export type TopicAlert = string | { level: string; message: string }
 
+export interface TopicInsight {
+  text: string
+  sentiment: 'positive' | 'negative' | 'neutral'
+}
+
 export interface TopicWidget {
   type: string
   field?: string
@@ -114,6 +119,7 @@ export interface TopicSummaryData {
   cycle_id?: string
   metrics?: Record<string, unknown>
   alerts?: TopicAlert[]
+  insights?: TopicInsight[]
   recommended_next_queries?: { platform: string; query: string; priority: string }[]
   widgets?: TopicWidget[]
 }

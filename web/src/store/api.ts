@@ -106,6 +106,9 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/topics/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Topic'],
     }),
+    getTopicTrend: builder.query<{ day: string; posts: number; likes: number; views: number }[], string>({
+      query: (id) => `/topics/${id}/trend`,
+    }),
     reanalyzeTopic: builder.mutation<{ task_id: string }, string>({
       query: (id) => ({ url: `/topics/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['Topic'],
@@ -148,6 +151,7 @@ export const {
   useCreateTopicMutation,
   useUpdateTopicMutation,
   useDeleteTopicMutation,
+  useGetTopicTrendQuery,
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
 } = apiSlice

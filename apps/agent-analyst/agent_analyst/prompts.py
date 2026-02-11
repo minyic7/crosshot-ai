@@ -83,9 +83,12 @@ Return **only** a JSON object:
     {{"platform": "xhs", "query": "中文关键词", "action": "search"}}
   ],
   "recommended_next_queries": ["query1", "query2"],
-  "alerts": ["notable alert if any"]
+  "insights": [
+    {{"text": "一句话洞察", "sentiment": "positive|negative|neutral"}}
+  ]
 }}
 ```
+Each insight is a short one-liner observation. Use "positive" for good trends/growth, "negative" for declining metrics/risks, "neutral" for factual observations.
 If no crawling needed, set `"crawl_tasks": []`."""
 
 
@@ -129,6 +132,9 @@ Return **only** a JSON object:
 {{
   "summary": "中文综合分析摘要...",
   "recommended_next_queries": ["query1", "query2"],
-  "alerts": ["notable alert if any"]
+  "insights": [
+    {{"text": "一句话洞察", "sentiment": "positive|negative|neutral"}}
+  ]
 }}
-```"""
+```
+Each insight is a short one-liner observation. Use "positive" for good trends/growth, "negative" for declining metrics/risks, "neutral" for factual observations."""

@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter
@@ -15,7 +15,7 @@ from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
 from shared.db.models import TopicRow
 from shared.models.task import Task, TaskPriority
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["topics"])
@@ -193,6 +193,31 @@ async def get_topic(topic_id: str) -> dict:
         if topic is None:
             return {"error": "Topic not found"}
         return _topic_to_dict(topic)
+
+
+@router.get("/topics/{topic_id}/trend")
+async def get_topic_trend(topic_id: str, days: int = 30) -> list[dict]:
+    """Return daily content counts + engagement for trend charts."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    factory = get_session_factory()
+    async with factory() as session:
+        result = await session.execute(
+            text("""
+                SELECT DATE(crawled_at) AS day,
+                       COUNT(*) AS posts,
+                       COALESCE(SUM((metrics->>'like_count')::int), 0) AS likes,
+                       COALESCE(SUM((metrics->>'views_count')::int), 0) AS views
+                FROM contents
+                WHERE topic_id = :tid AND crawled_at >= :since
+                GROUP BY DATE(crawled_at)
+                ORDER BY day
+            """),
+            {"tid": topic_id, "since": since},
+        )
+        return [
+            {"day": str(r.day), "posts": r.posts, "likes": r.likes, "views": r.views}
+            for r in result
+        ]
 
 
 @router.patch("/topics/{topic_id}")
