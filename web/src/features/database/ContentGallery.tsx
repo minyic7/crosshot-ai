@@ -383,7 +383,7 @@ function MasonryCard({
         {tweet?.hashtags && tweet.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2" style={{ flexShrink: 0 }}>
             {tweet.hashtags.slice(0, 3).map(tag => (
-              <span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(90,138,184,0.1)', color: 'var(--blue)', fontSize: '0.6875rem' }}>
+              <span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-surface)', color: 'var(--blue)', fontSize: '0.6875rem' }}>
                 #{tag}
               </span>
             ))}

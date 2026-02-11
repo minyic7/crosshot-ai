@@ -167,7 +167,7 @@ function TweetCard({ tweet, nested = false }: { tweet: TweetData; nested?: boole
               width: nested ? 32 : 40,
               height: nested ? 32 : 40,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--teal), #434e61)',
+              background: 'linear-gradient(135deg, var(--accent), var(--glass-border-hover))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

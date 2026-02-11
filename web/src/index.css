@@ -167,7 +167,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 1rem;
-  line-height: 1.75;
+  line-height: 1.6;
   transition: background 0.4s ease, color 0.3s ease;
 }
 
@@ -497,20 +497,21 @@ h3 {
   gap: 6px;
   padding: 8px 18px;
   border-radius: 8px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
+  border: 1px solid var(--btn-accent-border);
+  background: transparent;
+  color: var(--accent-light);
   font-size: 0.875rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px var(--accent-glow-strong);
+  box-shadow: none;
 }
 
 .topnav-cta:hover {
-  background: var(--accent-light);
-  box-shadow: 0 2px 8px var(--accent-glow-strong);
+  background: var(--btn-accent-bg-hover);
+  border-color: var(--btn-accent-border-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
   transform: translateY(-1px);
 }
 
@@ -556,13 +557,13 @@ h3 {
 
 .connection-pill.online {
   background: var(--positive-surface);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid var(--positive);
   color: var(--positive);
 }
 
 .connection-pill.offline {
   background: var(--negative-surface);
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  border: 1px solid var(--negative);
   color: var(--negative);
 }
 
@@ -680,8 +681,8 @@ h3 {
 }
 
 .badge-muted {
-  background: rgba(102, 102, 102, 0.08);
-  border: 1px solid rgba(102, 102, 102, 0.12);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-default);
   color: var(--foreground-muted);
 }
 
@@ -1257,8 +1258,8 @@ h3 {
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--ink-3);
+  background: var(--border-default);
+  color: var(--ink-2);
   transition: background 0.18s ease-out, color 0.18s ease-out;
 }
 
@@ -1704,13 +1705,9 @@ h3 {
   flex: 1;
   height: 4px;
   border-radius: 100px;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--border-default);
   overflow: hidden;
   min-width: 40px;
-}
-
-[data-theme="dark"] .pipeline-bar {
-  background: rgba(255, 255, 255, 0.08);
 }
 
 .pipeline-bar-fill {
@@ -3353,7 +3350,7 @@ h3 {
 .type-chip {
   font-size: 0.75rem;
   color: var(--foreground-muted);
-  background: rgba(90, 138, 184, 0.12);
+  background: var(--accent-surface);
   padding: 2px 10px;
   border-radius: 12px;
 }
@@ -4204,7 +4201,7 @@ h3 {
 }
 
 .detail-comment:hover {
-  background: var(--surface-muted);
+  background: var(--surface-hover);
 }
 
 .detail-comment + .detail-comment {
