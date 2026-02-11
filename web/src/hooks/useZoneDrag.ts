@@ -51,6 +51,22 @@ export function useZoneDrag({
   const unpinZoneRef = useRef<HTMLDivElement>(null)
   const pendingCleanupRef = useRef<(() => void) | null>(null)
 
+  // ── Ref-sync: keep latest values accessible in event handlers
+  //    without adding them to useEffect deps ──
+  const pinnedRef = useRef(pinnedIds)
+  const unpinnedRef = useRef(unpinnedIds)
+  const hoverZoneRef = useRef<Zone | null>(null)
+  const hoverIdxRef = useRef<number | null>(null)
+  const flipSnapRef = useRef(flipSnap)
+  const onDropRef = useRef(onDrop)
+
+  pinnedRef.current = pinnedIds
+  unpinnedRef.current = unpinnedIds
+  hoverZoneRef.current = hoverZone
+  hoverIdxRef.current = hoverIdx
+  flipSnapRef.current = flipSnap
+  onDropRef.current = onDrop
+
   // Clean up pending listeners on unmount
   useEffect(() => {
     return () => { pendingCleanupRef.current?.() }
@@ -62,14 +78,14 @@ export function useZoneDrag({
     for (const [id, el] of Object.entries(cellRefs.current)) {
       if (!el) continue
       const r = el.getBoundingClientRect()
-      const zone: Zone = pinnedIds.includes(id) ? 'pin' : 'unpin'
+      const zone: Zone = pinnedRef.current.includes(id) ? 'pin' : 'unpin'
       rects.push({
         id, x: r.left, y: r.top, w: r.width, h: r.height,
         cx: r.left + r.width / 2, cy: r.top + r.height / 2, zone,
       })
     }
     initCardRects.current = rects
-  }, [cellRefs, pinnedIds])
+  }, [cellRefs])
 
   const handlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
     if (e.button !== 0) return
@@ -79,7 +95,7 @@ export function useZoneDrag({
     const offset = { x: e.clientX - rect.left, y: e.clientY - rect.top }
     const startX = e.clientX
     const startY = e.clientY
-    const zone: Zone = pinnedIds.includes(id) ? 'pin' : 'unpin'
+    const zone: Zone = pinnedRef.current.includes(id) ? 'pin' : 'unpin'
 
     const cardRect: CardRect = {
       id, x: rect.left, y: rect.top, w: rect.width, h: rect.height,
@@ -95,7 +111,6 @@ export function useZoneDrag({
     const onPendingMove = (ev: PointerEvent) => {
       if (Math.hypot(ev.clientX - startX, ev.clientY - startY) >= DRAG_THRESHOLD) {
         cleanup()
-        // Commit to drag
         setDragOffset(offset)
         setDragPos({ x: ev.clientX, y: ev.clientY })
         setActiveId(id)
@@ -106,7 +121,6 @@ export function useZoneDrag({
 
     const onPendingUp = () => {
       cleanup()
-      // Released before threshold — was a click, not a drag
     }
 
     window.addEventListener('pointermove', onPendingMove)
@@ -114,77 +128,91 @@ export function useZoneDrag({
     pendingCleanupRef.current = cleanup
 
     e.preventDefault()
-  }, [cellRefs, measureAll, pinnedIds])
+  }, [cellRefs, measureAll])
 
+  // ── Main drag effect ──
+  // Only re-runs when activeId changes (drag start / drag end).
+  // All other values are read from refs so listeners stay stable.
   useEffect(() => {
     if (!activeId) return
 
+    let rafId: number | null = null
+
     const onMove = (e: PointerEvent) => {
-      setDragPos({ x: e.clientX, y: e.clientY })
-      const cy = e.clientY
-      const cx = e.clientX
+      // Throttle to one update per animation frame
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        rafId = null
 
-      const pinRect = pinZoneRef.current?.getBoundingClientRect()
-      const unpinRect = unpinZoneRef.current?.getBoundingClientRect()
+        setDragPos({ x: e.clientX, y: e.clientY })
+        const cy = e.clientY
+        const cx = e.clientX
 
-      // Determine zone from cursor position
-      let zone: Zone | null = null
-      if (pinRect && cy >= pinRect.top - 40 && cy <= pinRect.bottom + 40) {
-        zone = 'pin'
-      } else if (unpinRect && cy >= unpinRect.top - 40 && cy <= unpinRect.bottom + 40) {
-        zone = 'unpin'
-      } else if (pinRect && unpinRect) {
-        const pinMid = (pinRect.top + pinRect.bottom) / 2
-        const unpinMid = (unpinRect.top + unpinRect.bottom) / 2
-        zone = Math.abs(cy - pinMid) < Math.abs(cy - unpinMid) ? 'pin' : 'unpin'
-      }
+        const pinRect = pinZoneRef.current?.getBoundingClientRect()
+        const unpinRect = unpinZoneRef.current?.getBoundingClientRect()
 
-      if (!zone) return
+        // Determine zone from cursor position
+        let zone: Zone | null = null
+        if (pinRect && cy >= pinRect.top - 40 && cy <= pinRect.bottom + 40) {
+          zone = 'pin'
+        } else if (unpinRect && cy >= unpinRect.top - 40 && cy <= unpinRect.bottom + 40) {
+          zone = 'unpin'
+        } else if (pinRect && unpinRect) {
+          const pinMid = (pinRect.top + pinRect.bottom) / 2
+          const unpinMid = (unpinRect.top + unpinRect.bottom) / 2
+          zone = Math.abs(cy - pinMid) < Math.abs(cy - unpinMid) ? 'pin' : 'unpin'
+        }
 
-      // Find closest card in target zone
-      const zoneCards = initCardRects.current.filter(
-        (r) => r.zone === zone && r.id !== activeId,
-      )
+        if (!zone) return
 
-      if (zoneCards.length === 0) {
+        // Find closest card in target zone
+        const zoneCards = initCardRects.current.filter(
+          (r) => r.zone === zone && r.id !== activeId,
+        )
+
+        if (zoneCards.length === 0) {
+          setHoverZone((prev) => {
+            if (prev !== zone) flipSnapRef.current()
+            return zone
+          })
+          setHoverIdx(0)
+          return
+        }
+
+        let closest: CardRect | null = null
+        let closestDist = Infinity
+        for (const r of zoneCards) {
+          const dist = Math.hypot(cx - r.cx, cy - r.cy)
+          if (dist < closestDist) {
+            closestDist = dist
+            closest = r
+          }
+        }
+
+        if (!closest) return
+
+        const zoneList = zone === 'pin' ? pinnedRef.current : unpinnedRef.current
+        const targetIdx = zoneList.indexOf(closest.id)
+        const insertIdx = cy < closest.cy ? targetIdx : targetIdx + 1
+
         setHoverZone((prev) => {
-          if (prev !== zone) flipSnap()
+          if (prev !== zone) flipSnapRef.current()
           return zone
         })
-        setHoverIdx(0)
-        return
-      }
-
-      let closest: CardRect | null = null
-      let closestDist = Infinity
-      for (const r of zoneCards) {
-        const dist = Math.hypot(cx - r.cx, cy - r.cy)
-        if (dist < closestDist) {
-          closestDist = dist
-          closest = r
-        }
-      }
-
-      if (!closest) return
-
-      const zoneList = zone === 'pin' ? pinnedIds : unpinnedIds
-      const targetIdx = zoneList.indexOf(closest.id)
-      const insertIdx = cy < closest.cy ? targetIdx : targetIdx + 1
-
-      setHoverZone((prev) => {
-        if (prev !== zone) flipSnap()
-        return zone
-      })
-      setHoverIdx((prev) => {
-        if (prev !== insertIdx) flipSnap()
-        return insertIdx
+        setHoverIdx((prev) => {
+          if (prev !== insertIdx) flipSnapRef.current()
+          return insertIdx
+        })
       })
     }
 
     const onUp = () => {
-      if (hoverZone !== null && activeId) {
-        flipSnap()
-        onDrop(activeId, hoverZone, hoverIdx ?? 0)
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      const hz = hoverZoneRef.current
+      const hi = hoverIdxRef.current
+      if (hz !== null) {
+        flipSnapRef.current()
+        onDropRef.current(activeId, hz, hi ?? 0)
       }
       setActiveId(null)
       setHoverZone(null)
@@ -195,10 +223,11 @@ export function useZoneDrag({
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
-  }, [activeId, hoverZone, hoverIdx, pinnedIds, unpinnedIds, flipSnap, onDrop])
+  }, [activeId])
 
   return {
     activeId,
