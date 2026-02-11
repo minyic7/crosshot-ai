@@ -1353,7 +1353,7 @@ h3 {
 .topic-card {
   display: flex;
   flex-direction: column;
-  padding: 16px 20px 14px;
+  padding: 16px 20px 14px 28px;
   height: 210px;
   background: var(--glass);
   backdrop-filter: var(--frost);
