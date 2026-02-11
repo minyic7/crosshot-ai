@@ -19,7 +19,8 @@
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
-  --shimmer-color: rgba(255, 255, 255, 0.06);
+  --shimmer-soft: rgba(255, 255, 255, 0.025);
+  --shimmer-bright: rgba(255, 255, 255, 0.09);
 
   /* Accent — brand blue */
   --accent: #3B82F6;
@@ -87,7 +88,8 @@
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
-  --shimmer-color: rgba(0, 0, 0, 0.06);
+  --shimmer-soft: rgba(0, 0, 0, 0.02);
+  --shimmer-bright: rgba(0, 0, 0, 0.065);
 
   --accent: #2563EB;
   --accent-light: #3B82F6;
@@ -976,8 +978,8 @@ h3 {
 }
 
 @keyframes cardShimmer {
-  0% { transform: translateX(-100%) rotate(25deg); }
-  100% { transform: translateX(200%) rotate(25deg); }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
 }
 
 @keyframes glowPulse {
@@ -1373,14 +1375,21 @@ h3 {
   opacity: 0.5;
 }
 
-/* Shimmer overlay - visible on hover */
+/* Shimmer overlay — soft bell-curve light sweep on hover */
 .topic-card-shimmer {
   position: absolute;
   top: 0; left: 0;
-  width: 40%;
+  width: 55%;
   height: 100%;
-  background: linear-gradient(105deg, transparent 30%, var(--shimmer-color) 50%, transparent 70%);
-  transform: translateX(-100%) rotate(25deg);
+  background: linear-gradient(
+    105deg,
+    transparent 15%,
+    var(--shimmer-soft) 32%,
+    var(--shimmer-bright) 50%,
+    var(--shimmer-soft) 68%,
+    transparent 85%
+  );
+  transform: translateX(-100%);
   pointer-events: none;
 }
 
@@ -1392,7 +1401,7 @@ h3 {
 }
 
 .topic-card:hover .topic-card-shimmer {
-  animation: cardShimmer 0.7s ease forwards;
+  animation: cardShimmer 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 /* (metric tick animation removed — no more metric chips) */
