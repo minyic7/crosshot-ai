@@ -905,7 +905,7 @@ export function DashboardPage() {
             </div>
           )}
 
-          <DragOverlay dropAnimation={null}>
+          <DragOverlay>
             {activeTopic && (
               <div style={{ width: cellRefs.current[activeId!]?.offsetWidth }}>
                 <TopicCard
