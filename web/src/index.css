@@ -74,6 +74,15 @@
   --error: var(--negative);
   --blue: #60A5FA;
   --lavender: #A78BFA;
+
+  /* Outline button tokens */
+  --btn-outline-border: rgba(255, 255, 255, 0.12);
+  --btn-outline-border-hover: rgba(255, 255, 255, 0.22);
+  --btn-outline-bg-hover: rgba(255, 255, 255, 0.04);
+  --btn-accent-border: var(--accent);
+  --btn-accent-border-hover: var(--accent-light);
+  --btn-accent-bg-hover: rgba(59, 130, 246, 0.08);
+  --btn-accent-bg-active: rgba(59, 130, 246, 0.14);
 }
 
 [data-theme="light"] {
@@ -130,6 +139,14 @@
 
   --blue: #3B82F6;
   --lavender: #8B5CF6;
+
+  --btn-outline-border: rgba(0, 0, 0, 0.12);
+  --btn-outline-border-hover: rgba(0, 0, 0, 0.22);
+  --btn-outline-bg-hover: rgba(0, 0, 0, 0.04);
+  --btn-accent-border: var(--accent);
+  --btn-accent-border-hover: var(--accent-light);
+  --btn-accent-bg-hover: rgba(37, 99, 235, 0.06);
+  --btn-accent-bg-active: rgba(37, 99, 235, 0.10);
 }
 
 * {
@@ -679,30 +696,32 @@ h3 {
   font-weight: 500;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   outline: none;
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--foreground-muted);
+  border-color: var(--btn-outline-border);
+  color: var(--ink-2);
 }
 
 .btn-ghost:hover {
   color: var(--ink);
-  background: var(--border-default);
+  background: var(--btn-outline-bg-hover);
+  border-color: var(--btn-outline-border-hover);
 }
 
 .btn-outline {
-  background: var(--glass-strong);
-  border: 1px solid var(--border-hover);
+  background: transparent;
+  border-color: var(--btn-outline-border);
   color: var(--foreground);
 }
 
 .btn-outline:hover {
-  border-color: var(--teal);
-  color: var(--ink);
-  background: var(--border-default);
+  border-color: var(--accent);
+  color: var(--accent-light);
+  background: var(--btn-accent-bg-hover);
 }
 
 .btn-icon {
@@ -710,13 +729,14 @@ h3 {
   height: 40px;
   padding: 0;
   border-radius: 10px;
+  border-color: var(--btn-outline-border);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-icon:hover {
-  background: var(--border-default);
-  border-color: var(--teal);
-  box-shadow: 0 2px 8px var(--border-default);
+  background: var(--btn-outline-bg-hover);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* Code/Tag */
@@ -1278,26 +1298,28 @@ h3 {
   gap: 6px;
   padding: 8px 18px;
   border-radius: 10px;
-  background: var(--accent);
-  border: none;
+  background: transparent;
+  border: 1px solid var(--btn-accent-border);
   cursor: pointer;
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  color: var(--accent-light);
+  box-shadow: none;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .btn-accent:hover {
-  background: var(--accent-light);
+  background: var(--btn-accent-bg-hover);
+  border-color: var(--btn-accent-border-hover);
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 14px var(--accent-glow);
 }
 
 .btn-accent:active {
+  background: var(--btn-accent-bg-active);
   transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 /* ── Topics Header (legacy compat) ──────────────── */
@@ -1497,16 +1519,16 @@ h3 {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: var(--glass-strong);
-  backdrop-filter: blur(8px);
-  border: none;
+  background: transparent;
+  border: 1px solid var(--btn-outline-border);
   color: var(--ink-3);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .topic-card-refresh:hover {
-  background: var(--glass-hover);
+  background: var(--btn-outline-bg-hover);
+  border-color: var(--btn-outline-border-hover);
   color: var(--ink);
 }
 
@@ -2821,17 +2843,18 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid var(--btn-accent-border);
   border-radius: 8px;
-  background: var(--accent);
-  color: white;
+  background: transparent;
+  color: var(--accent-light);
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
 .assist-send:hover:not(:disabled) {
-  opacity: 0.85;
+  background: var(--btn-accent-bg-hover);
+  border-color: var(--btn-accent-border-hover);
   transform: scale(1.04);
 }
 
@@ -2909,15 +2932,24 @@ h3 {
 }
 
 .btn-primary {
-  background: var(--accent-grad-btn);
-  color: white;
+  background: transparent;
+  color: var(--accent-light);
+  border-color: var(--btn-accent-border);
   gap: 6px;
-  box-shadow: 0 2px 12px var(--accent-glow-strong);
+  box-shadow: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 4px 20px var(--accent-glow-strong);
+  background: var(--btn-accent-bg-hover);
+  border-color: var(--btn-accent-border-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
   transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--btn-accent-bg-active);
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .btn-primary:disabled {
@@ -4673,13 +4705,14 @@ h3 {
 }
 
 .btn-success {
-  border-color: var(--positive-surface);
+  border-color: var(--positive);
   color: var(--success);
+  background: transparent;
 }
 
 .btn-success:hover:not(:disabled) {
   background: var(--positive-surface);
-  border-color: var(--positive-surface);
+  border-color: var(--positive);
 }
 
 .agents-empty {
