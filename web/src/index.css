@@ -1254,6 +1254,52 @@ h3 {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
+.filter-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Card display mode toggle */
+.card-mode-pills {
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--glass);
+  backdrop-filter: var(--frost);
+  border: 1px solid var(--glass-border);
+}
+
+.card-mode-pill {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card-mode-pill:hover {
+  color: var(--ink-2);
+  background: var(--glass);
+}
+
+.card-mode-active {
+  background: var(--ink);
+  color: var(--canvas);
+}
+
+[data-theme="dark"] .card-mode-active {
+  background: var(--glass-strong);
+  color: var(--ink);
+}
+
 /* ── New Topic Button ──────────────────────────── */
 
 .btn-accent {
@@ -1532,8 +1578,9 @@ h3 {
   display: flex;
   align-items: center;
   gap: 0;
-  flex-wrap: wrap;
   padding-left: 36px; /* align with title (icon 28 + gap 8) */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .topic-card-updated {
@@ -1553,6 +1600,9 @@ h3 {
   font-size: 10px;
   color: var(--ink-3);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* Card summary */
@@ -1575,6 +1625,41 @@ h3 {
 /* Widget slot */
 .topic-card-widgets {
   min-height: 0;
+}
+
+/* Stats grid mode */
+.topic-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 6px;
+}
+
+.topic-stat-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+}
+
+.topic-stat-value {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.topic-stat-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .topic-card-empty {
@@ -1935,6 +2020,7 @@ h3 {
   will-change: transform;
   cursor: grab;
   touch-action: none;
+  max-width: 480px;
 }
 
 /* Drag placeholder skeleton */

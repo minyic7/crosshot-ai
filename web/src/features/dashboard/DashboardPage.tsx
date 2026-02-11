@@ -4,6 +4,7 @@ import {
   Plus, Pin, RefreshCw,
   AlertTriangle,
   Sparkles, Send, Loader2,
+  AlignLeft, BarChart3, Minus,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
@@ -18,6 +19,14 @@ import {
 import type { Topic, TopicAlert, TopicPipeline } from '@/types/models'
 import { useFlip } from '@/hooks/useFlip'
 import { useZoneDrag, type Zone } from '@/hooks/useZoneDrag'
+
+type CardMode = 'description' | 'stats' | 'compact'
+
+const CARD_MODES: { mode: CardMode; label: string; icon: typeof AlignLeft }[] = [
+  { mode: 'description', label: 'Summary', icon: AlignLeft },
+  { mode: 'stats', label: 'Stats', icon: BarChart3 },
+  { mode: 'compact', label: 'Compact', icon: Minus },
+]
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
@@ -91,6 +100,24 @@ function buildStatsLine(metrics: Record<string, unknown>): string {
   return parts.join(' · ')
 }
 
+interface StatBlock { label: string; value: number; display: string }
+
+function extractStatBlocks(metrics: Record<string, unknown>): StatBlock[] {
+  const out: StatBlock[] = []
+  const posts = metrics.total_contents
+  if (posts != null) out.push({ label: 'Posts', value: Number(posts), display: fmtNum(Number(posts)) })
+  const likes = Number(metrics.total_likes ?? 0)
+  const retweets = Number(metrics.total_retweets ?? 0)
+  const replies = Number(metrics.total_replies ?? 0)
+  const eng = likes + retweets + replies
+  if (eng > 0) out.push({ label: 'Engagement', value: eng, display: fmtNum(eng) })
+  const views = metrics.total_views
+  if (views != null && Number(views) > 0) out.push({ label: 'Views', value: Number(views), display: fmtNum(Number(views)) })
+  const mediaPct = metrics.with_media_pct
+  if (mediaPct != null) out.push({ label: 'Media', value: Number(mediaPct), display: `${mediaPct}%` })
+  return out.slice(0, 4)
+}
+
 // ─── Pipeline Badge ──────────────────────────────────────────
 
 function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
@@ -146,6 +173,7 @@ function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
 function TopicCard({
   topic,
   index,
+  cardMode,
   onPin,
   onRefresh,
   onClick,
@@ -154,6 +182,7 @@ function TopicCard({
 }: {
   topic: Topic
   index: number
+  cardMode: CardMode
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
@@ -162,6 +191,7 @@ function TopicCard({
 }) {
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
   const statsLine = topic.summary_data?.metrics ? buildStatsLine(topic.summary_data.metrics) : ''
+  const statBlocks = topic.summary_data?.metrics ? extractStatBlocks(topic.summary_data.metrics) : []
   const d = index * 80
 
   return (
@@ -189,7 +219,7 @@ function TopicCard({
         </button>
       </div>
 
-      {/* Row 1: icon + title + status */}
+      {/* HEADER — fixed */}
       <div className="topic-card-row1">
         <div className="topic-card-icon-box">{topic.icon}</div>
         <h3 className="topic-card-name">{topic.name}</h3>
@@ -199,7 +229,6 @@ function TopicCard({
         </div>
       </div>
 
-      {/* Row 2: updated + stats */}
       <div className="topic-card-row2">
         <span className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</span>
         {statsLine && (
@@ -213,28 +242,38 @@ function TopicCard({
       {/* Pipeline progress */}
       {topic.pipeline && <PipelineBadge pipeline={topic.pipeline} />}
 
-      {/* Widget slot — reserved for configurable trendlines/diagrams */}
-      {topic.summary_data?.widgets && (
-        <div className="topic-card-widgets">
-          {/* Future: render sparkline, bar, delta widgets here */}
+      {/* CONFIGURABLE MIDDLE — switches based on cardMode */}
+      {cardMode === 'description' && (
+        <>
+          {alerts.length > 0 ? (
+            <p className="topic-card-summary">
+              <span className="topic-card-alert-icon">
+                {alerts[0].level === 'critical' ? '🔴' : alerts[0].level === 'warning' ? '⚠️' : 'ℹ️'}
+              </span>
+              {topic.last_summary ? stripMarkdown(topic.last_summary) : alerts[0].message}
+            </p>
+          ) : topic.last_summary ? (
+            <p className="topic-card-summary">{stripMarkdown(topic.last_summary)}</p>
+          ) : !topic.pipeline ? (
+            <p className="topic-card-empty">Awaiting first analysis cycle...</p>
+          ) : null}
+        </>
+      )}
+
+      {cardMode === 'stats' && statBlocks.length > 0 && (
+        <div className="topic-stats-grid">
+          {statBlocks.map((s, i) => (
+            <div key={i} className="topic-stat-block">
+              <span className="topic-stat-value">{s.display}</span>
+              <span className="topic-stat-label">{s.label}</span>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Summary with optional alert prefix */}
-      {alerts.length > 0 ? (
-        <p className="topic-card-summary">
-          <span className={`topic-card-alert-icon ${alerts[0].level}`}>
-            {alerts[0].level === 'critical' ? '🔴' : alerts[0].level === 'warning' ? '⚠️' : 'ℹ️'}
-          </span>
-          {topic.last_summary ? stripMarkdown(topic.last_summary) : alerts[0].message}
-        </p>
-      ) : topic.last_summary ? (
-        <p className="topic-card-summary">{stripMarkdown(topic.last_summary)}</p>
-      ) : !topic.pipeline ? (
-        <p className="topic-card-empty">Awaiting first analysis cycle...</p>
-      ) : null}
+      {/* compact: no middle section */}
 
-      {/* Footer: sources + tags inline */}
+      {/* FOOTER — fixed */}
       <div className="topic-card-footer">
         {topic.platforms.map((p) => (
           <div key={p} className="topic-source-icon" title={p.toUpperCase()}>
@@ -268,6 +307,7 @@ function ZoneGrid({
   activeId,
   hoverZone,
   crossingZone,
+  cardMode,
   cellRefs,
   onPointerDown,
   onPin,
@@ -282,6 +322,7 @@ function ZoneGrid({
   activeId: string | null
   hoverZone: Zone | null
   crossingZone: boolean
+  cardMode: CardMode
   cellRefs: React.MutableRefObject<Record<string, HTMLElement | null>>
   onPointerDown: (e: React.PointerEvent, id: string) => void
   onPin: (id: string, pinned: boolean) => void
@@ -348,6 +389,7 @@ function ZoneGrid({
                 <TopicCard
                   topic={topic}
                   index={i}
+                  cardMode={cardMode}
                   onPin={onPin}
                   onRefresh={onRefresh}
                   onClick={onClick}
@@ -595,6 +637,7 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
+  const [cardMode, setCardMode] = useState<CardMode>('description')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -728,16 +771,30 @@ export function DashboardPage() {
       {/* Filter bar */}
       <div className="dashboard-filter-bar rise" style={{ animationDelay: '180ms' }}>
         <span className="dashboard-topics-label">Topics</span>
-        <div className="filter-pills">
-          {(['All', 'Active', 'Paused'] as const).map((f) => (
-            <button
-              key={f}
-              className={`filter-pill${filter === f ? ' filter-pill-active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f}
-            </button>
-          ))}
+        <div className="filter-bar-right">
+          <div className="filter-pills">
+            {(['All', 'Active', 'Paused'] as const).map((f) => (
+              <button
+                key={f}
+                className={`filter-pill${filter === f ? ' filter-pill-active' : ''}`}
+                onClick={() => setFilter(f)}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          <div className="card-mode-pills">
+            {CARD_MODES.map(({ mode, label, icon: Icon }) => (
+              <button
+                key={mode}
+                className={`card-mode-pill${cardMode === mode ? ' card-mode-active' : ''}`}
+                onClick={() => setCardMode(mode)}
+                title={label}
+              >
+                <Icon size={13} />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -758,6 +815,7 @@ export function DashboardPage() {
             activeId={drag.activeId}
             hoverZone={drag.hoverZone}
             crossingZone={crossingZone}
+            cardMode={cardMode}
             cellRefs={cellRefs}
             onPointerDown={drag.handlePointerDown}
             onPin={handlePin}
@@ -775,6 +833,7 @@ export function DashboardPage() {
             activeId={drag.activeId}
             hoverZone={drag.hoverZone}
             crossingZone={crossingZone}
+            cardMode={cardMode}
             cellRefs={cellRefs}
             onPointerDown={drag.handlePointerDown}
             onPin={handlePin}
@@ -814,6 +873,7 @@ export function DashboardPage() {
               is_pinned: drag.hoverZone === 'pin' ? true : drag.hoverZone === 'unpin' ? false : activeTopic.is_pinned,
             }}
             index={0}
+            cardMode={cardMode}
             onPin={() => {}}
             onRefresh={() => {}}
             onClick={() => {}}
