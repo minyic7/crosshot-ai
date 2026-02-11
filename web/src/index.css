@@ -1445,20 +1445,20 @@ h3 {
 
 .topic-drag-handle:hover {
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 [data-theme="light"] .topic-drag-handle:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .topic-drag-handle:active {
   cursor: grabbing;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(59, 130, 246, 0.18);
 }
 
 [data-theme="light"] .topic-drag-handle:active {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(37, 99, 235, 0.12);
 }
 
 /* Pin button — positioned independently, always visible when active */
