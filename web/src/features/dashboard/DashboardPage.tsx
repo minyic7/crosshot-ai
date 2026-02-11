@@ -1,13 +1,24 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  DragDropContext,
-  Droppable,
-  Draggable,
-  type DropResult,
-  type DragUpdate,
-  type DragStart,
-} from '@hello-pangea/dnd'
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  useDroppable,
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pin, RefreshCw,
   AlertTriangle,
@@ -27,6 +38,19 @@ import type { Topic, TopicAlert, TopicPipeline } from '@/types/models'
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
+
+// ─── Custom Sensor (ignores buttons) ────────────────────────
+
+class SmartPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: ({ nativeEvent: e }: { nativeEvent: PointerEvent }) => {
+        return e.button === 0 && !(e.target as HTMLElement).closest('button, [data-no-dnd]')
+      },
+    },
+  ]
+}
 
 // ─── Animated Number ──────────────────────────────────────────
 
@@ -239,53 +263,46 @@ function TopicCard({
   )
 }
 
-// ─── Draggable Card Wrapper ─────────────────────────────────
+// ─── Sortable Card Wrapper ──────────────────────────────────
 
-function DraggableCard({
+function SortableCard({
   topic,
   index,
-  dragOverZone,
   onPin,
   onRefresh,
   onClick,
 }: {
   topic: Topic
   index: number
-  dragOverZone: string | null
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
 }) {
-  return (
-    <Draggable draggableId={topic.id} index={index}>
-      {(provided, snapshot) => {
-        const originalZone = topic.is_pinned ? 'pinned' : 'unpinned'
-        const crossingZone = snapshot.isDragging && dragOverZone !== null && dragOverZone !== originalZone
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: topic.id })
 
-        return (
-          <div
-            ref={provided.innerRef}
-            {...provided.draggableProps}
-            {...provided.dragHandleProps}
-            className="g-cell"
-          >
-            <TopicCard
-              topic={crossingZone ? { ...topic, is_pinned: dragOverZone === 'pinned' } : topic}
-              index={index}
-              onPin={onPin}
-              onRefresh={onRefresh}
-              onClick={onClick}
-              className={snapshot.isDragging ? `drag-flying${crossingZone ? ' cross-zone' : ''}` : ''}
-            />
-            {crossingZone && (
-              <div className="drag-badge">
-                {dragOverZone === 'pinned' ? '📌 Pin' : '📋 Unpin'}
-              </div>
-            )}
-          </div>
-        )
-      }}
-    </Draggable>
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} className="g-cell" style={style} {...attributes} {...listeners}>
+      <TopicCard
+        topic={topic}
+        index={index}
+        onPin={onPin}
+        onRefresh={onRefresh}
+        onClick={onClick}
+      />
+    </div>
   )
 }
 
@@ -296,9 +313,9 @@ function ZoneGrid({
   title,
   icon,
   items,
-  isDragActive,
+  activeId,
   crossingZone,
-  dragOverZone,
+  currentDragZone,
   onPin,
   onRefresh,
   onClick,
@@ -307,58 +324,58 @@ function ZoneGrid({
   title: string
   icon: string
   items: Topic[]
-  isDragActive: boolean
+  activeId: string | null
   crossingZone: boolean
-  dragOverZone: string | null
+  currentDragZone: string | null
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
 }) {
-  const isTarget = crossingZone && dragOverZone === zone
-  const glowClass = isTarget
+  const { setNodeRef } = useDroppable({ id: `zone-${zone}` })
+
+  const glowClass = crossingZone && currentDragZone === zone
     ? zone === 'pinned' ? 'zone-glow-pin' : 'zone-glow-unpin'
     : ''
 
   return (
-    <div className={`zone ${isDragActive ? 'zone-active' : ''} ${glowClass}`}>
+    <div
+      ref={setNodeRef}
+      className={`zone ${activeId ? 'zone-active' : ''} ${glowClass}`}
+    >
       <div className="zone-hd">
         <span className="zone-icon">{icon}</span>
         <span className="zone-title">{title}</span>
         <span className="zone-ct">{items.length}</span>
-        {isTarget && (
+        {crossingZone && currentDragZone === zone && (
           <span className="zone-hint">
             {zone === 'pinned' ? 'Drop to pin' : 'Drop to unpin'}
           </span>
         )}
       </div>
 
-      {items.length === 0 && !isDragActive && zone === 'pinned' && (
+      {items.length === 0 && !activeId && zone === 'pinned' && (
         <div className="zone-empty">Drag topics here to pin them</div>
       )}
-      {items.length === 0 && isDragActive && zone === 'pinned' && (
+      {items.length === 0 && activeId && zone === 'pinned' && (
         <div className="zone-drop-target">
           <div className="zone-drop-inner">Drop here to pin</div>
         </div>
       )}
 
-      <Droppable droppableId={zone}>
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.droppableProps} className="zone-grid">
-            {items.map((topic, i) => (
-              <DraggableCard
-                key={topic.id}
-                topic={topic}
-                index={i}
-                dragOverZone={dragOverZone}
-                onPin={onPin}
-                onRefresh={onRefresh}
-                onClick={onClick}
-              />
-            ))}
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
+      <SortableContext items={items.map((t) => t.id)} strategy={rectSortingStrategy}>
+        <div className="zone-grid">
+          {items.map((topic, i) => (
+            <SortableCard
+              key={topic.id}
+              topic={topic}
+              index={i}
+              onPin={onPin}
+              onRefresh={onRefresh}
+              onClick={onClick}
+            />
+          ))}
+        </div>
+      </SortableContext>
     </div>
   )
 }
@@ -622,8 +639,9 @@ export function DashboardPage() {
 
   // ── DnD local state ──
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [dragOverZone, setDragOverZone] = useState<string | null>(null)
   const [containers, setContainers] = useState<{ pinned: string[]; unpinned: string[] }>({ pinned: [], unpinned: [] })
+  const containersRef = useRef(containers)
+  containersRef.current = containers
 
   // Sync from server when not dragging
   const pinnedKey = useMemo(() => pinned.map((t) => t.id).join(','), [pinned])
@@ -653,48 +671,86 @@ export function DashboardPage() {
     [containers.unpinned, topicMap],
   )
 
-  // DnD handlers
-  const handleDragStart = useCallback((start: DragStart) => {
-    setActiveId(start.draggableId)
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(SmartPointerSensor, { activationConstraint: { distance: 8 } }),
+  )
+
+  const findContainer = useCallback((id: string): 'pinned' | 'unpinned' | null => {
+    if (containersRef.current.pinned.includes(id)) return 'pinned'
+    if (containersRef.current.unpinned.includes(id)) return 'unpinned'
+    return null
   }, [])
 
-  const handleDragUpdate = useCallback((update: DragUpdate) => {
-    setDragOverZone(update.destination?.droppableId ?? null)
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
   }, [])
 
-  const handleDragEnd = useCallback((result: DropResult) => {
-    const { source, destination } = result
-    setActiveId(null)
-    setDragOverZone(null)
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over || over.id === active.id) return
 
-    if (!destination) return
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return
-
-    const srcZone = source.droppableId as 'pinned' | 'unpinned'
-    const dstZone = destination.droppableId as 'pinned' | 'unpinned'
-
-    const newContainers = { ...containers }
-    const from = [...newContainers[srcZone]]
-    const [moved] = from.splice(source.index, 1)
-
-    if (srcZone === dstZone) {
-      from.splice(destination.index, 0, moved)
-      newContainers[srcZone] = from
-    } else {
-      const to = [...newContainers[dstZone]]
-      to.splice(destination.index, 0, moved)
-      newContainers[srcZone] = from
-      newContainers[dstZone] = to
+    const activeContainer = findContainer(active.id as string)
+    let overContainer = findContainer(over.id as string)
+    if (!overContainer) {
+      if (over.id === 'zone-pinned') overContainer = 'pinned'
+      else if (over.id === 'zone-unpinned') overContainer = 'unpinned'
     }
 
-    setContainers(newContainers)
-    reorderTopics({ pinned: newContainers.pinned, unpinned: newContainers.unpinned })
-  }, [containers, reorderTopics])
+    if (!activeContainer || !overContainer) return
+
+    if (activeContainer !== overContainer) {
+      // Cross-container move
+      setContainers((prev) => {
+        const from = [...prev[activeContainer]]
+        const to = [...prev[overContainer!]]
+        const activeIndex = from.indexOf(active.id as string)
+        if (activeIndex === -1) return prev
+        from.splice(activeIndex, 1)
+        const overIndex = to.indexOf(over.id as string)
+        to.splice(overIndex >= 0 ? overIndex : to.length, 0, active.id as string)
+        return { ...prev, [activeContainer]: from, [overContainer!]: to }
+      })
+    } else {
+      // Same-container reorder
+      setContainers((prev) => {
+        const items = [...prev[activeContainer]]
+        const oldIndex = items.indexOf(active.id as string)
+        const newIndex = items.indexOf(over.id as string)
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev
+        return { ...prev, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
+      })
+    }
+  }, [findContainer])
+
+  const handleDragEnd = useCallback((_event: DragEndEvent) => {
+    if (!_event.over) {
+      // Cancelled — revert to server state
+      setActiveId(null)
+      setContainers({
+        pinned: pinnedKey ? pinnedKey.split(',') : [],
+        unpinned: unpinnedKey ? unpinnedKey.split(',') : [],
+      })
+      return
+    }
+    // Array is already correct from onDragOver — just commit
+    setActiveId(null)
+    reorderTopics({ pinned: containersRef.current.pinned, unpinned: containersRef.current.unpinned })
+  }, [reorderTopics, pinnedKey, unpinnedKey])
+
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null)
+    setContainers({
+      pinned: pinnedKey ? pinnedKey.split(',') : [],
+      unpinned: unpinnedKey ? unpinnedKey.split(',') : [],
+    })
+  }, [pinnedKey, unpinnedKey])
 
   // Derived drag state for visual effects
   const activeTopic = activeId ? topicMap.get(activeId) ?? null : null
   const originalZone = activeTopic?.is_pinned ? 'pinned' : 'unpinned'
-  const crossingZone = !!(activeId && dragOverZone && dragOverZone !== originalZone)
+  const currentDragZone = activeId ? findContainer(activeId) : null
+  const crossingZone = !!(activeId && currentDragZone && currentDragZone !== originalZone)
 
   // Pin via button
   const handlePin = useCallback((id: string, pinned: boolean) => {
@@ -760,10 +816,13 @@ export function DashboardPage() {
           <div style={{ minHeight: 280 }}><Skeleton className="w-full h-full" /></div>
         </div>
       ) : (
-        <DragDropContext
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
           onDragStart={handleDragStart}
-          onDragUpdate={handleDragUpdate}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
         >
           {/* Pinned Zone */}
           <ZoneGrid
@@ -771,9 +830,9 @@ export function DashboardPage() {
             title="Pinned"
             icon="📌"
             items={displayPinned}
-            isDragActive={!!activeId}
+            activeId={activeId}
             crossingZone={crossingZone}
-            dragOverZone={dragOverZone}
+            currentDragZone={currentDragZone}
             onPin={handlePin}
             onRefresh={handleRefresh}
             onClick={handleTopicClick}
@@ -785,9 +844,9 @@ export function DashboardPage() {
             title="All Topics"
             icon="📋"
             items={displayUnpinned}
-            isDragActive={!!activeId}
+            activeId={activeId}
             crossingZone={crossingZone}
-            dragOverZone={dragOverZone}
+            currentDragZone={currentDragZone}
             onPin={handlePin}
             onRefresh={handleRefresh}
             onClick={handleTopicClick}
@@ -805,7 +864,20 @@ export function DashboardPage() {
               </button>
             </div>
           )}
-        </DragDropContext>
+
+          <DragOverlay dropAnimation={null}>
+            {activeTopic && (
+              <TopicCard
+                topic={{ ...activeTopic, is_pinned: currentDragZone === 'pinned' }}
+                index={0}
+                onPin={() => {}}
+                onRefresh={() => {}}
+                onClick={() => {}}
+                className={`drag-flying ${crossingZone ? 'cross-zone' : ''}`}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
       )}
 
       <CreateTopicModal open={showCreate} onClose={() => setShowCreate(false)} />

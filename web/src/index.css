@@ -1947,6 +1947,9 @@ h3 {
 /* Grid cell wrapper */
 .g-cell {
   position: relative;
+  will-change: transform;
+  cursor: grab;
+  touch-action: none;
   max-width: 480px;
 }
 
