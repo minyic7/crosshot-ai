@@ -17,6 +17,8 @@ import {
   useSortable,
   arrayMove,
   rectSortingStrategy,
+  defaultAnimateLayoutChanges,
+  type AnimateLayoutChanges,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
@@ -280,6 +282,9 @@ function SortableCard({
   onRefresh: (id: string) => void
   onClick: (id: string) => void
 }) {
+  const noDropTransition: AnimateLayoutChanges = (args) =>
+    args.wasDragging ? false : defaultAnimateLayoutChanges(args)
+
   const {
     attributes,
     listeners,
@@ -287,7 +292,7 @@ function SortableCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: topic.id })
+  } = useSortable({ id: topic.id, animateLayoutChanges: noDropTransition })
 
   const ref = useCallback((el: HTMLElement | null) => {
     setNodeRef(el)
