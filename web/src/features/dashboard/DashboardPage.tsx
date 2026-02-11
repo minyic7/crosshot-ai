@@ -181,15 +181,17 @@ function TopicCard({
         <GripVertical size={14} />
       </div>
 
+      {/* Pin button — independent of actions so no flash on hover-out */}
+      <button
+        className={`topic-pin-btn${topic.is_pinned ? ' active' : ''}`}
+        onClick={() => onPin(topic.id, !topic.is_pinned)}
+        title={topic.is_pinned ? 'Unpin' : 'Pin'}
+      >
+        <Pin size={13} />
+      </button>
+
       {/* Hover actions — float top-right */}
       <div className="topic-card-actions">
-        <button
-          className={`topic-pin-btn${topic.is_pinned ? ' active' : ''}`}
-          onClick={() => onPin(topic.id, !topic.is_pinned)}
-          title={topic.is_pinned ? 'Unpin' : 'Pin'}
-        >
-          <Pin size={13} />
-        </button>
         <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
           <RefreshCw size={11} />
         </button>

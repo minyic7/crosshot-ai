@@ -1461,24 +1461,12 @@ h3 {
   background: rgba(0, 0, 0, 0.08);
 }
 
-/* Hover action buttons — float top-right, hidden by default */
-.topic-card-actions {
+/* Pin button — positioned independently, always visible when active */
+.topic-pin-btn {
   position: absolute;
   top: 10px;
   right: 10px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 2;
-}
-
-.topic-card:hover .topic-card-actions {
-  opacity: 1;
-}
-
-.topic-pin-btn {
+  z-index: 3;
   width: 24px;
   height: 24px;
   display: flex;
@@ -1490,30 +1478,39 @@ h3 {
   backdrop-filter: blur(8px);
   color: var(--ink-3);
   cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.topic-card:hover .topic-pin-btn {
+  opacity: 1;
 }
 
 .topic-pin-btn.active {
   color: var(--accent);
-  opacity: 1 !important;
-}
-
-/* Always show active pin even without hover */
-.topic-card .topic-pin-btn.active {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-}
-
-.topic-card:hover .topic-pin-btn.active {
-  position: static;
+  opacity: 1;
 }
 
 .topic-pin-btn:hover {
   background: var(--glass-hover);
   color: var(--accent);
+}
+
+/* Hover action buttons — sits left of pin button, hidden by default */
+.topic-card-actions {
+  position: absolute;
+  top: 10px;
+  right: 38px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 2;
+}
+
+.topic-card:hover .topic-card-actions {
+  opacity: 1;
 }
 
 .topic-card-refresh {
