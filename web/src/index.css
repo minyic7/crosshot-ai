@@ -19,7 +19,7 @@
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
-  --shimmer-opacity: 0.04;
+  --shimmer-color: rgba(255, 255, 255, 0.06);
 
   /* Accent — brand blue */
   --accent: #3B82F6;
@@ -87,7 +87,7 @@
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
-  --shimmer-opacity: 0.15;
+  --shimmer-color: rgba(0, 0, 0, 0.06);
 
   --accent: #2563EB;
   --accent-light: #3B82F6;
@@ -1379,7 +1379,7 @@ h3 {
   top: 0; left: 0;
   width: 40%;
   height: 100%;
-  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, var(--shimmer-opacity)) 50%, transparent 70%);
+  background: linear-gradient(105deg, transparent 30%, var(--shimmer-color) 50%, transparent 70%);
   transform: translateX(-100%) rotate(25deg);
   pointer-events: none;
 }
@@ -1423,7 +1423,9 @@ h3 {
   cursor: grab;
   color: var(--ink-4);
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  border-radius: 14px 0 0 14px;
+  background: transparent;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
   z-index: 3;
   touch-action: none;
 }
@@ -1433,11 +1435,21 @@ h3 {
 }
 
 .topic-drag-handle:hover {
-  color: var(--ink-2);
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] .topic-drag-handle:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .topic-drag-handle:active {
   cursor: grabbing;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="light"] .topic-drag-handle:active {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Hover action buttons — float top-right, hidden by default */
