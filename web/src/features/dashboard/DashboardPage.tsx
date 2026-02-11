@@ -69,6 +69,12 @@ function stripMarkdown(text: string): string {
     .trim()
 }
 
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}m`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
 // ─── Pipeline Badge ──────────────────────────────────────────
 
 function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
@@ -170,13 +176,17 @@ function TopicCard({
       <div className="topic-card-row1">
         <div className="topic-card-icon-box">{topic.icon}</div>
         <h3 className="topic-card-name">{topic.name}</h3>
-        <div className={`topic-status-dot-only ${topic.status}`} title={topic.status === 'active' ? 'Live' : 'Paused'}>
-          <span className="topic-status-dot-inner" />
-          {topic.status === 'active' && <span className="topic-status-dot-ring" />}
-        </div>
+        <span className={`topic-status-pill ${topic.status}`}>
+          <span className="topic-status-pill-dot" />
+          {topic.status === 'active' ? 'Live' : 'Paused'}
+        </span>
       </div>
 
-      <p className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</p>
+      <div className="topic-card-subtitle">
+        {timeAgo(topic.last_crawl_at)}
+        <span className="meta-sep">&middot;</span>
+        {fmtNum(topic.total_contents)} posts
+      </div>
 
       {/* Pipeline progress */}
       {topic.pipeline && <PipelineBadge pipeline={topic.pipeline} />}
@@ -199,21 +209,23 @@ function TopicCard({
 
       {/* FOOTER */}
       <div className="topic-card-footer">
-        {topic.platforms.map((p) => (
-          <div key={p} className="topic-source-icon" title={p.toUpperCase()}>
-            {p === 'x' ? (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-            ) : (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            )}
-          </div>
-        ))}
+        <div className="topic-card-sources">
+          {topic.platforms.map((p) => (
+            <span key={p} className="topic-source-icon" title={p.toUpperCase()}>
+              {p === 'x' ? (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              )}
+            </span>
+          ))}
+        </div>
         <div className="topic-card-tags">
-          {topic.keywords.slice(0, 3).map((kw) => (
+          {topic.keywords.slice(0, 2).map((kw) => (
             <span key={kw} className="topic-tag">#{kw}</span>
           ))}
-          {topic.keywords.length > 3 && (
-            <span className="topic-tag-more">+{topic.keywords.length - 3}</span>
+          {topic.keywords.length > 2 && (
+            <span className="topic-tag-more">+{topic.keywords.length - 2}</span>
           )}
         </div>
       </div>
