@@ -17,6 +17,9 @@ export function useFlip(
     const rects: Record<string, { x: number; y: number }> = {}
     for (const [id, el] of Object.entries(cellRefs.current)) {
       if (el) {
+        // Cancel running FLIP animations so getBoundingClientRect returns the
+        // true layout position, not a mid-animation transform offset.
+        el.getAnimations().forEach((a) => a.cancel())
         const r = el.getBoundingClientRect()
         rects[id] = { x: r.left, y: r.top }
       }
