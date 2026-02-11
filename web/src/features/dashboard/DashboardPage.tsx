@@ -35,7 +35,6 @@ import {
   useReorderTopicsMutation,
 } from '@/store/api'
 import type { Topic, TopicAlert, TopicPipeline } from '@/types/models'
-import { useFlip } from '@/hooks/useFlip'
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
@@ -625,12 +624,6 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 600)
-    return () => clearTimeout(t)
-  }, [])
 
   // Poll faster when any topic has an active pipeline
   const [pollingInterval, setPollingInterval] = useState(30_000)
@@ -688,10 +681,8 @@ export function DashboardPage() {
     [containers.unpinned, topicMap],
   )
 
-  // Refs for FLIP (pin button animation only)
+  // Ref map for measuring overlay width on drag start
   const cellRefs = useRef<Record<string, HTMLElement | null>>({})
-  const flipKey = [...containers.pinned, ...containers.unpinned].join(',')
-  const flipSnap = useFlip(flipKey, cellRefs, mounted && !activeId)
 
   // DnD sensors
   const sensors = useSensors(
@@ -789,11 +780,10 @@ export function DashboardPage() {
   const currentDragZone = activeId ? findContainer(activeId) : null
   const crossingZone = !!(activeId && currentDragZone && currentDragZone !== originalZone)
 
-  // Pin via button (with FLIP)
+  // Pin via button
   const handlePin = useCallback((id: string, pinned: boolean) => {
-    flipSnap()
     updateTopic({ id, is_pinned: pinned })
-  }, [updateTopic, flipSnap])
+  }, [updateTopic])
 
   const totalPosts = allTopics.reduce((s, t) => s + t.total_contents, 0)
 
