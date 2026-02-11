@@ -103,11 +103,19 @@ export type TopicStatus = 'active' | 'paused' | 'cancelled'
 
 export type TopicAlert = string | { level: string; message: string }
 
+export interface TopicWidget {
+  type: string
+  field?: string
+  label?: string
+  [key: string]: unknown
+}
+
 export interface TopicSummaryData {
   cycle_id?: string
   metrics?: Record<string, unknown>
   alerts?: TopicAlert[]
   recommended_next_queries?: { platform: string; query: string; priority: string }[]
+  widgets?: TopicWidget[]
 }
 
 export interface TopicPipeline {

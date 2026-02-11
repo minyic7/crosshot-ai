@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Pin, RefreshCw,
-  AlertTriangle, Info, AlertCircle,
+  AlertTriangle,
   Sparkles, Send, Loader2,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -75,32 +75,20 @@ function fmtNum(n: number): string {
   return String(n)
 }
 
-interface CardMetric {
-  label: string
-  value: string | number
-  color?: string
-  sub?: string
-  subColor?: string
-  subBg?: string
-  animate?: boolean
-}
-
-function extractCardMetrics(metrics: Record<string, unknown>): CardMetric[] {
-  const out: CardMetric[] = []
+function buildStatsLine(metrics: Record<string, unknown>): string {
+  const parts: string[] = []
   const posts = metrics.total_contents
-  if (posts != null) out.push({ label: 'Posts', value: Number(posts), animate: true })
+  if (posts != null) parts.push(`${fmtNum(Number(posts))} posts`)
   const likes = Number(metrics.total_likes ?? 0)
   const retweets = Number(metrics.total_retweets ?? 0)
   const replies = Number(metrics.total_replies ?? 0)
-  const totalEngagement = likes + retweets + replies
-  if (totalEngagement > 0) out.push({ label: 'Engagement', value: fmtNum(totalEngagement), color: 'var(--accent)' })
+  const eng = likes + retweets + replies
+  if (eng > 0) parts.push(`${fmtNum(eng)} eng`)
   const views = metrics.total_views
-  if (views != null && Number(views) > 0) out.push({ label: 'Views', value: fmtNum(Number(views)) })
+  if (views != null && Number(views) > 0) parts.push(`${fmtNum(Number(views))} views`)
   const mediaPct = metrics.with_media_pct
-  if (mediaPct != null && out.length < 4) out.push({ label: 'Media', value: `${mediaPct}%` })
-  const topAuthor = metrics.top_author as string | undefined
-  if (topAuthor && out.length < 4) out.push({ label: 'Top Author', value: `@${topAuthor}` })
-  return out.slice(0, 4)
+  if (mediaPct != null) parts.push(`${mediaPct}% media`)
+  return parts.join(' · ')
 }
 
 // ─── Pipeline Badge ──────────────────────────────────────────
@@ -173,13 +161,13 @@ function TopicCard({
   style?: React.CSSProperties
 }) {
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
-  const cardMetrics = topic.summary_data?.metrics ? extractCardMetrics(topic.summary_data.metrics) : []
-  const d = index * 110
+  const statsLine = topic.summary_data?.metrics ? buildStatsLine(topic.summary_data.metrics) : ''
+  const d = index * 80
 
   return (
     <div
       className={`topic-card rise${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''} ${className}`}
-      style={{ animationDelay: `${220 + d}ms`, ...style }}
+      style={{ animationDelay: `${180 + d}ms`, ...style }}
       onDoubleClick={(e) => {
         if ((e.target as HTMLElement).closest('button')) return
         onClick(topic.id)
@@ -187,111 +175,82 @@ function TopicCard({
     >
       <div className="topic-card-shimmer" />
 
-      {/* Header */}
-      <div className="topic-card-header">
-        <div className="topic-card-title-area">
-          <div className="topic-card-icon-box">{topic.icon}</div>
-          <div className="topic-card-title-info">
-            <div className="topic-card-title-row">
-              <h3 className="topic-card-name">{topic.name}</h3>
-              <div className={`topic-status-pill ${topic.status === 'active' ? 'active' : 'paused'}`}>
-                <span className="topic-status-dot">
-                  <span className="topic-status-dot-inner" />
-                  {topic.status === 'active' && <span className="topic-status-dot-ring" />}
-                </span>
-                {topic.status === 'active' ? 'Live' : 'Paused'}
-              </div>
-            </div>
-            <p className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</p>
-          </div>
+      {/* Hover actions — float top-right */}
+      <div className="topic-card-actions">
+        <button
+          className={`topic-pin-btn${topic.is_pinned ? ' active' : ''}`}
+          onClick={() => onPin(topic.id, !topic.is_pinned)}
+          title={topic.is_pinned ? 'Unpin' : 'Pin'}
+        >
+          <Pin size={13} />
+        </button>
+        <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
+          <RefreshCw size={11} />
+        </button>
+      </div>
+
+      {/* Row 1: icon + title + status */}
+      <div className="topic-card-row1">
+        <div className="topic-card-icon-box">{topic.icon}</div>
+        <h3 className="topic-card-name">{topic.name}</h3>
+        <div className={`topic-status-dot-only ${topic.status}`} title={topic.status === 'active' ? 'Live' : 'Paused'}>
+          <span className="topic-status-dot-inner" />
+          {topic.status === 'active' && <span className="topic-status-dot-ring" />}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            className={`topic-pin-btn${topic.is_pinned ? ' active' : ''}`}
-            onClick={() => onPin(topic.id, !topic.is_pinned)}
-            title={topic.is_pinned ? 'Unpin' : 'Pin'}
-          >
-            <Pin size={13} />
-          </button>
-          <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
-            <RefreshCw size={11} />
-            Reanalyze
-          </button>
-        </div>
+      </div>
+
+      {/* Row 2: updated + stats */}
+      <div className="topic-card-row2">
+        <span className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</span>
+        {statsLine && (
+          <>
+            <span className="topic-card-sep">·</span>
+            <span className="topic-card-stats">{statsLine}</span>
+          </>
+        )}
       </div>
 
       {/* Pipeline progress */}
       {topic.pipeline && <PipelineBadge pipeline={topic.pipeline} />}
 
-      {/* Description */}
-      {topic.last_summary ? (
+      {/* Widget slot — reserved for configurable trendlines/diagrams */}
+      {topic.summary_data?.widgets && (
+        <div className="topic-card-widgets">
+          {/* Future: render sparkline, bar, delta widgets here */}
+        </div>
+      )}
+
+      {/* Summary with optional alert prefix */}
+      {alerts.length > 0 ? (
+        <p className="topic-card-summary">
+          <span className={`topic-card-alert-icon ${alerts[0].level}`}>
+            {alerts[0].level === 'critical' ? '🔴' : alerts[0].level === 'warning' ? '⚠️' : 'ℹ️'}
+          </span>
+          {topic.last_summary ? stripMarkdown(topic.last_summary) : alerts[0].message}
+        </p>
+      ) : topic.last_summary ? (
         <p className="topic-card-summary">{stripMarkdown(topic.last_summary)}</p>
       ) : !topic.pipeline ? (
         <p className="topic-card-empty">Awaiting first analysis cycle...</p>
       ) : null}
 
-      {/* Metrics tiles */}
-      {cardMetrics.length > 0 && (
-        <div className="topic-metrics-row">
-          {cardMetrics.map((m, i) => (
-            <div
-              key={i}
-              className="topic-metric-chip pop"
-              style={{ animationDelay: `${340 + d + i * 70}ms` }}
-            >
-              <span className="topic-metric-label">{m.label}</span>
-              <span
-                className="topic-metric-value"
-                style={m.color ? { color: m.color } : undefined}
-              >
-                {m.animate && typeof m.value === 'number' ? <AnimatedNum to={m.value} /> : m.value}
-              </span>
-              {m.sub && (
-                <span
-                  className="topic-metric-sub"
-                  style={{
-                    background: m.subBg,
-                    border: `1px solid ${m.subColor}18`,
-                    color: m.subColor,
-                  }}
-                >
-                  {m.sub === 'bearish' ? '▼' : '▲'} {m.sub}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Alert */}
-      {alerts.length > 0 && (
-        <div className={`topic-card-alert ${alerts[0].level}`}>
-          {alerts[0].level === 'critical' ? <AlertCircle size={13} /> : alerts[0].level === 'warning' ? <AlertTriangle size={13} /> : <Info size={13} />}
-          <span>{alerts[0].message}</span>
-          {alerts.length > 1 && <span className="topic-alert-more">+{alerts.length - 1}</span>}
-        </div>
-      )}
-
-      {/* Footer */}
+      {/* Footer: sources + tags inline */}
       <div className="topic-card-footer">
-        <div className="topic-card-sources">
-          <span className="topic-card-sources-label">Sources</span>
-          {topic.platforms.map((p) => (
-            <div key={p} className="topic-source-icon" title={p.toUpperCase()}>
-              {p === 'x' ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              )}
-            </div>
-          ))}
-        </div>
+        {topic.platforms.map((p) => (
+          <div key={p} className="topic-source-icon" title={p.toUpperCase()}>
+            {p === 'x' ? (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            ) : (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            )}
+          </div>
+        ))}
         <div className="topic-card-tags">
           {topic.keywords.slice(0, 3).map((kw) => (
             <span key={kw} className="topic-tag">#{kw}</span>
           ))}
           {topic.keywords.length > 3 && (
-            <span className="topic-tag">+{topic.keywords.length - 3}</span>
+            <span className="topic-tag-more">+{topic.keywords.length - 3}</span>
           )}
         </div>
       </div>
