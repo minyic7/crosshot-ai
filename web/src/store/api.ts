@@ -110,11 +110,16 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/topics/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['Topic'],
     }),
-    reorderTopics: builder.mutation<{ status: string }, { ids: string[] }>({
-      query: ({ ids }) => ({
+    reorderTopics: builder.mutation<{ status: string }, { pinned: string[]; unpinned: string[] }>({
+      query: ({ pinned, unpinned }) => ({
         url: '/topics/reorder',
         method: 'POST',
-        body: { items: ids.map((id, i) => ({ id, position: i })) },
+        body: {
+          items: [
+            ...pinned.map((id, i) => ({ id, position: i, is_pinned: true })),
+            ...unpinned.map((id, i) => ({ id, position: i, is_pinned: false })),
+          ],
+        },
       }),
       invalidatesTags: ['Topic'],
     }),

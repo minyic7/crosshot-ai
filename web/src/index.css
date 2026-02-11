@@ -1921,6 +1921,207 @@ h3 {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   Zone Layout + Drag & Drop
+   ═══════════════════════════════════════════════════════════════ */
+
+.zone {
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--glass);
+  backdrop-filter: var(--frost);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+}
+
+.zone-active {
+  border-style: dashed;
+  border-color: var(--glass-border-hover);
+}
+
+.zone-glow-pin {
+  border-color: var(--warning);
+  box-shadow: 0 0 20px rgba(212, 148, 10, 0.15), var(--shadow-card);
+  background: rgba(212, 148, 10, 0.03);
+}
+
+.zone-glow-unpin {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(82, 96, 119, 0.15), var(--shadow-card);
+  background: rgba(82, 96, 119, 0.03);
+}
+
+.zone-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.zone-icon {
+  font-size: 1rem;
+}
+
+.zone-title {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.zone-ct {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  background: rgba(100, 116, 139, 0.1);
+  padding: 1px 7px;
+  border-radius: 8px;
+}
+
+.zone-hint {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--warning);
+  margin-left: auto;
+  animation: zone-hint-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes zone-hint-pop {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.zone-empty {
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+  border: 1px dashed var(--glass-border);
+  border-radius: 12px;
+  background: rgba(100, 116, 139, 0.02);
+}
+
+.zone-drop-target {
+  padding: 24px;
+  border: 2px dashed var(--warning);
+  border-radius: 12px;
+  background: rgba(212, 148, 10, 0.05);
+  animation: zone-drop-pulse 1.5s ease infinite;
+}
+
+@keyframes zone-drop-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.zone-drop-inner {
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.zone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 12px;
+}
+
+/* Grid cell wrapper */
+.g-cell {
+  position: relative;
+  will-change: transform;
+}
+
+/* Drag placeholder skeleton */
+.drag-placeholder {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--glass-border-hover);
+  border-radius: 18px;
+  background: rgba(100, 116, 139, 0.04);
+  animation: drag-placeholder-pulse 2s ease infinite;
+}
+
+@keyframes drag-placeholder-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+.drag-placeholder-inner {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drag-placeholder-line {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(100, 116, 139, 0.08);
+}
+
+.drag-placeholder-line.w60 { width: 60%; }
+.drag-placeholder-line.w40 { width: 40%; }
+
+.drag-placeholder-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.drag-placeholder-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(100, 116, 139, 0.1);
+}
+
+/* Drag overlay (follows cursor) */
+.drag-overlay {
+  position: fixed;
+  z-index: 999;
+  pointer-events: none;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.18));
+}
+
+.topic-card.drag-flying {
+  transform: scale(0.95) rotate(1.2deg);
+  border-color: var(--accent);
+  box-shadow: 0 16px 48px rgba(82, 96, 119, 0.25);
+  opacity: 0.95;
+}
+
+.topic-card.drag-flying.cross-zone {
+  border-color: var(--warning);
+  box-shadow: 0 16px 48px rgba(212, 148, 10, 0.25);
+}
+
+/* Floating badge on cross-zone drag */
+.drag-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--warning);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(212, 148, 10, 0.4);
+  animation: drag-badge-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes drag-badge-pop {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Topic Detail Page — Arctic Frost
    ═══════════════════════════════════════════════════════════════ */
 

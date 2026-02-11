@@ -246,6 +246,8 @@ async def reorder_topics(body: TopicReorder) -> dict:
             topic = await session.get(TopicRow, item["id"])
             if topic:
                 topic.position = item["position"]
+                if "is_pinned" in item:
+                    topic.is_pinned = item["is_pinned"]
         await session.commit()
     return {"status": "ok"}
 
