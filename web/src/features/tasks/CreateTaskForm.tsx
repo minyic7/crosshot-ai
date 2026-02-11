@@ -94,7 +94,7 @@ export function CreateTaskForm() {
               onClick={() => { setAction(a.key); setError(''); setResult(null) }}
               className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
               style={{
-                background: action === a.key ? 'white' : 'transparent',
+                background: action === a.key ? 'var(--surface-card)' : 'transparent',
                 color: action === a.key ? 'var(--foreground)' : 'var(--foreground-muted)',
                 boxShadow: action === a.key ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
                 flex: 1,

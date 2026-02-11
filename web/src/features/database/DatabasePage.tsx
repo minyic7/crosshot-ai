@@ -28,7 +28,7 @@ export function DatabasePage() {
               onClick={() => setActiveTab(t.key)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200"
               style={{
-                background: activeTab === t.key ? 'white' : 'transparent',
+                background: activeTab === t.key ? 'var(--surface-card)' : 'transparent',
                 color: activeTab === t.key ? 'var(--foreground)' : 'var(--foreground-muted)',
                 boxShadow: activeTab === t.key ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
                 border: 'none',

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Database, Bot, ListTodo, Cookie, MessageSquare, Sun, Moon, Globe } from 'lucide-react'
+import { LayoutDashboard, Database, Bot, ListTodo, Cookie, Sun, Moon, Globe } from 'lucide-react'
 import { useGetHealthQuery } from '@/store/api'
 import { useTimezone } from '@/hooks/useTimezone'
 
@@ -9,7 +9,6 @@ const navItems = [
   { to: '/agents', label: 'Agents', icon: Bot },
   { to: '/tasks', label: 'Tasks', icon: ListTodo },
   { to: '/cookies', label: 'Cookies', icon: Cookie },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
 export function TopNav({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {

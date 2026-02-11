@@ -5,7 +5,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { DatabasePage } from '@/features/database/DatabasePage'
 import { AgentsPage } from '@/features/agents/AgentsPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
-import { ChatPage } from '@/features/chat/ChatPage'
+
 import { CookiesPage } from '@/features/cookies/CookiesPage'
 import { ContentDetailPage } from '@/features/database/ContentDetailPage'
 import { TaskDetailPage } from '@/features/database/TaskDetailPage'
@@ -24,7 +24,6 @@ export function App() {
         <Route path="agents" element={<AgentsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="cookies" element={<CookiesPage />} />
-        <Route path="chat" element={<ChatPage />} />
       </Route>
     </Routes>
     </TimezoneProvider>

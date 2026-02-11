@@ -1,12 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bot, ListTodo, Cookie, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Bot, ListTodo, Cookie } from 'lucide-react'
 
 const tabItems = [
   { to: '/', label: 'Home', icon: LayoutDashboard },
   { to: '/agents', label: 'Agents', icon: Bot },
   { to: '/tasks', label: 'Tasks', icon: ListTodo },
   { to: '/cookies', label: 'Cookies', icon: Cookie },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
 export function BottomTabs() {

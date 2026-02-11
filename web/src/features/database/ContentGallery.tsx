@@ -160,7 +160,7 @@ export function ContentGallery() {
               onClick={() => setPlatform(p)}
               className="px-3 py-1 rounded-md text-xs font-medium transition-all"
               style={{
-                background: platform === p ? 'white' : 'transparent',
+                background: platform === p ? 'var(--surface-card)' : 'transparent',
                 color: platform === p ? 'var(--foreground)' : 'var(--foreground-muted)',
                 boxShadow: platform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
                 border: 'none',
