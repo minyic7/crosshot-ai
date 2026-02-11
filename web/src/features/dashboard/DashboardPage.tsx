@@ -805,7 +805,6 @@ export function DashboardPage() {
 
       {/* Filter bar */}
       <div className="dashboard-filter-bar rise" style={{ animationDelay: '100ms' }}>
-        <span className="dashboard-topics-label">Topics</span>
         <div className="filter-pills" ref={pillsRef}>
           <div
             className="filter-pill-slider"
