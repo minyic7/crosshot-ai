@@ -1184,9 +1184,9 @@ h3 {
   top: 4px;
   bottom: 4px;
   border-radius: 100px;
-  background: var(--accent-grad-btn);
-  box-shadow: 0 2px 14px var(--accent-glow-strong),
-              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: var(--btn-accent-bg-hover);
+  border: 1px solid var(--btn-accent-border);
+  box-shadow: 0 0 12px var(--accent-glow);
   transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1),
               width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
               opacity 0.2s ease;
@@ -1267,14 +1267,13 @@ h3 {
 }
 
 .filter-pill-active {
-  color: white;
+  color: var(--accent-light);
   font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .filter-pill-active .filter-pill-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
+  background: var(--accent-surface);
+  color: var(--accent-light);
 }
 
 /* Reduced motion */
