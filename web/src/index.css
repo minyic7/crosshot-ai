@@ -409,8 +409,8 @@ h3 {
   padding: 8px 14px;
   border-radius: 10px;
   font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 0.84375rem;
-  font-weight: 400;
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--ink-3);
   text-decoration: none;
   transition: all 0.25s ease;
@@ -1264,8 +1264,8 @@ h3 {
 }
 
 [data-theme="light"] .filter-pill-count {
-  background: #E2E8F0;
-  color: #475569;
+  background: var(--border-default);
+  color: var(--ink-2);
 }
 
 .filter-pill-active {
@@ -3855,7 +3855,7 @@ h3 {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--surface-hover);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .masonry-card-title {
@@ -3900,7 +3900,7 @@ h3 {
   display: flex;
   gap: 12px;
   padding: 6px 12px;
-  border-top: 1px solid var(--surface-hover);
+  border-top: 1px solid var(--border-default);
 }
 
 .masonry-stat {
@@ -3917,7 +3917,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-top: 1px solid var(--surface-hover);
+  border-top: 1px solid var(--border-default);
 }
 
 .masonry-card-author {
@@ -4205,7 +4205,7 @@ h3 {
 }
 
 .detail-comment + .detail-comment {
-  border-top: 1px solid var(--surface-hover);
+  border-top: 1px solid var(--border-default);
 }
 
 .detail-comment-header {
@@ -4750,14 +4750,14 @@ h3 {
   width: 100%;
   max-width: 800px;
   max-height: calc(100vh - 48px);
-  background: rgba(30, 34, 42, 0.98);
+  background: var(--surface-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-hover);
   border-radius: 16px;
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.3),
-    0 8px 24px rgba(0, 0, 0, 0.15);
+    0 24px 64px rgba(0, 0, 0, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.1);
   animation: detail-modal-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
@@ -4775,7 +4775,7 @@ h3 {
 .logs-modal-header h2 {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4790,7 +4790,7 @@ h3 {
 
 .logs-modal .detail-close:hover {
   background: var(--border-hover);
-  color: #e2e8f0;
+  color: var(--ink);
 }
 
 .logs-modal .btn-ghost {
@@ -4806,7 +4806,7 @@ h3 {
 }
 
 .logs-modal .btn-ghost:hover {
-  color: #e2e8f0;
+  color: var(--ink);
   background: var(--border-default);
 }
 
@@ -4817,7 +4817,7 @@ h3 {
   font-family: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
   font-size: 0.75rem;
   line-height: 1.7;
-  color: #cbd5e1;
+  color: var(--ink-2);
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 500px;
