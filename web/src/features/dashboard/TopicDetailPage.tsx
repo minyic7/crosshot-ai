@@ -337,7 +337,7 @@ export function TopicDetailPage() {
                 </button>
               </div>
             </CardHeader>
-            <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", fontSize: '0.875rem', lineHeight: 1.8, color: 'var(--ink)' }}>
+            <div style={{ fontFamily: "'Outfit', system-ui, sans-serif", lineHeight: 1.8, color: 'var(--ink)' }}>
               <Markdown>{translated || topic.last_summary!}</Markdown>
             </div>
             {topic.summary_data?.cycle_id && (
