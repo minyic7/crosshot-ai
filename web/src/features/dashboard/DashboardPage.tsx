@@ -296,7 +296,11 @@ function SortableCard({
   } = useSortable({ id: topic.id, animateLayoutChanges: skipPostDrop })
 
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    // Always provide a transform value so CSS transitions can animate
+    // both directions (adding a shift AND returning to origin).
+    // CSS.Transform.toString(null) returns undefined which removes the
+    // property — CSS can't transition a removed property.
+    transform: transform ? CSS.Transform.toString(transform) : 'translate3d(0, 0, 0)',
     transition,
     opacity: isDragging ? 0 : 1,
   }
