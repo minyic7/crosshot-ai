@@ -706,7 +706,7 @@ export function DashboardPage() {
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event
-    if (!over) return
+    if (!over || over.id === active.id) return
 
     const activeContainer = findContainer(active.id as string)
     let overContainer = findContainer(over.id as string)
@@ -715,27 +715,37 @@ export function DashboardPage() {
       else if (over.id === 'zone-unpinned') overContainer = 'unpinned'
     }
 
-    if (!activeContainer || !overContainer || activeContainer === overContainer) return
+    if (!activeContainer || !overContainer) return
 
-    // Cross-container move only — same-container reorder is handled visually
-    // by useSortable transforms, then committed in onDragEnd
-    setContainers((prev) => {
-      const from = [...prev[activeContainer]]
-      const to = [...prev[overContainer!]]
+    if (activeContainer !== overContainer) {
+      // Cross-container move
+      setContainers((prev) => {
+        const from = [...prev[activeContainer]]
+        const to = [...prev[overContainer!]]
 
-      const activeIndex = from.indexOf(active.id as string)
-      if (activeIndex === -1) return prev
-      from.splice(activeIndex, 1)
+        const activeIndex = from.indexOf(active.id as string)
+        if (activeIndex === -1) return prev
+        from.splice(activeIndex, 1)
 
-      const overIndex = to.indexOf(over.id as string)
-      to.splice(overIndex >= 0 ? overIndex : to.length, 0, active.id as string)
+        const overIndex = to.indexOf(over.id as string)
+        to.splice(overIndex >= 0 ? overIndex : to.length, 0, active.id as string)
 
-      return { ...prev, [activeContainer]: from, [overContainer!]: to }
-    })
+        return { ...prev, [activeContainer]: from, [overContainer!]: to }
+      })
+    } else {
+      // Same-container reorder
+      setContainers((prev) => {
+        const items = [...prev[activeContainer]]
+        const oldIndex = items.indexOf(active.id as string)
+        const newIndex = items.indexOf(over.id as string)
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev
+        return { ...prev, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
+      })
+    }
   }, [findContainer])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
+    const { over } = event
 
     if (!over) {
       setActiveId(null)
@@ -746,28 +756,10 @@ export function DashboardPage() {
       return
     }
 
-    // For same-container reorders, commit the arrayMove now
-    const activeContainer = findContainer(active.id as string)
-    let overContainer = findContainer(over.id as string)
-    if (!overContainer) {
-      if (over.id === 'zone-pinned') overContainer = 'pinned'
-      else if (over.id === 'zone-unpinned') overContainer = 'unpinned'
-    }
-
-    let finalContainers = containersRef.current
-    if (activeContainer && overContainer && activeContainer === overContainer) {
-      const items = [...containersRef.current[activeContainer]]
-      const oldIndex = items.indexOf(active.id as string)
-      const newIndex = items.indexOf(over.id as string)
-      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        finalContainers = { ...containersRef.current, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
-        setContainers(finalContainers)
-      }
-    }
-
+    // Array is already in correct order from onDragOver — just commit
     setActiveId(null)
-    reorderTopics({ pinned: finalContainers.pinned, unpinned: finalContainers.unpinned })
-  }, [findContainer, reorderTopics, pinnedKey, unpinnedKey])
+    reorderTopics({ pinned: containersRef.current.pinned, unpinned: containersRef.current.unpinned })
+  }, [reorderTopics, pinnedKey, unpinnedKey])
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null)
@@ -898,7 +890,7 @@ export function DashboardPage() {
             </div>
           )}
 
-          <DragOverlay dropAnimation={null}>
+          <DragOverlay>
             {activeTopic && (
               <div style={{ width: cellRefs.current[activeId!]?.offsetWidth }}>
                 <TopicCard
