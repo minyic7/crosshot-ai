@@ -4263,6 +4263,11 @@ h3 {
     display: flex;
   }
 
+  /* Hide inline "New Topic" button in header on mobile (FAB replaces it) */
+  .dashboard-header .btn-accent {
+    display: none;
+  }
+
   /* Main content: top padding for shorter nav, bottom padding for tab bar */
   .main-content {
     padding: 76px 16px 88px;
