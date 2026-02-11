@@ -3109,24 +3109,26 @@ h3 {
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
+  border: 1px solid var(--btn-accent-border);
+  background: transparent;
+  color: var(--accent-light);
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px var(--accent-glow-strong);
+  box-shadow: none;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-tap-highlight-color: transparent;
 }
 
 .fab:hover {
-  background: var(--accent-light);
+  background: var(--btn-accent-bg-hover);
+  border-color: var(--btn-accent-border-hover);
   transform: scale(1.05);
-  box-shadow: 0 4px 16px var(--accent-glow-strong);
+  box-shadow: 0 0 14px var(--accent-glow);
 }
 
 .fab:active {
+  background: var(--btn-accent-bg-active);
   transform: scale(0.95);
 }
 
