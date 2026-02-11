@@ -1137,70 +1137,6 @@ h3 {
 
 /* ── Stats Bar ──────────────────────────────────── */
 
-.dashboard-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.dash-stat {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 22px;
-  background: var(--glass);
-  backdrop-filter: var(--frost);
-  -webkit-backdrop-filter: var(--frost);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
-  cursor: default;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dash-stat::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--glass-border-hover), transparent);
-}
-
-.dash-stat:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card-hover);
-  background: var(--glass-hover);
-}
-
-.dash-stat-emoji {
-  font-size: 1.5rem;
-}
-
-.dash-stat-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.dash-stat-label {
-  font-family: 'Space Mono', monospace;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin-bottom: 3px;
-}
-
-.dash-stat-value {
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 1.625rem;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-  line-height: 1;
-}
-
 /* ── Filter Pills ──────────────────────────────── */
 
 .dashboard-filter-bar {
@@ -1221,7 +1157,7 @@ h3 {
 .filter-pills {
   display: flex;
   gap: 2px;
-  padding: 3px;
+  padding: 4px;
   border-radius: 100px;
   background: var(--glass);
   backdrop-filter: var(--frost);
@@ -1232,8 +1168,8 @@ h3 {
 
 .filter-pill-slider {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: 4px;
+  bottom: 4px;
   border-radius: 100px;
   background: var(--accent-grad-btn);
   box-shadow: 0 2px 14px var(--accent-glow-strong),
@@ -1245,29 +1181,88 @@ h3 {
 }
 
 .filter-pill {
-  padding: 6px 16px;
+  padding: 10px 20px;
   border-radius: 100px;
   border: none;
   cursor: pointer;
   font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 0.78125rem;
-  font-weight: 400;
+  font-size: 0.8125rem;
+  font-weight: 500;
   background: transparent;
   color: var(--ink-3);
-  transition: color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              font-weight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 0.18s ease-out,
+              background 0.18s ease-out,
+              transform 0.18s ease-out,
+              box-shadow 0.18s ease-out;
   position: relative;
   z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
-.filter-pill:hover:not(.filter-pill-active) {
-  color: var(--foreground);
+/* Hover — desktop only */
+@media (hover: hover) {
+  .filter-pill:hover:not(.filter-pill-active) {
+    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* Focus-visible — keyboard navigation */
+.filter-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Pressed / Active — both touch and mouse */
+.filter-pill:active:not(.filter-pill-active) {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.08);
+  transition-duration: 0.08s;
+  transition-timing-function: ease-in;
+}
+
+.filter-pill-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 100px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink-3);
+  transition: background 0.18s ease-out, color 0.18s ease-out;
 }
 
 .filter-pill-active {
   color: white;
-  font-weight: 700;
+  font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.filter-pill-active .filter-pill-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .filter-pill-slider {
+    transition-duration: 0.01s;
+  }
+  .filter-pill {
+    transition-duration: 0.01s;
+  }
+  .filter-pill:active:not(.filter-pill-active) {
+    transform: none;
+  }
 }
 
 /* ── New Topic Button ──────────────────────────── */
@@ -4235,11 +4230,6 @@ h3 {
   .main-content {
     padding: 76px 16px 88px;
     max-width: 100%;
-  }
-
-  .dashboard-stats {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
   }
 
   .topic-metrics-row {

@@ -54,22 +54,6 @@ class SmartPointerSensor extends PointerSensor {
   ]
 }
 
-// ─── Animated Number ──────────────────────────────────────────
-
-function AnimatedNum({ to, dur = 950 }: { to: number; dur?: number }) {
-  const [v, setV] = useState(0)
-  useEffect(() => {
-    const s = performance.now()
-    const go = (n: number) => {
-      const p = Math.min((n - s) / dur, 1)
-      setV(Math.round((1 - Math.pow(1 - p, 4)) * to))
-      if (p < 1) requestAnimationFrame(go)
-    }
-    requestAnimationFrame(go)
-  }, [to, dur])
-  return <>{v}</>
-}
-
 // ─── Helpers ──────────────────────────────────────────────────
 
 function timeAgo(dateStr: string | null): string {
@@ -809,39 +793,26 @@ export function DashboardPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="dashboard-stats rise" style={{ animationDelay: '80ms' }}>
-        {[
-          { label: 'Topics', value: allTopics.length, emoji: '📋' },
-          { label: 'Active', value: allTopics.filter((t) => t.status === 'active').length, emoji: '🟢' },
-        ].map((s, i) => (
-          <div key={i} className="dash-stat pop" style={{ animationDelay: `${130 + i * 70}ms` }}>
-            <span className="dash-stat-emoji">{s.emoji}</span>
-            <div className="dash-stat-content">
-              <span className="dash-stat-label">{s.label}</span>
-              <span className="dash-stat-value">
-                {typeof s.value === 'number' ? <AnimatedNum to={s.value} /> : s.value}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Filter bar */}
-      <div className="dashboard-filter-bar rise" style={{ animationDelay: '180ms' }}>
+      <div className="dashboard-filter-bar rise" style={{ animationDelay: '100ms' }}>
         <span className="dashboard-topics-label">Topics</span>
         <div className="filter-pills" ref={pillsRef}>
           <div
             className="filter-pill-slider"
             style={{ left: slider.left, width: slider.width, opacity: slider.ready ? 1 : 0 }}
           />
-          {(['All', 'Active', 'Paused'] as const).map((f) => (
+          {([
+            { key: 'All' as const, count: allTopics.length },
+            { key: 'Active' as const, count: allTopics.filter(t => t.status === 'active').length },
+            { key: 'Paused' as const, count: allTopics.filter(t => t.status !== 'active').length },
+          ]).map((f) => (
             <button
-              key={f}
-              className={`filter-pill${filter === f ? ' filter-pill-active' : ''}`}
-              onClick={() => setFilter(f)}
+              key={f.key}
+              className={`filter-pill${filter === f.key ? ' filter-pill-active' : ''}`}
+              onClick={() => setFilter(f.key)}
             >
-              {f}
+              {f.key}
+              <span className="filter-pill-count">{f.count}</span>
             </button>
           ))}
         </div>
