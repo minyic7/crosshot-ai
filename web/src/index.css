@@ -1954,7 +1954,6 @@ h3 {
 }
 
 .topic-card.drag-flying {
-  transform: scale(0.95) rotate(1.2deg);
   border-color: var(--accent);
   box-shadow: 0 16px 48px rgba(82, 96, 119, 0.25);
   opacity: 0.95;
