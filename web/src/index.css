@@ -1208,6 +1208,10 @@ h3 {
     transform: scale(1.06);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
+  [data-theme="light"] .filter-pill:hover:not(.filter-pill-active) {
+    background: rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
 }
 
 /* Focus-visible — keyboard navigation */
@@ -1222,6 +1226,10 @@ h3 {
   background: rgba(255, 255, 255, 0.08);
   transition-duration: 0.08s;
   transition-timing-function: ease-in;
+}
+
+[data-theme="light"] .filter-pill:active:not(.filter-pill-active) {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .filter-pill-count {
@@ -1239,6 +1247,10 @@ h3 {
   background: rgba(255, 255, 255, 0.1);
   color: var(--ink-3);
   transition: background 0.18s ease-out, color 0.18s ease-out;
+}
+
+[data-theme="light"] .filter-pill-count {
+  background: rgba(0, 0, 0, 0.07);
 }
 
 .filter-pill-active {
