@@ -69,28 +69,6 @@ function stripMarkdown(text: string): string {
     .trim()
 }
 
-function fmtNum(n: number): string {
-  if (n >= 100_000) return `${(n / 1000).toFixed(0)}k`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
-}
-
-function buildStatsLine(metrics: Record<string, unknown>): string {
-  const parts: string[] = []
-  const posts = metrics.total_contents
-  if (posts != null) parts.push(`${fmtNum(Number(posts))} posts`)
-  const likes = Number(metrics.total_likes ?? 0)
-  const retweets = Number(metrics.total_retweets ?? 0)
-  const replies = Number(metrics.total_replies ?? 0)
-  const eng = likes + retweets + replies
-  if (eng > 0) parts.push(`${fmtNum(eng)} eng`)
-  const views = metrics.total_views
-  if (views != null && Number(views) > 0) parts.push(`${fmtNum(Number(views))} views`)
-  const mediaPct = metrics.with_media_pct
-  if (mediaPct != null) parts.push(`${mediaPct}% media`)
-  return parts.join(' · ')
-}
-
 // ─── Pipeline Badge ──────────────────────────────────────────
 
 function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
@@ -161,7 +139,6 @@ function TopicCard({
   style?: React.CSSProperties
 }) {
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
-  const statsLine = topic.summary_data?.metrics ? buildStatsLine(topic.summary_data.metrics) : ''
   const d = index * 80
 
   return (
@@ -199,15 +176,7 @@ function TopicCard({
         </div>
       </div>
 
-      <div className="topic-card-row2">
-        <span className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</span>
-        {statsLine && (
-          <>
-            <span className="topic-card-sep">·</span>
-            <span className="topic-card-stats">{statsLine}</span>
-          </>
-        )}
-      </div>
+      <p className="topic-card-updated">Updated {timeAgo(topic.last_crawl_at)}</p>
 
       {/* Pipeline progress */}
       {topic.pipeline && <PipelineBadge pipeline={topic.pipeline} />}
