@@ -30,6 +30,8 @@ interface UseZoneDragOptions {
   onDrop: (id: string, targetZone: Zone, insertIdx: number) => void
 }
 
+const DRAG_THRESHOLD = 8
+
 export function useZoneDrag({
   pinnedIds,
   unpinnedIds,
@@ -47,6 +49,12 @@ export function useZoneDrag({
   const initCardRects = useRef<CardRect[]>([])
   const pinZoneRef = useRef<HTMLDivElement>(null)
   const unpinZoneRef = useRef<HTMLDivElement>(null)
+  const pendingCleanupRef = useRef<(() => void) | null>(null)
+
+  // Clean up pending listeners on unmount
+  useEffect(() => {
+    return () => { pendingCleanupRef.current?.() }
+  }, [])
 
   // Snapshot all card positions at drag start
   const measureAll = useCallback(() => {
@@ -68,15 +76,43 @@ export function useZoneDrag({
     const el = cellRefs.current[id]
     if (!el) return
     const rect = el.getBoundingClientRect()
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-    setDragPos({ x: e.clientX, y: e.clientY })
-    setActiveId(id)
-    measureAll()
+    const offset = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    const startX = e.clientX
+    const startY = e.clientY
     const zone: Zone = pinnedIds.includes(id) ? 'pin' : 'unpin'
-    setActiveRect({
+
+    const cardRect: CardRect = {
       id, x: rect.left, y: rect.top, w: rect.width, h: rect.height,
       cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, zone,
-    })
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPendingMove)
+      window.removeEventListener('pointerup', onPendingUp)
+      pendingCleanupRef.current = null
+    }
+
+    const onPendingMove = (ev: PointerEvent) => {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) >= DRAG_THRESHOLD) {
+        cleanup()
+        // Commit to drag
+        setDragOffset(offset)
+        setDragPos({ x: ev.clientX, y: ev.clientY })
+        setActiveId(id)
+        measureAll()
+        setActiveRect(cardRect)
+      }
+    }
+
+    const onPendingUp = () => {
+      cleanup()
+      // Released before threshold — was a click, not a drag
+    }
+
+    window.addEventListener('pointermove', onPendingMove)
+    window.addEventListener('pointerup', onPendingUp)
+    pendingCleanupRef.current = cleanup
+
     e.preventDefault()
   }, [cellRefs, measureAll, pinnedIds])
 

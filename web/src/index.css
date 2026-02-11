@@ -1328,15 +1328,15 @@ h3 {
 .topic-card {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 28px 28px 24px;
+  gap: 12px;
+  padding: 16px 18px 14px;
   background: var(--glass);
   backdrop-filter: var(--frost);
   -webkit-backdrop-filter: var(--frost);
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: 16px;
   box-shadow: var(--shadow-card), var(--glass-inner);
-  cursor: pointer;
+  cursor: default;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.35s ease, background 0.35s ease;
   position: relative;
   overflow: hidden;
@@ -1398,20 +1398,21 @@ h3 {
 
 .topic-card-title-area {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
+  min-width: 0;
 }
 
 .topic-card-icon-box {
-  width: 50px;
-  height: 50px;
-  border-radius: 15px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: var(--accent-surface);
   border: 1px solid var(--accent-glow);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 23px;
+  font-size: 17px;
   box-shadow: 0 2px 12px var(--accent-glow);
   flex-shrink: 0;
 }
@@ -1419,6 +1420,8 @@ h3 {
 .topic-card-title-info {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .topic-card-title-row {
@@ -1429,10 +1432,13 @@ h3 {
 
 .topic-card-name {
   font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--ink);
   letter-spacing: -0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Live/Paused pill */
@@ -1490,9 +1496,9 @@ h3 {
 
 .topic-card-updated {
   font-family: 'Space Mono', monospace;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-3);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .topic-drag-handle {
@@ -1548,9 +1554,9 @@ h3 {
 .topic-card-refresh {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 12px;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
   background: var(--glass);
   border: 1px solid var(--glass-border);
   font-size: 0.75rem;
@@ -1572,8 +1578,8 @@ h3 {
 /* Card summary */
 .topic-card-summary {
   font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 0.875rem;
-  line-height: 1.75;
+  font-size: 0.8rem;
+  line-height: 1.6;
   color: var(--ink-2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1649,16 +1655,18 @@ h3 {
 
 /* Card metrics grid — 4 tiles */
 .topic-metrics-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .topic-metric-chip {
   display: flex;
-  flex-direction: column;
-  padding: 16px 14px;
-  border-radius: 14px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 10px;
   background: var(--glass);
   backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
@@ -1685,18 +1693,18 @@ h3 {
 
 .topic-metric-label {
   font-family: 'Space Mono', monospace;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin-bottom: 8px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 .topic-metric-value {
   font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 1.625rem;
-  font-weight: 900;
+  font-size: 1rem;
+  font-weight: 800;
   color: var(--ink);
   letter-spacing: -0.04em;
   line-height: 1;
@@ -1805,7 +1813,7 @@ h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 18px;
+  padding-top: 10px;
   border-top: 1px solid var(--glass-border);
   margin-top: auto;
 }
@@ -1826,9 +1834,9 @@ h3 {
 }
 
 .topic-source-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   background: var(--glass);
   backdrop-filter: blur(8px);
   border: 1px solid var(--glass-border);
@@ -2034,6 +2042,8 @@ h3 {
 .g-cell {
   position: relative;
   will-change: transform;
+  cursor: grab;
+  touch-action: none;
 }
 
 /* Drag placeholder skeleton */
@@ -4366,7 +4376,7 @@ h3 {
   }
 
   .topic-metrics-row {
-    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
   }
 
   .page-container {

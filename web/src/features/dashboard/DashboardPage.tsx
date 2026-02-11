@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, GripVertical, Pin, RefreshCw,
+  Plus, Pin, RefreshCw,
   AlertTriangle, Info, AlertCircle,
   Sparkles, Send, Loader2,
 } from 'lucide-react'
@@ -54,6 +54,19 @@ function timeAgo(dateStr: string | null): string {
 function normalizeAlert(alert: TopicAlert): { level: string; message: string } {
   if (typeof alert === 'string') return { level: 'info', message: alert }
   return alert
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .replace(/\n{2,}/g, ' ')
+    .replace(/\n/g, ' ')
+    .trim()
 }
 
 function fmtNum(n: number): string {
@@ -148,7 +161,6 @@ function TopicCard({
   onPin,
   onRefresh,
   onClick,
-  onPointerDown,
   className = '',
   style,
 }: {
@@ -157,7 +169,6 @@ function TopicCard({
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
-  onPointerDown?: (e: React.PointerEvent) => void
   className?: string
   style?: React.CSSProperties
 }) {
@@ -169,8 +180,8 @@ function TopicCard({
     <div
       className={`topic-card rise${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''} ${className}`}
       style={{ animationDelay: `${220 + d}ms`, ...style }}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('button, .topic-drag-handle, .topic-card-refresh')) return
+      onDoubleClick={(e) => {
+        if ((e.target as HTMLElement).closest('button')) return
         onClick(topic.id)
       }}
     >
@@ -179,13 +190,6 @@ function TopicCard({
       {/* Header */}
       <div className="topic-card-header">
         <div className="topic-card-title-area">
-          <span
-            className="topic-drag-handle"
-            onPointerDown={onPointerDown}
-            style={{ touchAction: 'none' }}
-          >
-            <GripVertical size={14} />
-          </span>
           <div className="topic-card-icon-box">{topic.icon}</div>
           <div className="topic-card-title-info">
             <div className="topic-card-title-row">
@@ -221,7 +225,7 @@ function TopicCard({
 
       {/* Description */}
       {topic.last_summary ? (
-        <p className="topic-card-summary">{topic.last_summary}</p>
+        <p className="topic-card-summary">{stripMarkdown(topic.last_summary)}</p>
       ) : !topic.pipeline ? (
         <p className="topic-card-empty">Awaiting first analysis cycle...</p>
       ) : null}
@@ -363,6 +367,10 @@ function ZoneGrid({
               key={topic.id}
               className="g-cell"
               ref={(el) => { cellRefs.current[topic.id] = el }}
+              onPointerDown={(e) => {
+                if ((e.target as HTMLElement).closest('button')) return
+                onPointerDown(e, topic.id)
+              }}
             >
               {isDragging && (
                 <div className="drag-placeholder">
@@ -384,7 +392,6 @@ function ZoneGrid({
                   onPin={onPin}
                   onRefresh={onRefresh}
                   onClick={onClick}
-                  onPointerDown={(e) => onPointerDown(e, topic.id)}
                 />
               </div>
             </div>
