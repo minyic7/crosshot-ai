@@ -1953,58 +1953,6 @@ h3 {
   max-width: 480px;
 }
 
-/* Drag placeholder skeleton */
-.drag-placeholder {
-  position: absolute;
-  inset: 0;
-  border: 2px dashed var(--glass-border-hover);
-  border-radius: 18px;
-  background: rgba(100, 116, 139, 0.04);
-  animation: drag-placeholder-pulse 2s ease infinite;
-}
-
-@keyframes drag-placeholder-pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 0.8; }
-}
-
-.drag-placeholder-inner {
-  padding: 24px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.drag-placeholder-line {
-  height: 8px;
-  border-radius: 4px;
-  background: rgba(100, 116, 139, 0.08);
-}
-
-.drag-placeholder-line.w60 { width: 60%; }
-.drag-placeholder-line.w40 { width: 40%; }
-
-.drag-placeholder-dots {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.drag-placeholder-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(100, 116, 139, 0.1);
-}
-
-/* Drag overlay (follows cursor) */
-.drag-overlay {
-  position: fixed;
-  z-index: 999;
-  pointer-events: none;
-  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.18));
-}
-
 .topic-card.drag-flying {
   transform: scale(0.95) rotate(1.2deg);
   border-color: var(--accent);
