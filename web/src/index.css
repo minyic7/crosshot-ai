@@ -1330,7 +1330,7 @@ h3 {
   flex-direction: column;
   gap: 6px;
   padding: 14px 16px 12px;
-  height: 180px;
+  height: 200px;
   background: var(--glass);
   backdrop-filter: var(--frost);
   -webkit-backdrop-filter: var(--frost);
