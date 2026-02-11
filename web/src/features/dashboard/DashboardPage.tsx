@@ -22,7 +22,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  Plus, Pin, RefreshCw,
+  Plus, Pin, RefreshCw, GripVertical,
   AlertTriangle,
   Sparkles, Send, Loader2,
 } from 'lucide-react'
@@ -149,6 +149,7 @@ function TopicCard({
   onPin,
   onRefresh,
   onClick,
+  dragListeners,
   className = '',
   style,
 }: {
@@ -157,6 +158,7 @@ function TopicCard({
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
+  dragListeners?: Record<string, unknown>
   className?: string
   style?: React.CSSProperties
 }) {
@@ -167,12 +169,17 @@ function TopicCard({
     <div
       className={`topic-card rise${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''} ${className}`}
       style={{ animationDelay: `${180 + d}ms`, ...style }}
-      onDoubleClick={(e) => {
-        if ((e.target as HTMLElement).closest('button')) return
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button, .topic-drag-handle')) return
         onClick(topic.id)
       }}
     >
       <div className="topic-card-shimmer" />
+
+      {/* Drag handle */}
+      <div className="topic-drag-handle" {...dragListeners}>
+        <GripVertical size={14} />
+      </div>
 
       {/* Hover actions — float top-right */}
       <div className="topic-card-actions">
@@ -290,13 +297,14 @@ function SortableCard({
   }
 
   return (
-    <div ref={setNodeRef} className="g-cell" style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} className="g-cell" style={style} {...attributes}>
       <TopicCard
         topic={topic}
         index={index}
         onPin={onPin}
         onRefresh={onRefresh}
         onClick={onClick}
+        dragListeners={listeners}
       />
     </div>
   )

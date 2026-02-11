@@ -1359,7 +1359,7 @@ h3 {
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   box-shadow: var(--shadow-card);
-  cursor: default;
+  cursor: pointer;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.35s ease, background 0.35s ease;
   position: relative;
   overflow: hidden;
@@ -1408,6 +1408,36 @@ h3 {
 .topic-card.dragging {
   opacity: 0.5;
   border: 2px dashed var(--accent);
+}
+
+/* Drag handle — left edge, visible on hover */
+.topic-drag-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--ink-4);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  z-index: 3;
+  touch-action: none;
+}
+
+.topic-card:hover .topic-drag-handle {
+  opacity: 1;
+}
+
+.topic-drag-handle:hover {
+  color: var(--ink-2);
+}
+
+.topic-drag-handle:active {
+  cursor: grabbing;
 }
 
 /* Hover action buttons — float top-right, hidden by default */
