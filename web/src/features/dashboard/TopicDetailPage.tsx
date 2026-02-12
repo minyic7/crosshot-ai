@@ -250,6 +250,12 @@ function formatDay(day: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+const TREND_METRICS = [
+  { key: 'posts', label: 'Posts', color: 'var(--accent)' },
+  { key: 'likes', label: 'Likes', color: 'var(--positive)' },
+  { key: 'views', label: 'Views', color: 'var(--blue)' },
+] as const
+
 function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; dataKey: string }[]; label?: string }) {
   if (!active || !payload?.length) return null
   return (
@@ -257,7 +263,6 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
       <div className="trend-tooltip-date">{label}</div>
       {payload.map((p, i) => (
         <div key={i} className="trend-tooltip-row">
-          <span className="trend-tooltip-label">{p.dataKey}</span>
           <span className="trend-tooltip-value">{fmtNum(p.value)}</span>
         </div>
       ))}
@@ -267,31 +272,43 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 function EngagementTrend({ topicId }: { topicId: string }) {
   const { data: trend, isLoading } = useGetTopicTrendQuery(topicId)
+  const [active, setActive] = useState<'posts' | 'likes' | 'views'>('posts')
 
   if (isLoading) return <div style={{ height: 200 }}><Skeleton className="w-full h-full" /></div>
   if (!trend || trend.length < 2) return null
 
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
+  const metric = TREND_METRICS.find(m => m.key === active)!
 
   return (
     <Card>
       <CardContent>
         <CardHeader className="mb-3">
-          <CardDescription style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <BarChart3 size={14} /> Activity Trend
-          </CardDescription>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <CardDescription style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <BarChart3 size={14} /> Activity Trend
+            </CardDescription>
+            <div className="trend-toggle">
+              {TREND_METRICS.map(m => (
+                <button
+                  key={m.key}
+                  className={`trend-toggle-btn ${active === m.key ? 'active' : ''}`}
+                  onClick={() => setActive(m.key as typeof active)}
+                  style={active === m.key ? { color: m.color } : undefined}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <div style={{ width: '100%', height: 200 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="gradPosts" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradLikes" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--positive)" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="var(--positive)" stopOpacity={0} />
+                <linearGradient id="gradActive" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={metric.color} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" strokeOpacity={0.5} />
@@ -307,8 +324,7 @@ function EngagementTrend({ topicId }: { topicId: string }) {
                 tickLine={false}
               />
               <Tooltip content={<TrendTooltip />} />
-              <Area type="monotone" dataKey="posts" stroke="var(--accent)" strokeWidth={2} fill="url(#gradPosts)" />
-              <Area type="monotone" dataKey="likes" stroke="var(--positive)" strokeWidth={1.5} fill="url(#gradLikes)" />
+              <Area type="monotone" dataKey={active} stroke={metric.color} strokeWidth={2} fill="url(#gradActive)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>

@@ -2188,6 +2188,37 @@ h3 {
   color: var(--ink);
 }
 
+/* Trend metric toggle */
+.trend-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-hover);
+}
+
+.trend-toggle-btn {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.trend-toggle-btn:hover {
+  color: var(--ink-2);
+}
+
+.trend-toggle-btn.active {
+  background: var(--surface-card);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
 /* Topic Chat */
 
 /* Summary + Chat integrated card */
