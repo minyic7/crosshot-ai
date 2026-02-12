@@ -686,11 +686,13 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
               </div>
             )
           )}
-          <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
-            <Plus size={16} />
-            {isLoading ? 'Creating...' : topicType === 'creator' ? 'Create Creator' : 'Create Topic'}
-          </button>
         </div>
+
+        {/* ── Submit — always visible at bottom ── */}
+        <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
+          <Plus size={16} />
+          {isLoading ? 'Creating...' : topicType === 'creator' ? 'Create Creator' : 'Create Topic'}
+        </button>
       </div>
     </Modal>
   )

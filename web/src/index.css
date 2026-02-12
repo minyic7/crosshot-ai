@@ -3185,6 +3185,7 @@ h3 {
 
 /* Filled CTA button (create modal submit) */
 .btn-create {
+  flex-shrink: 0;
   margin-top: 10px;
   margin-left: auto;
   gap: 6px;
