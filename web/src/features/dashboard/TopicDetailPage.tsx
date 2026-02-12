@@ -262,7 +262,13 @@ const TREND_META: Record<TrendKey, { color: string }> = {
   views: { color: 'var(--blue)' },
 }
 
-/** Compute the latest day's value as delta */
+/** Sum all periods for a metric */
+function getTrendTotal(trend: { posts: number; likes: number; views: number }[] | undefined, key: TrendKey): number | null {
+  if (!trend || trend.length === 0) return null
+  return trend.reduce((sum, d) => sum + d[key], 0)
+}
+
+/** Compute the latest period's value as delta */
 function getLatestDelta(trend: { posts: number; likes: number; views: number }[] | undefined, key: TrendKey): number | null {
   if (!trend || trend.length === 0) return null
   return trend[trend.length - 1][key]
@@ -396,10 +402,12 @@ export function TopicDetailPage() {
     }
   }
 
-  // Compute deltas from trend data
+  // Compute totals and deltas from trend data
   const postsDelta = getLatestDelta(trend, 'posts')
   const likesDelta = getLatestDelta(trend, 'likes')
   const viewsDelta = getLatestDelta(trend, 'views')
+  const likesTotal = getTrendTotal(trend, 'likes')
+  const viewsTotal = getTrendTotal(trend, 'views')
 
   const handleTogglePause = async () => {
     await updateTopic({ id: topic.id, status: topic.status === 'active' ? 'paused' : 'active' })
@@ -474,7 +482,7 @@ export function TopicDetailPage() {
           <span className="topic-detail-stat-label">posts</span>
           {postsDelta != null && postsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(postsDelta)}</span>}
         </div>
-        {metrics.total_likes != null && (
+        {(likesTotal != null || metrics.total_likes != null) && (
           <>
             <div className="topic-detail-stat-sep" />
             <div
@@ -482,12 +490,12 @@ export function TopicDetailPage() {
               onClick={(e) => hasTrend && toggleMetric('likes', e)}
             >
               <Heart size={12} />
-              <span className="topic-detail-stat-num">{fmtNum(metrics.total_likes)}</span>
+              <span className="topic-detail-stat-num">{fmtNum(likesTotal ?? metrics.total_likes)}</span>
               {likesDelta != null && likesDelta > 0 && <span className="topic-detail-stat-delta positive">+{fmtNum(likesDelta)}</span>}
             </div>
           </>
         )}
-        {metrics.total_views != null && (
+        {(viewsTotal != null || metrics.total_views != null) && (
           <>
             <div className="topic-detail-stat-sep" />
             <div
@@ -495,7 +503,7 @@ export function TopicDetailPage() {
               onClick={(e) => hasTrend && toggleMetric('views', e)}
             >
               <Eye size={12} />
-              <span className="topic-detail-stat-num">{fmtNum(metrics.total_views)}</span>
+              <span className="topic-detail-stat-num">{fmtNum(viewsTotal ?? metrics.total_views)}</span>
               {viewsDelta != null && viewsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(viewsDelta)}</span>}
             </div>
           </>
