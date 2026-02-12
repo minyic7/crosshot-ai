@@ -3185,7 +3185,7 @@ h3 {
   cursor: not-allowed;
 }
 
-/* Filled CTA button (create modal submit) */
+/* Outlined CTA button (create modal submit) */
 .btn-create {
   flex-shrink: 0;
   margin-top: 10px;
@@ -3193,20 +3193,20 @@ h3 {
   gap: 6px;
   font-weight: 600;
   padding: 6px 20px;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  color: var(--accent-light);
 }
 
 .btn-create:hover:not(:disabled) {
-  background: var(--accent-light);
+  background: var(--accent-surface);
   border-color: var(--accent-light);
   box-shadow: 0 0 20px var(--accent-glow);
   transform: translateY(-1px);
 }
 
 .btn-create:active:not(:disabled) {
-  background: var(--accent);
+  background: var(--accent-surface);
   transform: translateY(0);
   box-shadow: none;
 }
@@ -4804,8 +4804,10 @@ h3 {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 14px var(--accent-glow);
     z-index: 110;
+    background: var(--surface-card);
+    border: 1.5px solid var(--accent);
   }
 
   .btn-create-label {
