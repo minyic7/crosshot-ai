@@ -10,6 +10,7 @@ import { CookiesPage } from '@/features/cookies/CookiesPage'
 import { ContentDetailPage } from '@/features/database/ContentDetailPage'
 import { TaskDetailPage } from '@/features/database/TaskDetailPage'
 import { TopicDetailPage } from '@/features/dashboard/TopicDetailPage'
+import { UserDetailPage } from '@/features/dashboard/UserDetailPage'
 
 export function App() {
   return (
@@ -18,6 +19,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
         <Route path="topic/:id" element={<TopicDetailPage />} />
+        <Route path="user/:id" element={<UserDetailPage />} />
         <Route path="database" element={<DatabasePage />} />
         <Route path="content/:id" element={<ContentDetailPage />} />
         <Route path="task/:id" element={<TaskDetailPage />} />

@@ -6,12 +6,14 @@ from uuid import uuid4
 from sqlalchemy import (
     ARRAY,
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     SmallInteger,
     String,
+    Table,
     Text,
     Uuid,
 )
@@ -62,6 +64,9 @@ class ContentRow(Base):
     id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
     task_id: Mapped[str] = mapped_column(Uuid, ForeignKey("tasks.id"), nullable=False)
     topic_id: Mapped[str | None] = mapped_column(Uuid, ForeignKey("topics.id"), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     platform: Mapped[str] = mapped_column(String(16), nullable=False)
     platform_content_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
@@ -89,6 +94,7 @@ class ContentRow(Base):
     # Relationships
     task: Mapped["TaskRow"] = relationship(back_populates="contents")
     topic: Mapped["TopicRow | None"] = relationship(back_populates="contents", foreign_keys=[topic_id])
+    user: Mapped["UserRow | None"] = relationship(back_populates="contents", foreign_keys=[user_id])
     media: Mapped[list["ContentMediaRow"]] = relationship(
         back_populates="content", cascade="all, delete-orphan"
     )
@@ -97,6 +103,7 @@ class ContentRow(Base):
         Index("ix_contents_platform", "platform"),
         Index("ix_contents_task_id", "task_id"),
         Index("ix_contents_topic_id", "topic_id"),
+        Index("ix_contents_user_id", "user_id"),
         Index(
             "ix_contents_platform_content_id",
             "platform",
@@ -131,6 +138,14 @@ class ContentMediaRow(Base):
     content: Mapped["ContentRow"] = relationship(back_populates="media")
 
     __table_args__ = (Index("ix_content_media_content_id", "content_id"),)
+
+
+topic_users = Table(
+    "topic_users",
+    Base.metadata,
+    Column("topic_id", Uuid, ForeignKey("topics.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class TopicRow(Base):
@@ -177,8 +192,64 @@ class TopicRow(Base):
     contents: Mapped[list["ContentRow"]] = relationship(
         back_populates="topic", foreign_keys="ContentRow.topic_id"
     )
+    users: Mapped[list["UserRow"]] = relationship(
+        secondary=topic_users, back_populates="topics"
+    )
 
     __table_args__ = (
         Index("ix_topics_status", "status"),
         Index("ix_topics_position", "position"),
+    )
+
+
+class UserRow(Base):
+    """A tracked user/creator — can be standalone or attached to topics."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(256), nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    profile_url: Mapped[str] = mapped_column(Text, nullable=False)
+    username: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    # Configuration
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # State
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Stats
+    total_contents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_crawl_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    topics: Mapped[list["TopicRow"]] = relationship(
+        secondary=topic_users, back_populates="users"
+    )
+    contents: Mapped[list["ContentRow"]] = relationship(
+        back_populates="user", foreign_keys="ContentRow.user_id"
+    )
+
+    __table_args__ = (
+        Index("ix_users_status", "status"),
+        Index("ix_users_platform", "platform"),
+        Index("ix_users_username", "username"),
     )

@@ -38,8 +38,12 @@ import {
   useUpdateTopicMutation,
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
+  useListUsersQuery,
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useReorderUsersMutation,
 } from '@/store/api'
-import type { Topic, TopicAlert, TopicPipeline } from '@/types/models'
+import type { Topic, TopicAlert, TopicPipeline, User as UserType, TopicStatus } from '@/types/models'
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
@@ -204,8 +208,9 @@ function TopicCard({
 
       {/* HEADER */}
       <div className="topic-card-row1">
-        <div className="topic-card-icon-box">{topic.icon}</div>
+        <div className="topic-card-icon-box">{topic.type === 'user' ? '👤' : topic.icon}</div>
         <h3 className="topic-card-name">{topic.name}</h3>
+        {topic.type === 'user' && <span className="topic-tag platform" style={{ fontSize: '0.6rem', marginLeft: 4 }}>{topic.platforms[0]?.toUpperCase()}</span>}
         <span className={`topic-status-pill ${topic.status}`}>
           <span className="topic-status-pill-dot" />
           {topic.status === 'active' ? 'Live' : 'Paused'}
@@ -251,11 +256,20 @@ function TopicCard({
           ))}
         </div>
         <div className="topic-card-tags">
-          {topic.keywords.slice(0, 2).map((kw) => (
-            <span key={kw} className="topic-tag">#{kw}</span>
-          ))}
-          {topic.keywords.length > 2 && (
-            <span className="topic-tag-more">+{topic.keywords.length - 2}</span>
+          {topic.type === 'user' && topic.description ? (
+            <span className="topic-tag">@{topic.description}</span>
+          ) : (
+            <>
+              {topic.keywords.slice(0, 2).map((kw) => (
+                <span key={kw} className="topic-tag">#{kw}</span>
+              ))}
+              {topic.keywords.length > 2 && (
+                <span className="topic-tag-more">+{topic.keywords.length - 2}</span>
+              )}
+            </>
+          )}
+          {(topic.user_count ?? 0) > 0 && (
+            <span className="topic-tag">{topic.user_count} users</span>
           )}
         </div>
       </div>
@@ -394,16 +408,18 @@ function ZoneGrid({
 // ─── Create Topic Modal ───────────────────────────────────────
 
 function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [topicType, setTopicType] = useState<'topic' | 'creator'>('topic')
+  const [topicType, setTopicType] = useState<'topic' | 'user'>('topic')
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('📊')
   const [description, setDescription] = useState('')
   const [platforms, setPlatforms] = useState<string[]>(['x'])
-  const [platform, setPlatform] = useState('x') // single platform for creator
+  const [platform, setPlatform] = useState('x') // single platform for user
   const [profileUrl, setProfileUrl] = useState('')
   const [keywords, setKeywords] = useState('')
   const [interval, setInterval] = useState('6')
-  const [createTopic, { isLoading }] = useCreateTopicMutation()
+  const [createTopic, { isLoading: topicLoading }] = useCreateTopicMutation()
+  const [createUser, { isLoading: userLoading }] = useCreateUserMutation()
+  const isLoading = topicLoading || userLoading
   const [formOpen, setFormOpen] = useState(true)
 
   const buildBody = useCallback(
@@ -442,11 +458,11 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     setProfileUrl(''); setKeywords(''); setInterval('6'); setFormOpen(true)
   }
 
-  const switchTab = (t: 'topic' | 'creator') => {
+  const switchTab = (t: 'topic' | 'user') => {
     if (t === topicType) return
     setTopicType(t)
     resetForm()
-    setIcon(t === 'creator' ? '👤' : '📊')
+    setIcon(t === 'user' ? '👤' : '📊')
   }
 
   const emojiOptions = EMOJI_OPTIONS.includes(icon) ? EMOJI_OPTIONS : [icon, ...EMOJI_OPTIONS]
@@ -465,19 +481,31 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     }
 
     const config: Record<string, unknown> = { schedule_interval_hours: Number(interval) || 6 }
-    if (topicType === 'creator') {
-      config.profile_url = profileUrl.trim()
-    }
 
-    await createTopic({
-      type: topicType,
-      name: name.trim(),
-      icon,
-      description: finalDesc || undefined,
-      platforms: topicType === 'creator' ? [platform] : platforms,
-      keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
-      config,
-    })
+    if (topicType === 'user') {
+      // Extract username from profile URL (e.g. https://x.com/elonmusk → elonmusk)
+      const urlStr = profileUrl.trim()
+      const usernameMatch = urlStr.match(/(?:x\.com|twitter\.com)\/(@?\w+)/i)
+      const username = usernameMatch ? usernameMatch[1].replace('@', '') : undefined
+
+      await createUser({
+        name: name.trim(),
+        platform,
+        profile_url: urlStr,
+        username,
+        config,
+      })
+    } else {
+      await createTopic({
+        type: 'topic',
+        name: name.trim(),
+        icon,
+        description: finalDesc || undefined,
+        platforms,
+        keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
+        config,
+      })
+    }
     resetForm()
     onClose()
   }
@@ -488,20 +516,20 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
 
   const [submitted, setSubmitted] = useState(false)
   const nameError = submitted && !name.trim()
-    ? (topicType === 'creator' ? 'Creator name is required' : 'Topic name is required')
+    ? (topicType === 'user' ? 'User name is required' : 'Topic name is required')
     : ''
   const platformError = submitted && topicType === 'topic' && platforms.length === 0 ? 'Select at least one platform' : ''
-  const urlError = submitted && topicType === 'creator' && !profileUrl.trim() ? 'Profile URL is required' : ''
+  const urlError = submitted && topicType === 'user' && !profileUrl.trim() ? 'Profile URL is required' : ''
 
   const handleSubmitWithValidation = () => {
     setSubmitted(true)
     if (topicType === 'topic' && (!name.trim() || platforms.length === 0)) return
-    if (topicType === 'creator' && (!name.trim() || !profileUrl.trim())) return
+    if (topicType === 'user' && (!name.trim() || !profileUrl.trim())) return
     handleSubmit()
   }
 
   // Form summary line for collapsed state
-  const formSummary = topicType === 'creator'
+  const formSummary = topicType === 'user'
     ? [
         name && `${icon} ${name}`,
         platform.toUpperCase(),
@@ -517,7 +545,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
       ].filter(Boolean).join(' · ')
 
   return (
-    <Modal open={open} onClose={onClose} title={topicType === 'creator' ? 'New Creator' : 'New Topic'} className="create-topic-panel">
+    <Modal open={open} onClose={onClose} title={topicType === 'user' ? 'New User' : 'New Topic'} className="create-topic-panel">
       <div className="create-topic-content">
         {/* ── Tab Switcher ── */}
         <div className="create-topic-tabs">
@@ -529,11 +557,11 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
             Topic
           </button>
           <button
-            className={`create-topic-tab${topicType === 'creator' ? ' active' : ''}`}
-            onClick={() => switchTab('creator')}
+            className={`create-topic-tab${topicType === 'user' ? ' active' : ''}`}
+            onClick={() => switchTab('user')}
           >
             <User size={14} />
-            Creator
+            User
           </button>
         </div>
 
@@ -543,9 +571,9 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
             {chatMessages.length === 0 && !streamingReply && !isAssisting ? (
               <div className="create-topic-chat-empty">
                 <Sparkles size={24} />
-                {topicType === 'creator' ? (
+                {topicType === 'user' ? (
                   <>
-                    <p>Tell AI which creator to follow,</p>
+                    <p>Tell AI which user to follow,</p>
                     <p>or fill in the form below.</p>
                   </>
                 ) : (
@@ -587,8 +615,8 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
           <div className="create-topic-chat-input-row">
             <textarea
               className="topic-chat-input"
-              placeholder={topicType === 'creator'
-                ? 'Describe the creator you want to follow...'
+              placeholder={topicType === 'user'
+                ? 'Describe the user you want to follow...'
                 : 'Describe what you want to monitor...'}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
@@ -606,7 +634,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         <div className="create-topic-form">
           <div className="create-topic-form-header" onClick={() => setFormOpen(!formOpen)}>
             <span className="form-label" style={{ margin: 0 }}>
-              {topicType === 'creator' ? 'Creator Details' : 'Topic Details'}
+              {topicType === 'user' ? 'User Details' : 'Topic Details'}
             </span>
             {!formOpen && formSummary && (
               <span className="create-topic-form-summary">{formSummary}</span>
@@ -614,7 +642,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
             {formOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </div>
           {formOpen && (
-            topicType === 'creator' ? (
+            topicType === 'user' ? (
               /* ── Creator Form ── */
               <div className="create-topic-form-fields">
                 <div className="form-group">
@@ -693,7 +721,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
       <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
         {isLoading ? <Loader2 size={18} className="assist-spinner" /> : <Plus size={18} />}
         <span className="btn-create-label">
-          {isLoading ? 'Creating...' : topicType === 'creator' ? 'Create Creator' : 'Create Topic'}
+          {isLoading ? 'Creating...' : topicType === 'user' ? 'Create User' : 'Create Topic'}
         </span>
       </button>
     </Modal>
@@ -716,24 +744,61 @@ export function DashboardPage() {
     if (btn) setSlider({ left: btn.offsetLeft, width: btn.offsetWidth, ready: true })
   }, [filter])
 
-  // Poll faster when any topic has an active pipeline
+  // Poll faster when any entity has an active pipeline
   const [pollingInterval, setPollingInterval] = useState(30_000)
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval })
+  const { data: standaloneUsers, isLoading: usersLoading } = useListUsersQuery({ standalone: true }, { pollingInterval })
 
   useEffect(() => {
     const hasActivePipeline = topics?.some((t) => t.pipeline && t.pipeline.phase !== 'done')
+      || standaloneUsers?.some((u) => u.pipeline && u.pipeline.phase !== 'done')
     setPollingInterval(hasActivePipeline ? 3_000 : 30_000)
-  }, [topics])
+  }, [topics, standaloneUsers])
 
   const [updateTopic] = useUpdateTopicMutation()
+  const [updateUser] = useUpdateUserMutation()
   const [reanalyzeTopic] = useReanalyzeTopicMutation()
   const [reorderTopics] = useReorderTopicsMutation()
+  const [reorderUsers] = useReorderUsersMutation()
 
   const handleRefresh = useCallback((id: string) => { reanalyzeTopic(id) }, [reanalyzeTopic])
-  const handleTopicClick = useCallback((id: string) => { navigate(`/topic/${id}`) }, [navigate])
+  const handleTopicClick = useCallback((id: string) => {
+    // Check if it's a user card (type === 'user') by looking up in allTopics
+    const item = allTopicsRef.current.find((t) => t.id === id)
+    if (item?.type === 'user') navigate(`/user/${id}`)
+    else navigate(`/topic/${id}`)
+  }, [navigate])
 
-  // Derive pinned / unpinned from topics + filter
-  const allTopics = topics ?? []
+  // Map standalone users to Topic-like objects for the shared grid
+  const userAsTopic = useCallback((u: UserType): Topic => ({
+    id: u.id,
+    type: 'user',
+    name: u.name,
+    icon: '👤',
+    description: u.username, // store username in description for card display
+    platforms: [u.platform],
+    keywords: [],
+    config: u.config,
+    status: u.status as TopicStatus,
+    is_pinned: u.is_pinned,
+    position: u.position,
+    total_contents: u.total_contents,
+    last_crawl_at: u.last_crawl_at,
+    last_summary: u.last_summary,
+    summary_data: u.summary_data,
+    pipeline: u.pipeline,
+    created_at: u.created_at,
+    updated_at: u.updated_at,
+  }), [])
+
+  // Merge topics + standalone users
+  const allTopics = useMemo(() => {
+    const t = topics ?? []
+    const u = (standaloneUsers ?? []).map(userAsTopic)
+    return [...t, ...u]
+  }, [topics, standaloneUsers, userAsTopic])
+  const allTopicsRef = useRef(allTopics)
+  allTopicsRef.current = allTopics
   const filtered = filter === 'All' ? allTopics : filter === 'Active' ? allTopics.filter((t) => t.status === 'active') : allTopics.filter((t) => t.status === 'paused')
   const pinned = useMemo(() => filtered.filter((t) => t.is_pinned), [filtered])
   const unpinned = useMemo(() => filtered.filter((t) => !t.is_pinned), [filtered])
@@ -844,8 +909,22 @@ export function DashboardPage() {
     // Skip the next sync so stale server data doesn't overwrite our local order.
     skipSyncRef.current = true
     setActiveId(null)
-    reorderTopics({ pinned: containersRef.current.pinned, unpinned: containersRef.current.unpinned })
-  }, [reorderTopics, pinnedKey, unpinnedKey])
+
+    // Split IDs by type — topics and users have separate reorder APIs
+    const isUserItem = (id: string) => allTopicsRef.current.find(t => t.id === id)?.type === 'user'
+    const { pinned, unpinned } = containersRef.current
+    const topicPinned = pinned.filter(id => !isUserItem(id))
+    const topicUnpinned = unpinned.filter(id => !isUserItem(id))
+    const userPinned = pinned.filter(id => isUserItem(id))
+    const userUnpinned = unpinned.filter(id => isUserItem(id))
+
+    if (topicPinned.length > 0 || topicUnpinned.length > 0) {
+      reorderTopics({ pinned: topicPinned, unpinned: topicUnpinned })
+    }
+    if (userPinned.length > 0 || userUnpinned.length > 0) {
+      reorderUsers({ pinned: userPinned, unpinned: userUnpinned })
+    }
+  }, [reorderTopics, reorderUsers, pinnedKey, unpinnedKey])
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null)
@@ -861,10 +940,12 @@ export function DashboardPage() {
   const currentDragZone = activeId ? findContainer(activeId) : null
   const crossingZone = !!(activeId && currentDragZone && currentDragZone !== originalZone)
 
-  // Pin via button
+  // Pin via button — route to correct mutation based on type
   const handlePin = useCallback((id: string, pinned: boolean) => {
-    updateTopic({ id, is_pinned: pinned })
-  }, [updateTopic])
+    const item = allTopicsRef.current.find((t) => t.id === id)
+    if (item?.type === 'user') updateUser({ id, is_pinned: pinned })
+    else updateTopic({ id, is_pinned: pinned })
+  }, [updateTopic, updateUser])
 
   const totalPosts = allTopics.reduce((s, t) => s + t.total_contents, 0)
 
@@ -909,7 +990,7 @@ export function DashboardPage() {
       </div>
 
       {/* Topic zones */}
-      {topicsLoading ? (
+      {(topicsLoading || usersLoading) ? (
         <div className="topic-grid">
           <div style={{ minHeight: 280 }}><Skeleton className="w-full h-full" /></div>
           <div style={{ minHeight: 280 }}><Skeleton className="w-full h-full" /></div>

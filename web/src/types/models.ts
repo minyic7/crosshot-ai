@@ -151,4 +151,28 @@ export interface Topic {
   pipeline: TopicPipeline | null
   created_at: string
   updated_at: string
+  user_count?: number
+  users?: User[]
+}
+
+export type UserStatus = 'active' | 'paused' | 'cancelled'
+
+export interface User {
+  id: string
+  name: string
+  platform: string
+  profile_url: string
+  username: string | null
+  config: Record<string, unknown>
+  status: UserStatus
+  is_pinned: boolean
+  position: number
+  total_contents: number
+  last_crawl_at: string | null
+  last_summary: string | null
+  summary_data: TopicSummaryData | null
+  pipeline: TopicPipeline | null
+  created_at: string
+  updated_at: string
+  topics?: Topic[]
 }

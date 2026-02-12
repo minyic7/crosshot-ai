@@ -1,17 +1,17 @@
 import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, ExternalLink } from 'lucide-react'
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Markdown } from '@/components/ui/Markdown'
 import {
-  useGetTopicQuery,
-  useGetTopicTrendQuery,
-  useReanalyzeTopicMutation,
-  useUpdateTopicMutation,
-  useDeleteTopicMutation,
+  useGetUserQuery,
+  useGetUserTrendQuery,
+  useReanalyzeUserMutation,
+  useUpdateUserMutation,
+  useDeleteUserMutation,
   useDetachUserMutation,
 } from '@/store/api'
 import type { TopicInsight } from '@/types/models'
@@ -20,7 +20,6 @@ import { useSSEChat } from '@/hooks/useSSEChat'
 
 function normalizeInsights(data: { alerts?: unknown[]; insights?: unknown[] } | null): TopicInsight[] {
   const result: TopicInsight[] = []
-  // New format: insights with sentiment
   if (data?.insights && Array.isArray(data.insights)) {
     for (const item of data.insights) {
       if (typeof item === 'object' && item !== null && 'text' in item) {
@@ -32,7 +31,6 @@ function normalizeInsights(data: { alerts?: unknown[]; insights?: unknown[] } | 
     }
     return result
   }
-  // Legacy format: alerts
   if (data?.alerts && Array.isArray(data.alerts)) {
     for (const item of data.alerts) {
       if (typeof item === 'object' && item !== null && 'message' in item) {
@@ -56,9 +54,8 @@ function fmtNum(n: unknown): string {
   return String(v)
 }
 
-/** Summary card with integrated chat — summary is the first "assistant" turn */
 function SummaryChat({
-  topicId,
+  userId,
   summary,
   translated,
   translating,
@@ -66,7 +63,7 @@ function SummaryChat({
   cycleId,
   insights,
 }: {
-  topicId: string
+  userId: string
   summary: string
   translated: string
   translating: boolean
@@ -83,7 +80,7 @@ function SummaryChat({
   )
 
   const { messages, input, setInput, streaming, send, handleKeyDown, scrollRef } = useSSEChat({
-    endpoint: `/api/topics/${topicId}/chat`,
+    endpoint: `/api/users/${userId}/chat`,
     buildBody,
     mode: 'direct',
   })
@@ -107,9 +104,7 @@ function SummaryChat({
           </div>
         </CardHeader>
 
-        {/* Scrollable area: insights + summary + chat messages */}
         <div className="summary-chat-scroll">
-          {/* Insights — above the summary */}
           {insights.length > 0 && (
             <div className="summary-insights">
               {insights.map((insight, i) => (
@@ -121,7 +116,6 @@ function SummaryChat({
             </div>
           )}
 
-          {/* Summary = first assistant turn */}
           <div className="summary-chat-summary">
             <Markdown>{translated || summary}</Markdown>
           </div>
@@ -133,7 +127,6 @@ function SummaryChat({
             </div>
           )}
 
-          {/* Chat messages */}
           {hasChat && (
             <div className="summary-chat-divider">
               <span>Conversation</span>
@@ -151,14 +144,13 @@ function SummaryChat({
           <div ref={scrollRef} />
         </div>
 
-        {/* Chat input — always visible at the bottom */}
         <div className="summary-chat-input-row">
           <textarea
             className="topic-chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this analysis..."
+            placeholder="Ask about this user's content..."
             disabled={streaming}
             rows={1}
           />
@@ -172,7 +164,6 @@ function SummaryChat({
 }
 
 function formatDay(day: string): string {
-  // Handle both "2026-02-11" and "2026-02-11 18:00" formats
   const d = new Date(day.includes(' ') ? day.replace(' ', 'T') : day + 'T00:00:00')
   if (isNaN(d.getTime())) return day
   const hasTime = day.includes(' ')
@@ -192,13 +183,11 @@ const TREND_META: Record<TrendKey, { color: string }> = {
 
 type TrendPoint = { posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }
 
-/** Sum all periods for a metric */
 function getTrendTotal(trend: TrendPoint[] | undefined, key: keyof TrendPoint): number | null {
   if (!trend || trend.length === 0) return null
   return trend.reduce((sum, d) => sum + d[key], 0)
 }
 
-/** Compute the latest period's value as delta */
 function getLatestDelta(trend: TrendPoint[] | undefined, key: keyof TrendPoint): number | null {
   if (!trend || trend.length === 0) return null
   return trend[trend.length - 1][key]
@@ -216,7 +205,6 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-/** Compact sparkline chart that expands below the clicked stat */
 function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint & { day: string })[]; metricKey: TrendKey; anchorLeft: number }) {
   const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
@@ -226,7 +214,7 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
           <defs>
-            <linearGradient id={`grad-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={`grad-user-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={meta.color} stopOpacity={0.25} />
               <stop offset="100%" stopColor={meta.color} stopOpacity={0} />
             </linearGradient>
@@ -238,21 +226,21 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
             tickLine={false}
           />
           <Tooltip content={<TrendTooltip />} />
-          <Area type="monotone" dataKey={metricKey} stroke={meta.color} strokeWidth={2} fill={`url(#grad-${metricKey})`} />
+          <Area type="monotone" dataKey={metricKey} stroke={meta.color} strokeWidth={2} fill={`url(#grad-user-${metricKey})`} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   )
 }
 
-export function TopicDetailPage() {
+export function UserDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: topic, isLoading, isError } = useGetTopicQuery(id ?? '', { skip: !id, pollingInterval: 10000 })
-  const { data: trend } = useGetTopicTrendQuery(id ?? '', { skip: !id })
-  const [reanalyzeTopic, { isLoading: isReanalyzing }] = useReanalyzeTopicMutation()
-  const [updateTopic] = useUpdateTopicMutation()
-  const [deleteTopic] = useDeleteTopicMutation()
+  const { data: user, isLoading, isError } = useGetUserQuery(id ?? '', { skip: !id, pollingInterval: 10000 })
+  const { data: trend } = useGetUserTrendQuery(id ?? '', { skip: !id })
+  const [reanalyzeUser, { isLoading: isReanalyzing }] = useReanalyzeUserMutation()
+  const [updateUser] = useUpdateUserMutation()
+  const [deleteUser] = useDeleteUserMutation()
   const [detachUser] = useDetachUserMutation()
   const { fmt } = useTimezone()
   const [translated, setTranslated] = useState('')
@@ -303,19 +291,19 @@ export function TopicDetailPage() {
     )
   }
 
-  if (isError || !topic || ('error' in topic)) {
+  if (isError || !user || ('error' in user)) {
     return (
       <div className="stack rise">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ArrowLeft size={16} /> Back
         </Button>
-        <p style={{ color: 'var(--negative)' }}>Topic not found</p>
+        <p style={{ color: 'var(--negative)' }}>User not found</p>
       </div>
     )
   }
 
-  const insights = normalizeInsights(topic.summary_data)
-  const metrics = (topic.summary_data?.metrics ?? {}) as Record<string, unknown>
+  const insights = normalizeInsights(user.summary_data)
+  const metrics = (user.summary_data?.metrics ?? {}) as Record<string, unknown>
   const hasTrend = trend && trend.length >= 2
 
   const toggleMetric = (key: TrendKey, e: React.MouseEvent) => {
@@ -346,7 +334,6 @@ export function TopicDetailPage() {
     setShowMediaPie((prev) => !prev)
   }
 
-  // Compute totals and deltas from trend data
   const postsDelta = getLatestDelta(trend, 'posts')
   const likesDelta = getLatestDelta(trend, 'likes')
   const viewsDelta = getLatestDelta(trend, 'views')
@@ -361,13 +348,21 @@ export function TopicDetailPage() {
   const mediaPct = (postsTotal && mediaPostsTotal != null) ? Math.round(mediaPostsTotal * 100 / postsTotal) : null
 
   const handleTogglePause = async () => {
-    await updateTopic({ id: topic.id, status: topic.status === 'active' ? 'paused' : 'active' })
+    await updateUser({ id: user.id, status: user.status === 'active' ? 'paused' : 'active' })
   }
 
   const handleDelete = async () => {
-    await deleteTopic(topic.id)
+    await deleteUser(user.id)
     navigate('/')
   }
+
+  const handleDetach = async (topicId: string) => {
+    await detachUser({ userId: user.id, topicId })
+  }
+
+  // Crawl progress from summary_data
+  const crawlProgress = (user.summary_data as Record<string, unknown>)?.crawl_progress as
+    { timeline_exhausted?: boolean; total_known_tweets?: number } | undefined
 
   return (
     <div className="topic-detail rise">
@@ -378,23 +373,35 @@ export function TopicDetailPage() {
             <ArrowLeft size={16} />
           </Button>
           <div className="topic-card-icon-box" style={{ width: 40, height: 40, borderRadius: 12, fontSize: 18 }}>
-            {topic.icon}
+            👤
           </div>
-          <h1>{topic.name}</h1>
-          <div className={`topic-status-pill ${topic.status === 'active' ? 'active' : 'paused'}`}>
+          <div>
+            <h1>{user.name}</h1>
+            {user.username && (
+              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: '0.75rem', color: 'var(--ink-3)' }}>
+                @{user.username}
+              </span>
+            )}
+          </div>
+          <div className={`topic-status-pill ${user.status === 'active' ? 'active' : 'paused'}`}>
             <span className="topic-status-dot">
               <span className="topic-status-dot-inner" />
-              {topic.status === 'active' && <span className="topic-status-dot-ring" />}
+              {user.status === 'active' && <span className="topic-status-dot-ring" />}
             </span>
-            {topic.status === 'active' ? 'Live' : 'Paused'}
+            {user.status === 'active' ? 'Live' : 'Paused'}
           </div>
         </div>
         <div className="topic-detail-actions">
-          <button className="topic-card-refresh" onClick={() => reanalyzeTopic(topic.id)} disabled={isReanalyzing} title="Reanalyze">
+          <button className="topic-card-refresh" onClick={() => reanalyzeUser(user.id)} disabled={isReanalyzing} title="Reanalyze">
             <RefreshCw size={13} className={isReanalyzing ? 'animate-spin' : ''} />
           </button>
+          {user.profile_url && (
+            <a href={user.profile_url} target="_blank" rel="noreferrer" className="topic-card-refresh" title="Open profile">
+              <ExternalLink size={13} />
+            </a>
+          )}
           <Button size="sm" variant="ghost" onClick={handleTogglePause}>
-            {topic.status === 'active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+            {user.status === 'active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
           </Button>
           <Button size="sm" variant="ghost" onClick={handleDelete} style={{ color: 'var(--negative)' }}>
             <Trash2 size={14} />
@@ -407,29 +414,36 @@ export function TopicDetailPage() {
       <div ref={statsRef} className="topic-detail-stats pop" style={{ animationDelay: '80ms' }}>
         <div className="topic-detail-stat">
           <span className="topic-detail-stat-label">Created</span>
-          <span className="topic-detail-stat-value">{fmt(topic.created_at)}</span>
+          <span className="topic-detail-stat-value">{fmt(user.created_at)}</span>
         </div>
         <div className="topic-detail-stat-sep" />
         <div className="topic-detail-stat">
           <span className="topic-detail-stat-label">Last Crawl</span>
-          <span className="topic-detail-stat-value">{fmt(topic.last_crawl_at)}</span>
+          <span className="topic-detail-stat-value">{fmt(user.last_crawl_at)}</span>
         </div>
         <div className="topic-detail-stat-sep" />
         <div className="topic-detail-stat">
-          <span className="topic-detail-stat-label">Platforms</span>
-          <span style={{ display: 'flex', gap: 4 }}>
-            {(topic.platforms ?? []).map((p) => (
-              <span key={p} className="topic-tag platform">{(p ?? '').toUpperCase()}</span>
-            ))}
-          </span>
+          <span className="topic-detail-stat-label">Platform</span>
+          <span className="topic-tag platform">{(user.platform ?? '').toUpperCase()}</span>
         </div>
+        {crawlProgress?.timeline_exhausted != null && (
+          <>
+            <div className="topic-detail-stat-sep" />
+            <div className="topic-detail-stat">
+              <span className="topic-detail-stat-label">Timeline</span>
+              <span className="topic-detail-stat-value">
+                {crawlProgress.timeline_exhausted ? 'Fully crawled' : 'In progress'}
+              </span>
+            </div>
+          </>
+        )}
         <div className="topic-detail-stat-sep" />
         <div
           className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'posts' ? 'expanded' : ''}`}
           onClick={(e) => hasTrend && toggleMetric('posts', e)}
         >
           <BarChart3 size={13} />
-          <span className="topic-detail-stat-num">{fmtNum(topic.total_contents)}</span>
+          <span className="topic-detail-stat-num">{fmtNum(user.total_contents)}</span>
           <span className="topic-detail-stat-label">posts</span>
           {postsDelta != null && postsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(postsDelta)}</span>}
         </div>
@@ -499,12 +513,10 @@ export function TopicDetailPage() {
         )}
       </div>
 
-      {/* Expanded sparkline — slides open below stats bar */}
       {expandedMetric && hasTrend && (
         <TrendSparkline trend={trend} metricKey={expandedMetric} anchorLeft={anchorLeft} />
       )}
 
-      {/* Media pie chart */}
       {showMediaPie && mediaPostsTotal != null && postsTotal != null && postsTotal > 0 && (() => {
         const pct = Math.round(mediaPostsTotal * 100 / postsTotal)
         const textOnly = postsTotal - mediaPostsTotal
@@ -547,7 +559,6 @@ export function TopicDetailPage() {
                   />
                 </PieChart>
               </ResponsiveContainer>
-              {/* Center label */}
               <div className="media-pie-center">
                 <span className="media-pie-pct">{pct}%</span>
                 <span className="media-pie-label">media</span>
@@ -570,30 +581,23 @@ export function TopicDetailPage() {
       })()}
       </div>
 
-      {/* Keywords */}
-      {(topic.keywords ?? []).length > 0 && (
+      {/* Attached Topics */}
+      {user.topics && user.topics.length > 0 && (
         <div className="topic-card-tags" style={{ padding: 0 }}>
-          {(topic.keywords ?? []).map((kw) => <span key={kw} className="topic-tag">#{kw}</span>)}
-        </div>
-      )}
-
-      {/* Subscribed Users */}
-      {(topic.users ?? []).length > 0 && (
-        <div className="topic-card-tags" style={{ padding: 0 }}>
-          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)', marginRight: 8 }}>Users:</span>
-          {topic.users!.map((u) => (
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)', marginRight: 8 }}>Topics:</span>
+          {user.topics.map((t) => (
             <span
-              key={u.id}
+              key={t.id}
               className="topic-tag"
               style={{ cursor: 'pointer' }}
-              onClick={() => navigate(`/user/${u.id}`)}
+              onClick={() => navigate(`/topic/${t.id}`)}
             >
-              👤 {u.username ? `@${u.username}` : u.name}
+              {t.icon} {t.name}
               <button
                 className="topic-card-refresh"
                 style={{ marginLeft: 4, padding: 0, minWidth: 0 }}
-                onClick={(e) => { e.stopPropagation(); detachUser({ userId: u.id, topicId: topic.id }) }}
-                title="Detach user"
+                onClick={(e) => { e.stopPropagation(); handleDetach(t.id) }}
+                title="Detach from topic"
               >
                 &times;
               </button>
@@ -602,21 +606,21 @@ export function TopicDetailPage() {
         </div>
       )}
 
-      {/* Summary + Chat (integrated) */}
-      {topic.last_summary && (
+      {/* Summary + Chat */}
+      {user.last_summary && (
         <SummaryChat
-          topicId={topic.id}
-          summary={topic.last_summary}
+          userId={user.id}
+          summary={user.last_summary}
           translated={translated}
           translating={translating}
-          onTranslate={() => handleTranslate(topic.last_summary!)}
-          cycleId={topic.summary_data?.cycle_id}
+          onTranslate={() => handleTranslate(user.last_summary!)}
+          cycleId={user.summary_data?.cycle_id}
           insights={insights}
         />
       )}
 
       {/* Raw data */}
-      {topic.summary_data && (
+      {user.summary_data && (
         <details style={{ marginTop: 8 }}>
           <summary style={{ fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', cursor: 'pointer', color: 'var(--ink-3)', padding: '8px 0' }}>
             Raw summary data
@@ -634,7 +638,7 @@ export function TopicDetailPage() {
             border: '1px solid var(--glass-border)',
             color: 'var(--ink-2)',
           }}>
-            {JSON.stringify(topic.summary_data, null, 2)}
+            {JSON.stringify(user.summary_data, null, 2)}
           </pre>
         </details>
       )}

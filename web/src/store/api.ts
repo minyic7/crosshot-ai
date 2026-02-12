@@ -1,10 +1,10 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic } from '@/types/models'
+import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User } from '@/types/models'
 
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Task', 'Job', 'Agent', 'Content', 'Cookies', 'Topic'],
+  tagTypes: ['Task', 'Job', 'Agent', 'Content', 'Cookies', 'Topic', 'User'],
   endpoints: (builder) => ({
     // Health (at root, not /api)
     getHealth: builder.query<HealthResponse, void>({
@@ -126,6 +126,58 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Topic'],
     }),
+
+    // Users
+    listUsers: builder.query<User[], { standalone?: boolean } | void>({
+      query: (params) => ({ url: '/users', params: params ?? undefined }),
+      transformResponse: (res: { users: User[] }) => res.users,
+      providesTags: ['User'],
+    }),
+    getUser: builder.query<User, string>({
+      query: (id) => `/users/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'User', id }],
+    }),
+    createUser: builder.mutation<User, { name: string; platform: string; profile_url: string; username?: string; config?: Record<string, unknown>; topic_ids?: string[] }>({
+      query: (body) => ({ url: '/users', method: 'POST', body }),
+      transformResponse: (res: { user: User }) => res.user,
+      invalidatesTags: ['User', 'Topic'],
+    }),
+    updateUser: builder.mutation<User, { id: string } & Partial<{ name: string; platform: string; profile_url: string; username: string; config: Record<string, unknown>; status: string; is_pinned: boolean }>>({
+      query: ({ id, ...body }) => ({ url: `/users/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['User'],
+    }),
+    deleteUser: builder.mutation<{ deleted: string }, string>({
+      query: (id) => ({ url: `/users/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['User', 'Topic'],
+    }),
+    attachUser: builder.mutation<{ status: string }, { userId: string; topicId: string }>({
+      query: ({ userId, topicId }) => ({ url: `/users/${userId}/attach`, method: 'POST', body: { topic_id: topicId } }),
+      invalidatesTags: ['User', 'Topic'],
+    }),
+    detachUser: builder.mutation<{ status: string }, { userId: string; topicId: string }>({
+      query: ({ userId, topicId }) => ({ url: `/users/${userId}/detach`, method: 'POST', body: { topic_id: topicId } }),
+      invalidatesTags: ['User', 'Topic'],
+    }),
+    reorderUsers: builder.mutation<{ status: string }, { pinned: string[]; unpinned: string[] }>({
+      query: ({ pinned, unpinned }) => ({
+        url: '/users/reorder',
+        method: 'POST',
+        body: {
+          items: [
+            ...pinned.map((id, i) => ({ id, position: i, is_pinned: true })),
+            ...unpinned.map((id, i) => ({ id, position: i, is_pinned: false })),
+          ],
+        },
+      }),
+      invalidatesTags: ['User'],
+    }),
+    reanalyzeUser: builder.mutation<{ task_id: string }, string>({
+      query: (id) => ({ url: `/users/${id}/reanalyze`, method: 'POST' }),
+      invalidatesTags: ['User'],
+    }),
+    getUserTrend: builder.query<{ day: string; posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }[], string>({
+      query: (id) => `/users/${id}/trend`,
+    }),
   }),
 })
 
@@ -154,4 +206,14 @@ export const {
   useGetTopicTrendQuery,
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
+  useListUsersQuery,
+  useGetUserQuery,
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useDeleteUserMutation,
+  useAttachUserMutation,
+  useDetachUserMutation,
+  useReorderUsersMutation,
+  useReanalyzeUserMutation,
+  useGetUserTrendQuery,
 } = apiSlice

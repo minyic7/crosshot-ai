@@ -2,8 +2,8 @@
 
 Dispatches by task.payload["action"]:
 - "search": Generate/validate query → execute search → return tweets
-- "tweet": Fetch a single tweet by URL/ID
-- "timeline": Fetch a user's timeline
+- "tweet": Fetch a single tweet by URL/ID (+ replies / hot comments)
+- "timeline": Fetch a user's timeline (incremental, target-driven)
 
 Each action: acquire cookie → open stealth browser → run action → save content → report.
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -241,26 +242,56 @@ class XExecutor(BasePlatformExecutor):
     async def _handle_timeline(
         self, session: XBrowserSession, task: Task,
     ) -> dict[str, Any]:
-        """Handle user timeline fetch."""
+        """Handle user timeline fetch with incremental exhaustive crawling.
+
+        Features:
+        - Pre-loads known tweet IDs from PG to avoid re-processing
+        - Target-driven: stops after ``target_new`` fresh tweets found
+        - Dispatches detail tasks for high-engagement tweets
+        - Tracks timeline exhaustion for future crawl cycles
+        """
         payload = task.payload
         username = payload.get("username")
         if not username:
             raise ValueError("Timeline action requires 'username' in payload")
 
-        tweets = await fetch_timeline(
+        user_id = payload.get("user_id")
+        config = payload.get("config", {})
+
+        # Pre-load known tweet IDs from PG for incremental crawling
+        known_ids = await self._get_known_tweet_ids(user_id, username)
+
+        target_new = config.get("target_new_contents", 50)
+        max_pages = config.get("max_scroll_pages", 50)
+
+        tweets, exhausted = await fetch_timeline(
             session,
             username=username,
-            max_tweets=payload.get("max_tweets", 100),
-            include_replies=payload.get("include_replies", False),
+            target_new=target_new,
+            max_pages=max_pages,
+            include_replies=config.get("include_replies_in_timeline", False),
+            known_ids=known_ids,
         )
 
-        saved_ids = await self._save_contents(task, tweets)
+        saved_ids, new_count = await self._save_contents_dedup(task, tweets)
+
+        # Dispatch detail tasks for high-engagement tweets
+        detail_task_count = await self._dispatch_detail_tasks(
+            task, tweets, config,
+        )
+
+        # Update timeline exhaustion status on the user row
+        if exhausted and user_id:
+            await self._mark_timeline_exhausted(user_id)
 
         return {
             "action": "timeline",
             "username": username,
             "tweets_found": len(tweets),
             "content_ids": saved_ids,
+            "new_count": new_count,
+            "exhausted": exhausted,
+            "detail_tasks_dispatched": detail_task_count,
         }
 
     # ──────────────────────────────────────
@@ -279,6 +310,21 @@ class XExecutor(BasePlatformExecutor):
         logger.info("Saved %d content items for task %s", len(content_ids), task.id)
         return content_ids
 
+    async def _save_contents_dedup(
+        self, task: Task, tweets: list[dict[str, Any]],
+    ) -> tuple[list[str], int]:
+        """Save tweets with dedup-aware upsert. Returns (content_ids, new_count)."""
+        if not tweets:
+            return [], 0
+
+        content_ids = [str(uuid4()) for _ in tweets]
+        new_count = await self._save_to_pg_upsert(task, tweets, content_ids)
+        logger.info(
+            "Saved %d content items (%d new) for task %s",
+            len(content_ids), new_count, task.id,
+        )
+        return content_ids, new_count
+
     async def _save_to_pg(
         self,
         task: Task,
@@ -292,6 +338,7 @@ class XExecutor(BasePlatformExecutor):
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
             topic_id = task.payload.get("topic_id")
+            user_id = task.payload.get("user_id")
             factory = get_session_factory()
             async with factory() as session:
                 # Ensure task exists in PG (ContentRow FK requirement)
@@ -312,6 +359,7 @@ class XExecutor(BasePlatformExecutor):
                             id=content_ids[i],
                             task_id=task.id,
                             topic_id=topic_id,
+                            user_id=user_id,
                             platform="x",
                             platform_content_id=tweet.get("tweet_id"),
                             source_url=tweet.get("source_url", ""),
@@ -331,6 +379,203 @@ class XExecutor(BasePlatformExecutor):
                 await session.commit()
         except Exception as e:
             logger.warning("PG save failed (non-fatal): %s", e)
+
+    async def _save_to_pg_upsert(
+        self,
+        task: Task,
+        tweets: list[dict[str, Any]],
+        content_ids: list[str],
+    ) -> int:
+        """Persist content rows with upsert — updates metrics/text on conflict.
+
+        Returns the number of truly new rows inserted.
+        """
+        new_count = 0
+        try:
+            from shared.db.engine import get_session_factory
+            from shared.db.models import ContentRow, TaskRow
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            topic_id = task.payload.get("topic_id")
+            user_id = task.payload.get("user_id")
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    pg_insert(TaskRow).values(
+                        id=task.id,
+                        label=task.label,
+                        priority=task.priority,
+                        payload=task.payload,
+                    ).on_conflict_do_nothing(index_elements=["id"])
+                )
+
+                for i, tweet in enumerate(tweets):
+                    author = tweet.get("author", {})
+                    stmt = pg_insert(ContentRow).values(
+                        id=content_ids[i],
+                        task_id=task.id,
+                        topic_id=topic_id,
+                        user_id=user_id,
+                        platform="x",
+                        platform_content_id=tweet.get("tweet_id"),
+                        source_url=tweet.get("source_url", ""),
+                        author_uid=author.get("user_id"),
+                        author_username=author.get("username"),
+                        author_display_name=author.get("display_name"),
+                        text=tweet.get("text"),
+                        lang=tweet.get("lang"),
+                        hashtags=tweet.get("hashtags", []),
+                        metrics=tweet.get("metrics", {}),
+                        data=tweet,
+                    )
+                    # On conflict: update metrics + text (detect edits)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["platform", "platform_content_id"],
+                        set_={
+                            "metrics": stmt.excluded.metrics,
+                            "text": stmt.excluded.text,
+                            "data": stmt.excluded.data,
+                        },
+                    )
+                    result = await session.execute(stmt)
+                    # xmax = 0 means a fresh insert (not an update)
+                    # For pg_insert ... on_conflict_do_update, rowcount is always 1
+                    # We use a simpler heuristic: check if the ID we provided was used
+                    # by querying back. Instead, just count via platform_content_id.
+                    # Simpler: just check if this tweet_id was in known set before saving.
+                    # But we don't have known_ids here, so we rely on the caller.
+                    new_count += 1  # provisional — actual new vs update below
+
+                await session.commit()
+
+            # Correct new_count: query how many of our IDs actually exist
+            # (the ones that conflicted got a different existing ID)
+            async with factory() as session:
+                from sqlalchemy import text as sql_text
+                row = await session.execute(
+                    sql_text(
+                        "SELECT COUNT(*) FROM contents WHERE id = ANY(:ids)"
+                    ),
+                    {"ids": content_ids},
+                )
+                actually_inserted = row.scalar() or 0
+                new_count = actually_inserted
+
+        except Exception as e:
+            logger.warning("PG upsert save failed (non-fatal): %s", e)
+
+        return new_count
+
+    async def _get_known_tweet_ids(
+        self,
+        user_id: str | None,
+        username: str,
+    ) -> set[str]:
+        """Load platform_content_ids for a user from PG for dedup awareness."""
+        try:
+            from shared.db.engine import get_session_factory
+            from sqlalchemy import text as sql_text
+
+            factory = get_session_factory()
+            async with factory() as session:
+                if user_id:
+                    result = await session.execute(
+                        sql_text(
+                            "SELECT platform_content_id FROM contents "
+                            "WHERE platform = 'x' AND user_id = :uid "
+                            "AND platform_content_id IS NOT NULL"
+                        ),
+                        {"uid": user_id},
+                    )
+                else:
+                    result = await session.execute(
+                        sql_text(
+                            "SELECT platform_content_id FROM contents "
+                            "WHERE platform = 'x' AND author_username = :username "
+                            "AND platform_content_id IS NOT NULL"
+                        ),
+                        {"username": username},
+                    )
+                ids = {row[0] for row in result}
+                logger.info("Loaded %d known tweet IDs for @%s", len(ids), username)
+                return ids
+        except Exception as e:
+            logger.warning("Failed to load known tweet IDs: %s", e)
+            return set()
+
+    async def _dispatch_detail_tasks(
+        self,
+        task: Task,
+        tweets: list[dict[str, Any]],
+        config: dict,
+    ) -> int:
+        """Dispatch tweet detail tasks for high-engagement timeline tweets.
+
+        Fetches hot comments + quoted content for tweets exceeding
+        the engagement threshold.
+        """
+        threshold = config.get("detail_engagement_threshold", 50)
+        max_hot_comments = config.get("max_hot_comments", 20)
+
+        from shared.queue.redis_queue import TaskQueue
+
+        high_engagement = [
+            t for t in tweets
+            if (t.get("metrics", {}).get("reply_count", 0) >= threshold
+                or t.get("quoted_tweet") is not None)
+        ]
+
+        if not high_engagement:
+            return 0
+
+        settings = get_settings()
+        queue = TaskQueue(settings.redis_url)
+        try:
+            for tweet in high_engagement:
+                detail_task = Task(
+                    label="crawler:x",
+                    priority=task.priority,
+                    payload={
+                        "action": "tweet",
+                        "tweet_id": tweet["tweet_id"],
+                        "username": tweet.get("author", {}).get("username", ""),
+                        "user_id": task.payload.get("user_id"),
+                        "topic_id": task.payload.get("topic_id"),
+                        "max_replies": max_hot_comments,
+                        "source": "timeline_detail",
+                    },
+                    parent_job_id=task.parent_job_id,
+                )
+                await queue.push(detail_task)
+
+            logger.info(
+                "Dispatched %d detail tasks for @%s timeline",
+                len(high_engagement), task.payload.get("username"),
+            )
+            return len(high_engagement)
+        finally:
+            await queue.close()
+
+    async def _mark_timeline_exhausted(self, user_id: str) -> None:
+        """Update user's summary_data to record timeline exhaustion."""
+        try:
+            from shared.db.engine import get_session_factory
+            from shared.db.models import UserRow
+
+            factory = get_session_factory()
+            async with factory() as session:
+                user = await session.get(UserRow, user_id)
+                if user:
+                    data = user.summary_data or {}
+                    progress = data.get("crawl_progress", {})
+                    progress["timeline_exhausted"] = True
+                    progress["exhausted_at"] = datetime.now(timezone.utc).isoformat()
+                    data["crawl_progress"] = progress
+                    user.summary_data = data
+                    await session.commit()
+                    logger.info("Marked timeline exhausted for user %s", user_id)
+        except Exception as e:
+            logger.warning("Failed to mark timeline exhausted: %s", e)
 
     async def _download_and_update_media(
         self, content_ids: list[str],

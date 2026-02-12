@@ -13,9 +13,10 @@ from pydantic import BaseModel
 from api.deps import get_queue, get_redis
 from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
-from shared.db.models import TopicRow
+from shared.db.models import TopicRow, UserRow, topic_users
 from shared.models.task import Task, TaskPriority
 from sqlalchemy import func, select, text
+from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["topics"])
@@ -63,8 +64,8 @@ class TopicAssistRequest(BaseModel):
 # ── Helpers ─────────────────────────────────────────
 
 
-def _topic_to_dict(t: TopicRow) -> dict:
-    return {
+def _topic_to_dict(t: TopicRow, *, include_users: bool = False) -> dict:
+    d: dict[str, Any] = {
         "id": str(t.id),
         "type": t.type,
         "name": t.name,
@@ -83,6 +84,19 @@ def _topic_to_dict(t: TopicRow) -> dict:
         "created_at": t.created_at.isoformat(),
         "updated_at": t.updated_at.isoformat(),
     }
+    if include_users:
+        d["users"] = [
+            {
+                "id": str(u.id),
+                "name": u.name,
+                "platform": u.platform,
+                "username": u.username,
+                "profile_url": u.profile_url,
+            }
+            for u in t.users
+        ]
+        d["user_count"] = len(t.users)
+    return d
 
 
 async def _dispatch_analyze(
@@ -99,6 +113,23 @@ async def _dispatch_analyze(
     }
     if force_crawl:
         payload["force_crawl"] = True
+
+    # Include attached users info for the analyst
+    try:
+        users_list = [
+            {
+                "user_id": str(u.id),
+                "username": u.username,
+                "platform": u.platform,
+                "profile_url": u.profile_url,
+                "config": u.config,
+            }
+            for u in topic.users
+        ]
+        if users_list:
+            payload["users"] = users_list
+    except Exception:
+        pass  # users relationship not loaded — skip
 
     task = Task(
         label="analyst:analyze",
@@ -193,10 +224,14 @@ async def list_topics(status: str | None = None) -> dict:
 async def get_topic(topic_id: str) -> dict:
     factory = get_session_factory()
     async with factory() as session:
-        topic = await session.get(TopicRow, topic_id)
+        stmt = select(TopicRow).where(TopicRow.id == topic_id).options(
+            selectinload(TopicRow.users)
+        )
+        result = await session.execute(stmt)
+        topic = result.scalar_one_or_none()
         if topic is None:
             return {"error": "Topic not found"}
-        return _topic_to_dict(topic)
+        return _topic_to_dict(topic, include_users=True)
 
 
 @router.get("/topics/{topic_id}/trend")
@@ -288,7 +323,11 @@ async def reanalyze_topic(topic_id: str) -> dict:
     """Re-run analysis — analyst decides if new data is needed."""
     factory = get_session_factory()
     async with factory() as session:
-        topic = await session.get(TopicRow, topic_id)
+        stmt = select(TopicRow).where(TopicRow.id == topic_id).options(
+            selectinload(TopicRow.users)
+        )
+        result = await session.execute(stmt)
+        topic = result.scalar_one_or_none()
         if topic is None:
             return {"error": "Topic not found"}
 
