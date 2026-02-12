@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
@@ -717,25 +716,32 @@ export function DashboardPage() {
 
     if (!activeContainer || !overContainer) return
 
-    // Only handle cross-container moves in onDragOver.
-    // Same-container reordering is handled visually by useSortable transforms,
-    // then committed with arrayMove in onDragEnd.
-    if (activeContainer === overContainer) return
-
-    setContainers((prev) => {
-      const from = [...prev[activeContainer]]
-      const to = [...prev[overContainer!]]
-      const activeIndex = from.indexOf(active.id as string)
-      if (activeIndex === -1) return prev
-      from.splice(activeIndex, 1)
-      const overIndex = to.indexOf(over.id as string)
-      to.splice(overIndex >= 0 ? overIndex : to.length, 0, active.id as string)
-      return { ...prev, [activeContainer]: from, [overContainer!]: to }
-    })
+    if (activeContainer === overContainer) {
+      // Same-container: reorder DOM in real-time so drop has no flash
+      setContainers((prev) => {
+        const items = [...prev[activeContainer]]
+        const oldIndex = items.indexOf(active.id as string)
+        const newIndex = items.indexOf(over.id as string)
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev
+        return { ...prev, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
+      })
+    } else {
+      // Cross-container: move item between zones
+      setContainers((prev) => {
+        const from = [...prev[activeContainer]]
+        const to = [...prev[overContainer!]]
+        const activeIndex = from.indexOf(active.id as string)
+        if (activeIndex === -1) return prev
+        from.splice(activeIndex, 1)
+        const overIndex = to.indexOf(over.id as string)
+        to.splice(overIndex >= 0 ? overIndex : to.length, 0, active.id as string)
+        return { ...prev, [activeContainer]: from, [overContainer!]: to }
+      })
+    }
   }, [findContainer])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
+    const { over } = event
 
     if (!over) {
       setActiveId(null)
@@ -746,28 +752,11 @@ export function DashboardPage() {
       return
     }
 
-    // Commit same-container reorder (cross-container was already done in onDragOver)
-    const activeContainer = findContainer(active.id as string)
-    let overContainer = findContainer(over.id as string)
-    if (!overContainer) {
-      if (over.id === 'zone-pinned') overContainer = 'pinned'
-      else if (over.id === 'zone-unpinned') overContainer = 'unpinned'
-    }
-
-    let finalContainers = containersRef.current
-    if (activeContainer && overContainer && activeContainer === overContainer) {
-      const items = [...containersRef.current[activeContainer]]
-      const oldIndex = items.indexOf(active.id as string)
-      const newIndex = items.indexOf(over.id as string)
-      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        finalContainers = { ...containersRef.current, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
-        flushSync(() => setContainers(finalContainers))
-      }
-    }
-
+    // DOM order already matches visual order (updated in handleDragOver),
+    // just finalize: clear active and persist to backend.
     setActiveId(null)
-    reorderTopics({ pinned: finalContainers.pinned, unpinned: finalContainers.unpinned })
-  }, [findContainer, reorderTopics, pinnedKey, unpinnedKey])
+    reorderTopics({ pinned: containersRef.current.pinned, unpinned: containersRef.current.unpinned })
+  }, [reorderTopics, pinnedKey, unpinnedKey])
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null)
