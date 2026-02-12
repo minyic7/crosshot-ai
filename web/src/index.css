@@ -4776,7 +4776,16 @@ h3 {
   }
 
   .create-topic-content {
-    height: min(calc(92vh - 120px), 600px);
+    height: auto;
+  }
+
+  .create-topic-chat {
+    min-height: 120px;
+  }
+
+  .create-topic-form {
+    max-height: none;
+    overflow-y: visible;
   }
 
   .create-topic-form-fields {
