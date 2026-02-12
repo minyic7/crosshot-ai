@@ -1024,7 +1024,7 @@ h3 {
 }
 
 /* Animation utility classes */
-.rise { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.rise { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 .pop { animation: pop 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* Theme transition wrapper */
