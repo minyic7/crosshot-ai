@@ -694,9 +694,9 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                   <Input label="Keywords" placeholder="Optional additional keywords..." value={keywords} onChange={(e) => setKeywords(e.target.value)} />
                 </div>
                 {/* Topic picker for user */}
-                {(allTopics ?? []).length > 0 && (
-                  <div className="create-topic-form-full">
-                    <label className="form-label">Attach to Topics</label>
+                <div className="create-topic-form-full">
+                  <label className="form-label">Attach to Topics</label>
+                  {(allTopics ?? []).length > 0 ? (
                     <div className="entity-picker-chips">
                       {(allTopics ?? []).map((t) => (
                         <button
@@ -712,8 +712,10 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="entity-picker-empty">No topics yet — create one from the Topic tab</p>
+                  )}
+                </div>
                 <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
               </div>
             ) : (
@@ -749,9 +751,9 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                   <Input label="Description" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
                 </div>
                 {/* User picker for topic */}
-                {(allUsers ?? []).length > 0 && (
-                  <div className="create-topic-form-full">
-                    <label className="form-label">Subscribed Users</label>
+                <div className="create-topic-form-full">
+                  <label className="form-label">Subscribed Users</label>
+                  {(allUsers ?? []).length > 0 ? (
                     <div className="entity-picker-chips">
                       {(allUsers ?? []).map((u) => (
                         <button
@@ -768,8 +770,10 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="entity-picker-empty">No users yet — create one from the User tab</p>
+                  )}
+                </div>
                 <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
               </div>
             )

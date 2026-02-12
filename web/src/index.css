@@ -3109,6 +3109,13 @@ h3 {
   opacity: 0.6;
 }
 
+.entity-picker-empty {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-3);
+  margin: 4px 0 0;
+}
+
 /* Shared assist utilities (send button, spinner, cursor) */
 .assist-send {
   width: 34px;
