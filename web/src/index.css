@@ -1405,7 +1405,7 @@ h3 {
 }
 
 .topic-card:hover .topic-card-shimmer {
-  animation: cardShimmer 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation: cardShimmer 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.12s forwards;
 }
 
 /* (metric tick animation removed — no more metric chips) */
