@@ -19,8 +19,8 @@
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
-  --shimmer-soft: rgba(255, 255, 255, 0.025);
-  --shimmer-bright: rgba(255, 255, 255, 0.09);
+  --shimmer-soft: rgba(96, 165, 250, 0.06);
+  --shimmer-bright: rgba(96, 165, 250, 0.18);
 
   /* Accent — brand blue */
   --accent: #3B82F6;
@@ -99,8 +99,8 @@
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
-  --shimmer-soft: rgba(0, 0, 0, 0.025);
-  --shimmer-bright: rgba(0, 0, 0, 0.08);
+  --shimmer-soft: rgba(59, 130, 246, 0.05);
+  --shimmer-bright: rgba(59, 130, 246, 0.15);
 
   --accent: #2563EB;
   --accent-light: #1D4ED8;
@@ -1405,7 +1405,7 @@ h3 {
 }
 
 .topic-card:hover .topic-card-shimmer {
-  animation: cardShimmer 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation: cardShimmer 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 /* (metric tick animation removed — no more metric chips) */
