@@ -42,6 +42,7 @@ import {
   useCreateUserMutation,
   useUpdateUserMutation,
   useReorderUsersMutation,
+  useAttachUserMutation,
 } from '@/store/api'
 import type { Topic, TopicAlert, TopicPipeline, User as UserType, TopicStatus } from '@/types/models'
 
@@ -417,8 +418,13 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [profileUrl, setProfileUrl] = useState('')
   const [keywords, setKeywords] = useState('')
   const [interval, setInterval] = useState('6')
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
+  const { data: allUsers } = useListUsersQuery()
+  const { data: allTopics } = useListTopicsQuery()
   const [createTopic, { isLoading: topicLoading }] = useCreateTopicMutation()
   const [createUser, { isLoading: userLoading }] = useCreateUserMutation()
+  const [attachUser] = useAttachUserMutation()
   const isLoading = topicLoading || userLoading
   const [formOpen, setFormOpen] = useState(true)
 
@@ -456,6 +462,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     resetChat()
     setName(''); setIcon('📊'); setDescription(''); setPlatforms(['x']); setPlatform('x')
     setProfileUrl(''); setKeywords(''); setInterval('6'); setFormOpen(true)
+    setSelectedUserIds([]); setSelectedTopicIds([])
   }
 
   const switchTab = (t: 'topic' | 'user') => {
@@ -494,9 +501,10 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         profile_url: urlStr,
         username,
         config,
+        topic_ids: selectedTopicIds.length > 0 ? selectedTopicIds : undefined,
       })
     } else {
-      await createTopic({
+      const result = await createTopic({
         type: 'topic',
         name: name.trim(),
         icon,
@@ -504,7 +512,14 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         platforms,
         keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
         config,
-      })
+      }).unwrap()
+
+      // Attach selected users to the newly created topic
+      if (selectedUserIds.length > 0 && result?.id) {
+        await Promise.all(
+          selectedUserIds.map((uid) => attachUser({ userId: uid, topicId: result.id }))
+        )
+      }
     }
     resetForm()
     onClose()
@@ -535,12 +550,14 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         platform.toUpperCase(),
         profileUrl && 'URL set',
         keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
+        selectedTopicIds.length > 0 && `${selectedTopicIds.length} topics`,
         `${interval}h`,
       ].filter(Boolean).join(' · ')
     : [
         name && `${icon} ${name}`,
         platforms.length > 0 && platforms.map((p) => p.toUpperCase()).join(', '),
         keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
+        selectedUserIds.length > 0 && `${selectedUserIds.length} users`,
         `${interval}h`,
       ].filter(Boolean).join(' · ')
 
@@ -676,6 +693,27 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                 <div className="create-topic-form-full">
                   <Input label="Keywords" placeholder="Optional additional keywords..." value={keywords} onChange={(e) => setKeywords(e.target.value)} />
                 </div>
+                {/* Topic picker for user */}
+                {(allTopics ?? []).length > 0 && (
+                  <div className="create-topic-form-full">
+                    <label className="form-label">Attach to Topics</label>
+                    <div className="entity-picker-chips">
+                      {(allTopics ?? []).map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`entity-chip${selectedTopicIds.includes(t.id) ? ' selected' : ''}`}
+                          onClick={() => setSelectedTopicIds((prev) =>
+                            prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id]
+                          )}
+                        >
+                          <span>{t.icon}</span>
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
               </div>
             ) : (
@@ -710,6 +748,28 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                 <div className="create-topic-form-full">
                   <Input label="Description" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
                 </div>
+                {/* User picker for topic */}
+                {(allUsers ?? []).length > 0 && (
+                  <div className="create-topic-form-full">
+                    <label className="form-label">Subscribed Users</label>
+                    <div className="entity-picker-chips">
+                      {(allUsers ?? []).map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          className={`entity-chip${selectedUserIds.includes(u.id) ? ' selected' : ''}`}
+                          onClick={() => setSelectedUserIds((prev) =>
+                            prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                          )}
+                        >
+                          <User size={12} />
+                          {u.username ? `@${u.username}` : u.name}
+                          <span className="entity-chip-platform">{u.platform.toUpperCase()}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
               </div>
             )

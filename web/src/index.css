@@ -3065,6 +3065,50 @@ h3 {
   grid-column: 1 / -1;
 }
 
+/* Entity picker chips (user/topic selection in create modal) */
+.entity-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.entity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-strong);
+  background: var(--glass-light);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.entity-chip:hover {
+  border-color: var(--accent-glow);
+  background: var(--accent-surface);
+  color: var(--accent);
+}
+
+.entity-chip.selected {
+  border-color: var(--accent);
+  background: var(--accent-surface);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.entity-chip-platform {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  opacity: 0.6;
+}
+
 /* Shared assist utilities (send button, spinner, cursor) */
 .assist-send {
   width: 34px;
