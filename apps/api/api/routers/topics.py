@@ -491,10 +491,16 @@ async def assist_topic(body: TopicAssistRequest):
                 text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             data = json.loads(text)
+            actions = data.get("actions", [])
+            # Fallback: if model returned old "suggestion" dict instead of "actions" array
+            if not actions and isinstance(data.get("suggestion"), dict):
+                s = data["suggestion"]
+                s.setdefault("type", "create_topic")
+                actions = [s]
             yield _sse({
                 "done": True,
                 "reply": data.get("reply", ""),
-                "actions": data.get("actions", []),
+                "actions": actions,
             })
         except json.JSONDecodeError:
             yield _sse({"done": True, "reply": full, "actions": []})
