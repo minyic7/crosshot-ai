@@ -247,8 +247,12 @@ class XExecutor(BasePlatformExecutor):
         Features:
         - Pre-loads known tweet IDs from PG to avoid re-processing
         - Target-driven: stops after ``target_new`` fresh tweets found
-        - Dispatches detail tasks for high-engagement tweets
         - Tracks timeline exhaustion for future crawl cycles
+
+        Note: Detail task dispatch (fetching comments/quotes for high-value
+        tweets) is handled by the analyst pipeline's triage step, not here.
+        The crawler is a dumb executor — the analyst decides what needs
+        deeper investigation.
         """
         payload = task.payload
         username = payload.get("username")
@@ -275,11 +279,6 @@ class XExecutor(BasePlatformExecutor):
 
         saved_ids, new_count = await self._save_contents_dedup(task, tweets)
 
-        # Dispatch detail tasks for high-engagement tweets
-        detail_task_count = await self._dispatch_detail_tasks(
-            task, tweets, config,
-        )
-
         # Update timeline exhaustion status on the user row
         if exhausted and user_id:
             await self._mark_timeline_exhausted(user_id)
@@ -291,7 +290,6 @@ class XExecutor(BasePlatformExecutor):
             "content_ids": saved_ids,
             "new_count": new_count,
             "exhausted": exhausted,
-            "detail_tasks_dispatched": detail_task_count,
         }
 
     # ──────────────────────────────────────
@@ -502,59 +500,6 @@ class XExecutor(BasePlatformExecutor):
         except Exception as e:
             logger.warning("Failed to load known tweet IDs: %s", e)
             return set()
-
-    async def _dispatch_detail_tasks(
-        self,
-        task: Task,
-        tweets: list[dict[str, Any]],
-        config: dict,
-    ) -> int:
-        """Dispatch tweet detail tasks for high-engagement timeline tweets.
-
-        Fetches hot comments + quoted content for tweets exceeding
-        the engagement threshold.
-        """
-        threshold = config.get("detail_engagement_threshold", 50)
-        max_hot_comments = config.get("max_hot_comments", 20)
-
-        from shared.queue.redis_queue import TaskQueue
-
-        high_engagement = [
-            t for t in tweets
-            if (t.get("metrics", {}).get("reply_count", 0) >= threshold
-                or t.get("quoted_tweet") is not None)
-        ]
-
-        if not high_engagement:
-            return 0
-
-        settings = get_settings()
-        queue = TaskQueue(settings.redis_url)
-        try:
-            for tweet in high_engagement:
-                detail_task = Task(
-                    label="crawler:x",
-                    priority=task.priority,
-                    payload={
-                        "action": "tweet",
-                        "tweet_id": tweet["tweet_id"],
-                        "username": tweet.get("author", {}).get("username", ""),
-                        "user_id": task.payload.get("user_id"),
-                        "topic_id": task.payload.get("topic_id"),
-                        "max_replies": max_hot_comments,
-                        "source": "timeline_detail",
-                    },
-                    parent_job_id=task.parent_job_id,
-                )
-                await queue.push(detail_task)
-
-            logger.info(
-                "Dispatched %d detail tasks for @%s timeline",
-                len(high_engagement), task.payload.get("username"),
-            )
-            return len(high_engagement)
-        finally:
-            await queue.close()
 
     async def _mark_timeline_exhausted(self, user_id: str) -> None:
         """Update user's summary_data to record timeline exhaustion."""

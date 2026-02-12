@@ -65,6 +65,8 @@ async def get_entity_config(
                 "status": topic.status,
                 "total_contents": topic.total_contents,
                 "previous_recommendations": previous_recommendations,
+                "summary_data": topic.summary_data,
+                "last_summary": topic.last_summary,
                 "users": users,
             }
 
@@ -90,6 +92,8 @@ async def get_entity_config(
                 "status": user.status,
                 "total_contents": user.total_contents,
                 "previous_recommendations": previous_recommendations,
+                "summary_data": user.summary_data,
+                "last_summary": user.last_summary,
                 "platforms": [user.platform],
                 "keywords": [],
                 "users": [],

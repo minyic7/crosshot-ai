@@ -1,4 +1,10 @@
-"""LLM prompt templates for the analyst pipeline."""
+"""LLM prompt templates for the incremental knowledge pipeline.
+
+Three prompt types:
+1. Triage — fast model classifies content: skip | brief | detail
+2. Knowledge integration — reasoning model updates the knowledge document
+3. Gap analysis — reasoning model decides crawl tasks
+"""
 
 import json
 
@@ -40,138 +46,231 @@ def _build_entity_header(entity: dict) -> str:
         header = f"**Topic:** {entity['name']}\n"
         header += f"**Keywords:** {json.dumps(entity.get('keywords', []), ensure_ascii=False)}\n"
         header += f"**Platforms:** {json.dumps(entity.get('platforms', []), ensure_ascii=False)}\n"
-        # Attached users
         users = entity.get("users", [])
         if users:
             user_list = ", ".join(
                 f"@{u['username']} ({u['platform']})" for u in users if u.get("username")
             )
             header += f"**Tracked Users:** {user_list}\n"
-    header += f"**Previous recommendations:** {json.dumps(entity.get('previous_recommendations', []), ensure_ascii=False)}"
     return header
 
 
-def _build_data_sections(data: dict, gaps: dict | None = None) -> str:
-    """Build the common data + posts + gaps sections."""
-    data_section = json.dumps({
-        "time_window": data["time_window"],
-        "metrics": data["metrics"],
-        "classification_stats": data["classification_stats"],
-        "top_authors": data["top_authors"],
-        "data_status": data["data_status"],
-        "previous_cycle": data["previous_cycle"],
-    }, ensure_ascii=False, indent=None)
-
-    posts_section = json.dumps(data["top_posts"], ensure_ascii=False, indent=None)
-
-    sections = f"""## Aggregated Data
-{data_section}
-
-## Top Posts (ranked by relevance × engagement, classified)
-{posts_section}"""
-
-    if gaps is not None:
-        gaps_section = json.dumps(gaps, ensure_ascii=False)
-        sections += f"\n\n## Detected Data Gaps\n{gaps_section}"
-
-    return sections
+# ── Triage Prompt ──────────────────────────────────────
 
 
-def build_analyze_prompt(entity: dict, data: dict, gaps: dict) -> str:
-    """Build the prompt for analyst:analyze — preliminary analysis + crawl decisions."""
-    header = _build_entity_header(entity)
-    sections = _build_data_sections(data, gaps)
+def build_triage_prompt(
+    entity: dict,
+    posts: list[dict],
+) -> str:
+    """Build the batch triage prompt for the fast model.
 
+    For each post, the LLM decides:
+    - "skip": spam, irrelevant, duplicate
+    - "brief": worth noting, extract 1-2 key points
+    - "detail": high-value, warrants fetching comments/quotes
+    """
     is_user = entity.get("type") == "user"
-    subject = f"user @{entity.get('username', entity['name'])}" if is_user else "topic"
 
-    # User-mode: focus on personal content style; Topic-mode: broader trend analysis
     if is_user:
-        summary_structure = """\
-   - **内容概览** (1 paragraph): What kind of content does this user post? Themes, style, frequency.
-   - **关键发现** (1 paragraph): Notable posts, engagement patterns, content shifts. Cite posts using their `url` field (NOT t.co links from text) as markdown: [@username](url).
-   - **趋势与建议** (1 paragraph): How has their posting changed vs last cycle? What to watch next?"""
+        context = f'User: @{entity.get("username", entity["name"])} ({entity.get("platform", "?")})'
     else:
-        summary_structure = """\
-   - **内容本质** (1 paragraph): What is this content ACTUALLY about?
-   - **关键发现** (1 paragraph): What stands out? Cite posts using their `url` field (NOT t.co links from text) as markdown: [@username](url).
-   - **趋势与建议** (1 paragraph): What changed vs last cycle? What should we watch next?"""
+        context = (
+            f'Topic: "{entity["name"]}" | '
+            f'Keywords: {json.dumps(entity.get("keywords", []), ensure_ascii=False)}'
+        )
+
+    # Build compact post list
+    compact = []
+    for i, p in enumerate(posts):
+        compact.append({
+            "i": i,
+            "text": p["text"][:300],
+            "author": p["author"],
+            "likes": p["likes"],
+            "retweets": p.get("retweets", 0),
+            "replies": p.get("replies", 0),
+            "media": p["media_types"],
+        })
 
     return f"""\
-## Task: Analyze {subject} data and decide next steps.
+{context}
+
+Triage each post for processing depth. Consider relevance, engagement, and information value.
+
+Decisions:
+- "skip": Spam, completely irrelevant, low-value duplicate content
+- "brief": Worth noting. Extract 1-2 key points (what's the actual insight?).
+- "detail": High-value content — many replies/quotes suggest rich discussion. Fetch comments + quoted content for deeper analysis.
+
+Guidelines for "detail":
+- Posts with many replies (discussion-worthy) or quoted tweets
+- Controversial or trending topics generating debate
+- Original analysis/threads from notable authors
+- NOT just high likes — high likes + low replies = viral but shallow
+
+Return a JSON array (same order, same length={len(compact)}):
+[{{"d": "skip|brief|detail", "kp": ["key point 1", "key point 2"] or null}}, ...]
+
+d = decision
+kp = key points (1-2 concise insights, only for "brief" and "detail"; null for "skip")
+
+Posts:
+{json.dumps(compact, ensure_ascii=False)}"""
+
+
+# ── Knowledge Integration Prompt ──────────────────────
+
+
+def build_integration_prompt(
+    entity: dict,
+    overview: dict,
+    knowledge_doc: str,
+    new_content: list[dict],
+) -> str:
+    """Build the knowledge integration prompt for the reasoning model.
+
+    Takes existing knowledge + new processed content → returns updated knowledge + summary.
+    """
+    header = _build_entity_header(entity)
+
+    # Build content section from integration-ready items
+    content_entries = []
+    for p in new_content:
+        entry = f"[@{p['author']}]({p['url']}) — "
+        if p.get("key_points"):
+            entry += " | ".join(
+                kp if isinstance(kp, str) else str(kp) for kp in p["key_points"]
+            )
+        else:
+            entry += p["text"][:200]
+        entry += f" (likes:{p['likes']} rt:{p['retweets']} views:{p.get('views', 0)})"
+        if p.get("processing_status") == "detail_ready":
+            entry += " [DETAILED — comments fetched]"
+        content_entries.append(entry)
+
+    content_section = "\n".join(content_entries) if content_entries else "(no new content)"
+
+    # Metrics context
+    metrics_section = json.dumps({
+        "metrics": overview.get("metrics", {}),
+        "top_authors": overview.get("top_authors", []),
+        "data_status": overview.get("data_status", {}),
+    }, ensure_ascii=False, indent=None)
+
+    is_user = entity.get("type") == "user"
+
+    if is_user:
+        summary_instructions = """\
+Write a comprehensive summary in Chinese (中文), structured as:
+- **内容概览**: What kind of content does this user post? Themes, style, frequency.
+- **关键发现**: Notable posts, engagement patterns, content shifts. Cite posts using markdown: [@username](url).
+- **趋势与建议**: How has their posting changed? What to watch next?"""
+    else:
+        summary_instructions = """\
+Write a comprehensive summary in Chinese (中文), structured as:
+- **内容本质**: What is this content ACTUALLY about? Be specific and honest.
+- **关键发现**: What stands out? Cite posts using markdown: [@username](url).
+- **趋势与建议**: What changed? What to watch next? Suggested queries."""
+
+    knowledge_section = knowledge_doc if knowledge_doc else "(empty — this is the first analysis)"
+
+    return f"""\
+## Task: Integrate new content into the knowledge document and write a summary.
 
 {header}
 
-{sections}
+## Current Knowledge Document
+{knowledge_section}
+
+## New Content to Integrate ({len(new_content)} items)
+{content_section}
+
+## Current Metrics
+{metrics_section}
+
+## Previous Summary
+{overview.get("previous_cycle", {}).get("summary", "(none)")}
 
 ## Instructions
 
-1. **Read every top post carefully.** Understand what the content ACTUALLY is about — not just the keywords.
-2. **Write a summary** in Chinese (中文), structured as:
-{summary_structure}
-3. **If data gaps exist** (missing platforms, stale data, low volume, or you see angles the keywords miss):
-   construct targeted crawl tasks. Use X search operators to filter noise.
-4. **If no gaps**: return empty crawl_tasks array.
+1. **Read each new piece of content carefully.** Understand the actual meaning, not just surface keywords.
+2. **Update the knowledge document:**
+   - Add new themes, observations, or notable events
+   - Update existing themes with new evidence
+   - Note sentiment changes or trend shifts
+   - Track key figures and their stances
+   - Remove or compress outdated observations if the document exceeds ~8000 characters
+   - Keep the document in Chinese (中文)
+3. **{summary_instructions}**
 
 Return **only** a JSON object:
 ```json
 {{
-  "summary": "中文分析摘要...",
+  "knowledge": "Updated knowledge document (markdown, Chinese)...",
+  "summary": "中文综合分析摘要...",
+  "insights": [
+    {{"text": "一句话洞察", "sentiment": "positive|negative|neutral"}}
+  ],
+  "recommended_next_queries": ["query1", "query2"]
+}}
+```
+Each insight is a short one-liner. "positive" for good trends, "negative" for risks, "neutral" for factual observations.
+The knowledge document should be a structured markdown text that captures cumulative understanding."""
+
+
+# ── Gap Analysis Prompt ──────────────────────────────
+
+
+def build_gap_analysis_prompt(
+    entity: dict,
+    overview: dict,
+    gaps: dict,
+    knowledge_doc: str,
+) -> str:
+    """Build the gap analysis prompt — decides what crawl tasks to dispatch.
+
+    Only called when deterministic gap detection found issues.
+    """
+    header = _build_entity_header(entity)
+    header += f"\n**Previous recommendations:** {json.dumps(entity.get('previous_recommendations', []), ensure_ascii=False)}"
+
+    gaps_section = json.dumps(gaps, ensure_ascii=False)
+    data_section = json.dumps({
+        "data_status": overview.get("data_status", {}),
+        "metrics": overview.get("metrics", {}),
+    }, ensure_ascii=False, indent=None)
+
+    knowledge_context = ""
+    if knowledge_doc:
+        # Truncate knowledge for gap analysis (just need high-level themes)
+        knowledge_context = f"\n## Current Knowledge Summary\n{knowledge_doc[:2000]}"
+
+    return f"""\
+## Task: Decide what additional data to crawl.
+
+{header}
+
+## Data Status
+{data_section}
+
+## Detected Gaps
+{gaps_section}
+{knowledge_context}
+
+## Instructions
+
+Based on the gaps and current knowledge, construct targeted crawl tasks.
+Use X search operators to filter noise (min_faves, lang, date range).
+Only suggest queries that would meaningfully improve our understanding.
+
+Return **only** a JSON object:
+```json
+{{
   "crawl_tasks": [
     {{"platform": "x", "query": "keyword min_faves:10", "action": "search"}},
     {{"platform": "xhs", "query": "中文关键词", "action": "search"}}
   ],
-  "recommended_next_queries": ["query1", "query2"],
-  "insights": [
-    {{"text": "一句话洞察", "sentiment": "positive|negative|neutral"}}
-  ]
+  "reasoning": "Brief explanation of why these queries"
 }}
 ```
-Each insight is a short one-liner observation. Use "positive" for good trends/growth, "negative" for declining metrics/risks, "neutral" for factual observations.
 If no crawling needed, set `"crawl_tasks": []`."""
-
-
-def build_summarize_prompt(entity: dict, data: dict) -> str:
-    """Build the prompt for analyst:summarize — final summary after crawling."""
-    header = _build_entity_header(entity)
-    sections = _build_data_sections(data)
-
-    is_user = entity.get("type") == "user"
-    subject = f"user @{entity.get('username', entity['name'])}" if is_user else "topic"
-
-    if is_user:
-        summary_structure = """\
-   - **内容概览** (1 paragraph): What kind of content does this user post? Be specific and honest.
-   - **关键发现** (1 paragraph): Top posts, engagement patterns, content themes. Cite posts using their `url` field (NOT t.co links from text) as markdown: [@username](url).
-   - **趋势与建议** (1 paragraph): Changes vs last cycle, posting frequency shifts, what to watch next."""
-    else:
-        summary_structure = """\
-   - **内容本质** (1 paragraph): What is this content ACTUALLY about? Be specific and honest.
-   - **关键发现** (1 paragraph): Top posts, notable authors, trending angles. Cite posts using their `url` field (NOT t.co links from text) as markdown: [@username](url).
-   - **趋势与建议** (1 paragraph): Changes vs last cycle, what to watch next, suggested queries."""
-
-    return f"""\
-## Task: Write the final comprehensive summary for {subject} after all crawling is complete.
-
-{header}
-
-{sections}
-
-## Instructions
-
-1. **Read every top post carefully.** This is post-crawl data — you now have the full picture.
-2. **Compare with previous_cycle** — what's new? What changed?
-3. **Write a comprehensive summary** in Chinese (中文), structured as:
-{summary_structure}
-
-Return **only** a JSON object:
-```json
-{{
-  "summary": "中文综合分析摘要...",
-  "recommended_next_queries": ["query1", "query2"],
-  "insights": [
-    {{"text": "一句话洞察", "sentiment": "positive|negative|neutral"}}
-  ]
-}}
-```
-Each insight is a short one-liner observation. Use "positive" for good trends/growth, "negative" for declining metrics/risks, "neutral" for factual observations."""

@@ -87,6 +87,10 @@ class ContentRow(Base):
     # Media
     media_downloaded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # Knowledge pipeline — triage + integration status
+    processing_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    key_points: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # Platform-specific (JSONB)
     metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -111,6 +115,7 @@ class ContentRow(Base):
             unique=True,
         ),
         Index("ix_contents_crawled_at", "crawled_at", postgresql_using="btree"),
+        Index("ix_contents_processing_status", "processing_status"),
         Index("ix_contents_author_username", "author_username"),
         Index("ix_contents_hashtags", "hashtags", postgresql_using="gin"),
     )

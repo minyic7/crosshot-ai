@@ -30,12 +30,16 @@ async def update_entity_summary(
     session_factory: async_sessionmaker[AsyncSession],
     topic_id: str | None = None,
     user_id: str | None = None,
-    summary: str = "",
+    summary: str | None = None,
     summary_data: dict | None = None,
     total_contents: int | None = None,
     is_preliminary: bool = False,
 ) -> dict:
-    """Save analysis summary and structured insights for a topic or user."""
+    """Save analysis summary and structured insights for a topic or user.
+
+    Only updates fields that are explicitly provided (non-None).
+    Set is_preliminary=False to also update last_crawl_at (marks cycle complete).
+    """
     async with session_factory() as session:
         if topic_id:
             entity = await session.get(TopicRow, topic_id)
@@ -52,7 +56,8 @@ async def update_entity_summary(
         else:
             return {"error": "Must provide either topic_id or user_id"}
 
-        entity.last_summary = summary
+        if summary is not None:
+            entity.last_summary = summary
         if summary_data is not None:
             entity.summary_data = summary_data
         if total_contents is not None:
