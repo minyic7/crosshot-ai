@@ -552,10 +552,10 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   return (
     <Modal open={open} onClose={onClose} title="New Topic" className="create-topic-panel">
       <div className="stack-sm">
-        <div className="assist-section" role="region" aria-label="AI Assist">
-          <div className="assist-label"><Sparkles size={13} aria-hidden="true" /> AI Assist</div>
+        <div className="assist-section">
+          <div className="assist-label"><Sparkles size={13} /> AI Assist</div>
           {(chatMessages.length > 0 || streamingReply) && (
-            <div className="assist-messages" role="log" aria-live="polite">
+            <div className="assist-messages">
               {chatMessages.map((m, i) => (
                 <div key={i} className={`assist-msg ${m.role}`}>
                   <span className="assist-msg-text">{m.content}</span>
@@ -568,7 +568,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
               )}
               {isAssisting && !streamingReply && (
                 <div className="assist-msg assistant">
-                  <Loader2 size={13} className="assist-spinner" aria-hidden="true" />
+                  <Loader2 size={13} className="assist-spinner" />
                   <span className="assist-msg-text">Thinking...</span>
                 </div>
               )}
@@ -585,64 +585,47 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handleAsk()
               }}
               disabled={isAssisting}
-              aria-label="Describe what you want to monitor"
             />
-            <button className="assist-send" onClick={handleAsk} disabled={!chatInput.trim() || isAssisting} aria-label="Send message">
-              {isAssisting ? <Loader2 size={14} className="assist-spinner" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
+            <button className="assist-send" onClick={handleAsk} disabled={!chatInput.trim() || isAssisting}>
+              {isAssisting ? <Loader2 size={14} className="assist-spinner" /> : <Send size={14} />}
             </button>
           </div>
         </div>
         <div className="assist-divider" />
-        <div className="form-group" role="radiogroup" aria-label="Topic icon">
+        <div className="form-group">
           <label className="form-label">Icon</label>
           <div className="emoji-picker">
             {emojiOptions.map((e) => (
-              <button
-                key={e}
-                className={`emoji-option${e === icon ? ' selected' : ''}`}
-                onClick={() => setIcon(e)}
-                aria-label={`Icon ${e}`}
-                aria-pressed={e === icon}
-              >{e}</button>
+              <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
             ))}
           </div>
         </div>
         <div>
-          <Input
-            label="Name"
-            placeholder="e.g. Elon Musk"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-invalid={nameError ? true : undefined}
-            aria-describedby={nameError ? 'name-error' : undefined}
-          />
-          {nameError && <p id="name-error" className="form-error" role="alert">{nameError}</p>}
+          <Input label="Name" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
+          {nameError && <p className="form-error">{nameError}</p>}
         </div>
         <div className="form-group">
           <label htmlFor="topic-description" className="form-label">Description</label>
           <textarea id="topic-description" className="form-input form-textarea" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label" id="platforms-label">Platforms</label>
-          <div className="flex gap-2" role="group" aria-labelledby="platforms-label">
+          <label className="form-label">Platforms</label>
+          <div className="flex gap-2">
             {PLATFORM_OPTIONS.map((p) => (
               <button
                 key={p}
                 className={`topic-tag${platforms.includes(p) ? ' platform' : ''}`}
                 style={{ padding: '6px 14px', cursor: 'pointer' }}
                 onClick={() => togglePlatform(p)}
-                role="checkbox"
-                aria-checked={platforms.includes(p)}
-                aria-label={`Platform ${p.toUpperCase()}`}
               >{p.toUpperCase()}</button>
             ))}
           </div>
-          {platformError && <p className="form-error" role="alert">{platformError}</p>}
+          {platformError && <p className="form-error">{platformError}</p>}
         </div>
         <Input label="Keywords (comma-separated)" placeholder="e.g. Elon Musk, SpaceX, Tesla" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
         <Input label="Refresh Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-        <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={isLoading} onClick={handleSubmitWithValidation} aria-busy={isLoading}>
-          <Plus size={16} aria-hidden="true" />
+        <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={isLoading} onClick={handleSubmitWithValidation}>
+          <Plus size={16} />
           {isLoading ? 'Creating...' : 'Create Topic'}
         </button>
       </div>

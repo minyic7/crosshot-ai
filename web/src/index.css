@@ -3088,10 +3088,6 @@ h3 {
   margin-top: 4px;
 }
 
-.form-input[aria-invalid="true"] {
-  border-color: var(--negative);
-}
-
 .btn-primary {
   background: transparent;
   color: var(--accent-light);
