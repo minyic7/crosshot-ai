@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
@@ -760,7 +761,7 @@ export function DashboardPage() {
       const newIndex = items.indexOf(over.id as string)
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
         finalContainers = { ...containersRef.current, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
-        setContainers(finalContainers)
+        flushSync(() => setContainers(finalContainers))
       }
     }
 
