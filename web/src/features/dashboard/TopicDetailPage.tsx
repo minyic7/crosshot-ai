@@ -599,6 +599,7 @@ export function TopicDetailPage() {
                     stroke="none"
                     startAngle={90}
                     endAngle={-270}
+                    animationDuration={400}
                   >
                     <Cell fill="var(--accent)" />
                     <Cell fill="var(--ink-4)" />
