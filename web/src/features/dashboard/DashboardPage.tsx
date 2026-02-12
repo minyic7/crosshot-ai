@@ -275,9 +275,6 @@ function SortableCard({
   onRefresh: (id: string) => void
   onClick: (id: string) => void
 }) {
-  // After a drop (active is null), skip transition so items snap instantly
-  // to their new DOM positions — prevents the "slide from wrong spot" glitch
-  // when arrayMove reorders the DOM in handleDragEnd.
   const skipPostDrop: AnimateLayoutChanges = (args) =>
     args.active ? defaultAnimateLayoutChanges(args) : false
 
@@ -290,13 +287,16 @@ function SortableCard({
     isDragging,
   } = useSortable({ id: topic.id, animateLayoutChanges: skipPostDrop })
 
+  // On the frame isDragging flips false → card becomes visible.
+  // Force transform=0, transition=none so it appears at its DOM position
+  // instantly, avoiding a flash from stale drag offsets.
+  const wasDragging = useRef(false)
+  const justDropped = wasDragging.current && !isDragging
+  wasDragging.current = isDragging
+
   const style: React.CSSProperties = {
-    // Always provide a transform value so CSS transitions can animate
-    // both directions (adding a shift AND returning to origin).
-    // CSS.Transform.toString(null) returns undefined which removes the
-    // property — CSS can't transition a removed property.
-    transform: transform ? CSS.Transform.toString(transform) : 'translate3d(0, 0, 0)',
-    transition,
+    transform: (isDragging || justDropped) ? 'translate3d(0, 0, 0)' : (transform ? CSS.Transform.toString(transform) : 'translate3d(0, 0, 0)'),
+    transition: justDropped ? 'none' : transition,
     opacity: isDragging ? 0 : 1,
   }
 
@@ -659,13 +659,16 @@ export function DashboardPage() {
   const [containers, setContainers] = useState<{ pinned: string[]; unpinned: string[] }>({ pinned: [], unpinned: [] })
   const containersRef = useRef(containers)
   containersRef.current = containers
+  const skipSyncRef = useRef(false)
 
-  // Sync from server when not dragging
+  // Sync from server when not dragging (skip one cycle after drop
+  // so the local reorder isn't overwritten by stale server data)
   const pinnedKey = useMemo(() => pinned.map((t) => t.id).join(','), [pinned])
   const unpinnedKey = useMemo(() => unpinned.map((t) => t.id).join(','), [unpinned])
 
   useEffect(() => {
     if (activeId) return
+    if (skipSyncRef.current) { skipSyncRef.current = false; return }
     setContainers({
       pinned: pinnedKey ? pinnedKey.split(',') : [],
       unpinned: unpinnedKey ? unpinnedKey.split(',') : [],
@@ -754,6 +757,8 @@ export function DashboardPage() {
 
     // DOM order already matches visual order (updated in handleDragOver),
     // just finalize: clear active and persist to backend.
+    // Skip the next sync so stale server data doesn't overwrite our local order.
+    skipSyncRef.current = true
     setActiveId(null)
     reorderTopics({ pinned: containersRef.current.pinned, unpinned: containersRef.current.unpinned })
   }, [reorderTopics, pinnedKey, unpinnedKey])
