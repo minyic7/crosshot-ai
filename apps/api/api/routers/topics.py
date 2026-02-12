@@ -197,25 +197,41 @@ async def get_topic(topic_id: str) -> dict:
 
 @router.get("/topics/{topic_id}/trend")
 async def get_topic_trend(topic_id: str, days: int = 30) -> list[dict]:
-    """Return daily content counts + engagement for trend charts."""
+    """Return per-period content counts + engagement for trend charts.
+
+    Groups by the topic's schedule_interval_hours (default 6h) instead of by day.
+    """
     since = datetime.now(timezone.utc) - timedelta(days=days)
     factory = get_session_factory()
     async with factory() as session:
+        # Get the topic's schedule interval
+        topic_row = await session.execute(
+            text("SELECT config FROM topics WHERE id = :tid"),
+            {"tid": topic_id},
+        )
+        row = topic_row.first()
+        interval_hours = 6
+        if row and row.config:
+            interval_hours = (row.config or {}).get("schedule_interval_hours", 6)
+
+        interval_secs = interval_hours * 3600
         result = await session.execute(
             text("""
-                SELECT DATE(crawled_at) AS day,
+                SELECT TO_TIMESTAMP(
+                         FLOOR(EXTRACT(EPOCH FROM crawled_at) / :interval) * :interval
+                       ) AS period,
                        COUNT(*) AS posts,
                        COALESCE(SUM((metrics->>'like_count')::int), 0) AS likes,
                        COALESCE(SUM((metrics->>'views_count')::int), 0) AS views
                 FROM contents
                 WHERE topic_id = :tid AND crawled_at >= :since
-                GROUP BY DATE(crawled_at)
-                ORDER BY day
+                GROUP BY period
+                ORDER BY period
             """),
-            {"tid": topic_id, "since": since},
+            {"tid": topic_id, "since": since, "interval": interval_secs},
         )
         return [
-            {"day": str(r.day), "posts": r.posts, "likes": r.likes, "views": r.views}
+            {"day": r.period.strftime("%Y-%m-%d %H:%M"), "posts": r.posts, "likes": r.likes, "views": r.views}
             for r in result
         ]
 

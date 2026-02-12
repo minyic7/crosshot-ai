@@ -2184,13 +2184,14 @@ h3 {
   color: var(--positive);
 }
 
-/* Sparkline that expands below stats bar */
+/* Compact sparkline below clicked stat */
 .trend-sparkline {
+  width: 280px;
   background: var(--glass);
   backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
-  padding: 12px 8px 4px;
+  padding: 12px 4px 4px;
   animation: slideDown 0.2s ease;
 }
 

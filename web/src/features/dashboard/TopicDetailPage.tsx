@@ -246,7 +246,11 @@ function SummaryChat({
 }
 
 function formatDay(day: string): string {
-  const d = new Date(day + 'T00:00:00')
+  // Handle both "2026-02-11" and "2026-02-11 18:00" formats
+  const d = new Date(day.includes(' ') ? day.replace(' ', 'T') : day + 'T00:00:00')
+  if (isNaN(d.getTime())) return day
+  const hasTime = day.includes(' ')
+  if (hasTime) return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}h`
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
@@ -276,14 +280,14 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-/** Compact sparkline chart that expands below the stats bar */
-function TrendSparkline({ trend, metricKey }: { trend: { day: string; posts: number; likes: number; views: number }[]; metricKey: TrendKey }) {
+/** Compact sparkline chart that expands below the clicked stat */
+function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: { day: string; posts: number; likes: number; views: number }[]; metricKey: TrendKey; anchorLeft: number }) {
   const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
 
   return (
-    <div className="trend-sparkline">
-      <ResponsiveContainer width="100%" height={120}>
+    <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
+      <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
           <defs>
             <linearGradient id={`grad-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
@@ -317,6 +321,8 @@ export function TopicDetailPage() {
   const [translated, setTranslated] = useState('')
   const [translating, setTranslating] = useState(false)
   const [expandedMetric, setExpandedMetric] = useState<TrendKey | null>(null)
+  const [anchorLeft, setAnchorLeft] = useState(0)
+  const statsRef = useRef<HTMLDivElement>(null)
 
   const handleTranslate = useCallback(async (text: string) => {
     if (translating || translated) { setTranslated(''); return }
@@ -374,8 +380,20 @@ export function TopicDetailPage() {
   const metrics = (topic.summary_data?.metrics ?? {}) as Record<string, unknown>
   const hasTrend = trend && trend.length >= 2
 
-  const toggleMetric = (key: TrendKey) => {
-    setExpandedMetric(prev => prev === key ? null : key)
+  const toggleMetric = (key: TrendKey, e: React.MouseEvent) => {
+    if (expandedMetric === key) {
+      setExpandedMetric(null)
+    } else {
+      // Compute offset relative to the stats bar
+      const statEl = e.currentTarget as HTMLElement
+      const barEl = statsRef.current
+      if (barEl) {
+        const barRect = barEl.getBoundingClientRect()
+        const statRect = statEl.getBoundingClientRect()
+        setAnchorLeft(statRect.left - barRect.left + statRect.width / 2)
+      }
+      setExpandedMetric(key)
+    }
   }
 
   // Compute deltas from trend data
@@ -427,7 +445,7 @@ export function TopicDetailPage() {
       </div>
 
       {/* Compact info + metrics bar */}
-      <div className="topic-detail-stats pop" style={{ animationDelay: '80ms' }}>
+      <div ref={statsRef} className="topic-detail-stats pop" style={{ animationDelay: '80ms' }}>
         <div className="topic-detail-stat">
           <span className="topic-detail-stat-label">Created</span>
           <span className="topic-detail-stat-value">{fmt(topic.created_at)}</span>
@@ -449,7 +467,7 @@ export function TopicDetailPage() {
         <div className="topic-detail-stat-sep" />
         <div
           className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'posts' ? 'expanded' : ''}`}
-          onClick={() => hasTrend && toggleMetric('posts')}
+          onClick={(e) => hasTrend && toggleMetric('posts', e)}
         >
           <BarChart3 size={13} />
           <span className="topic-detail-stat-num">{fmtNum(topic.total_contents)}</span>
@@ -461,7 +479,7 @@ export function TopicDetailPage() {
             <div className="topic-detail-stat-sep" />
             <div
               className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'likes' ? 'expanded' : ''}`}
-              onClick={() => hasTrend && toggleMetric('likes')}
+              onClick={(e) => hasTrend && toggleMetric('likes', e)}
             >
               <Heart size={12} />
               <span className="topic-detail-stat-num">{fmtNum(metrics.total_likes)}</span>
@@ -474,7 +492,7 @@ export function TopicDetailPage() {
             <div className="topic-detail-stat-sep" />
             <div
               className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'views' ? 'expanded' : ''}`}
-              onClick={() => hasTrend && toggleMetric('views')}
+              onClick={(e) => hasTrend && toggleMetric('views', e)}
             >
               <Eye size={12} />
               <span className="topic-detail-stat-num">{fmtNum(metrics.total_views)}</span>
@@ -513,7 +531,7 @@ export function TopicDetailPage() {
 
       {/* Expanded sparkline — slides open below stats bar */}
       {expandedMetric && hasTrend && (
-        <TrendSparkline trend={trend} metricKey={expandedMetric} />
+        <TrendSparkline trend={trend} metricKey={expandedMetric} anchorLeft={anchorLeft} />
       )}
 
       {/* Keywords */}
