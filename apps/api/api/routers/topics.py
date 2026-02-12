@@ -335,6 +335,51 @@ async def reanalyze_topic(topic_id: str) -> dict:
         return {"status": "reanalyzing", "task_id": task_id}
 
 
+@router.get("/topics/{topic_id}/pipeline")
+async def get_topic_pipeline(topic_id: str) -> dict:
+    """Get pipeline state and active crawler task progress for a topic."""
+    redis = get_redis()
+
+    pipeline = await redis.hgetall(f"topic:{topic_id}:pipeline")
+    if not pipeline:
+        return {"pipeline": None, "tasks": []}
+
+    task_ids = await redis.smembers(f"topic:{topic_id}:task_ids")
+
+    tasks_info = []
+    if task_ids:
+        pipe = redis.pipeline()
+        for tid in task_ids:
+            pipe.get(f"task:{tid}")
+            pipe.get(f"task:{tid}:progress")
+        results = await pipe.execute()
+
+        for i in range(0, len(results), 2):
+            task_raw = results[i]
+            progress_raw = results[i + 1]
+            if not task_raw:
+                continue
+
+            task_data = json.loads(task_raw) if isinstance(task_raw, str) else task_raw
+            progress = json.loads(progress_raw) if progress_raw else None
+
+            tasks_info.append({
+                "id": task_data.get("id"),
+                "label": task_data.get("label"),
+                "status": task_data.get("status"),
+                "payload": {
+                    "action": task_data.get("payload", {}).get("action"),
+                    "username": task_data.get("payload", {}).get("username"),
+                    "query": (task_data.get("payload", {}).get("query") or "")[:80],
+                },
+                "progress": progress,
+                "started_at": task_data.get("started_at"),
+                "completed_at": task_data.get("completed_at"),
+            })
+
+    return {"pipeline": pipeline, "tasks": tasks_info}
+
+
 @router.post("/topics/reorder")
 async def reorder_topics(body: TopicReorder) -> dict:
     """Bulk update topic positions for drag-drop reordering."""

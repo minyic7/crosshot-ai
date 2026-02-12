@@ -155,6 +155,38 @@ export interface Topic {
   users?: User[]
 }
 
+export interface PipelineTaskProgress {
+  action?: string
+  target?: string
+  phase?: string
+  message?: string
+  page?: number
+  max_pages?: number
+  new_count?: number
+  target_new?: number
+  total_found?: number
+  updated_at?: string
+}
+
+export interface PipelineTask {
+  id: string
+  label: string
+  status: TaskStatus
+  payload: {
+    action?: string
+    username?: string
+    query?: string
+  }
+  progress: PipelineTaskProgress | null
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface PipelineDetail {
+  pipeline: TopicPipeline | null
+  tasks: PipelineTask[]
+}
+
 export type UserStatus = 'active' | 'paused' | 'cancelled'
 
 export interface User {

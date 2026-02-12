@@ -13,8 +13,9 @@ import {
   useUpdateUserMutation,
   useDeleteUserMutation,
   useDetachUserMutation,
+  useGetUserPipelineQuery,
 } from '@/store/api'
-import type { TopicInsight } from '@/types/models'
+import type { TopicInsight, PipelineTask } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
 import { useSSEChat } from '@/hooks/useSSEChat'
 
@@ -229,6 +230,101 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
           <Area type="monotone" dataKey={metricKey} stroke={meta.color} strokeWidth={2} fill={`url(#grad-user-${metricKey})`} />
         </AreaChart>
       </ResponsiveContainer>
+    </div>
+  )
+}
+
+function getTaskIcon(task: PipelineTask): string {
+  const action = task.payload?.action || task.progress?.action
+  if (action === 'timeline') return '📋'
+  if (action === 'search') return '🔍'
+  if (action === 'tweet') return '💬'
+  return '⚡'
+}
+
+function getTaskLabel(task: PipelineTask): string {
+  const action = task.payload?.action
+  if (action === 'timeline' && task.payload?.username) return `Timeline @${task.payload.username}`
+  if (action === 'search' && task.payload?.query) return `Search: ${task.payload.query}`
+  if (action === 'tweet') return `Tweet detail`
+  return task.label || 'Task'
+}
+
+function getTaskProgressPct(task: PipelineTask): number | null {
+  const p = task.progress
+  if (!p) return null
+  if (p.action === 'timeline' && p.target_new && p.target_new > 0) {
+    return Math.min(100, Math.round(((p.new_count || 0) / p.target_new) * 100))
+  }
+  return null
+}
+
+function UserPipelineTasks({ entityId }: { entityId: string }) {
+  const { data } = useGetUserPipelineQuery(entityId, { pollingInterval: 2000 })
+  const [expanded, setExpanded] = useState(true)
+
+  if (!data?.pipeline || data.pipeline.phase === 'done') return null
+  if (data.tasks.length === 0 && data.pipeline.phase !== 'crawling') return null
+
+  const phase = data.pipeline.phase
+  const total = Number(data.pipeline.total) || 0
+  const done = Number(data.pipeline.done) || 0
+  const overallPct = total > 0 ? Math.round((done / total) * 100) : 0
+
+  return (
+    <div className="pipeline-tasks-section pop" style={{ animationDelay: '120ms' }}>
+      <button className="pipeline-tasks-header" onClick={() => setExpanded((p) => !p)}>
+        <div className="pipeline-tasks-header-left">
+          {phase === 'analyzing' && <Loader2 size={14} className="pipeline-spin" />}
+          {phase === 'crawling' && <RefreshCw size={14} className="pipeline-spin" />}
+          {phase === 'summarizing' && <TrendingUp size={14} className="pipeline-spin" />}
+          {phase === 'error' && <span style={{ color: 'var(--negative)' }}>!</span>}
+          <span className="pipeline-tasks-phase">
+            {phase === 'analyzing' && 'Analyzing...'}
+            {phase === 'crawling' && `Crawling ${done}/${total}`}
+            {phase === 'summarizing' && 'Summarizing...'}
+            {phase === 'error' && `Error: ${data.pipeline.error_msg || 'Unknown'}`}
+          </span>
+        </div>
+        {phase === 'crawling' && total > 0 && (
+          <div className="pipeline-tasks-overall-bar">
+            <div className="pipeline-tasks-overall-fill" style={{ width: `${overallPct}%` }} />
+          </div>
+        )}
+        <span className="pipeline-tasks-chevron">{expanded ? '▾' : '▸'}</span>
+      </button>
+      {expanded && data.tasks.length > 0 && (
+        <div className="pipeline-tasks-list">
+          {data.tasks.map((task) => {
+            const pct = getTaskProgressPct(task)
+            const isDone = task.status === 'completed'
+            const isFailed = task.status === 'failed'
+            const isRunning = task.status === 'running'
+            return (
+              <div key={task.id} className={`pipeline-task-item ${isDone ? 'done' : ''} ${isFailed ? 'failed' : ''} ${isRunning ? 'running' : ''}`}>
+                <div className="pipeline-task-row">
+                  <span className="pipeline-task-icon">{getTaskIcon(task)}</span>
+                  <span className="pipeline-task-label">{getTaskLabel(task)}</span>
+                  <span className={`pipeline-task-status ${task.status}`}>
+                    {isDone && '✓'}
+                    {isFailed && '✗'}
+                    {isRunning && <Loader2 size={10} className="pipeline-spin" />}
+                    {task.status === 'pending' && '○'}
+                  </span>
+                </div>
+                {task.progress?.message && isRunning && (
+                  <div className="pipeline-task-message">{task.progress.message}</div>
+                )}
+                {pct !== null && isRunning && (
+                  <div className="pipeline-task-bar">
+                    <div className="pipeline-task-bar-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -605,6 +701,9 @@ export function UserDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Active Pipeline Tasks */}
+      <UserPipelineTasks entityId={user.id} />
 
       {/* Summary + Chat */}
       {user.last_summary && (

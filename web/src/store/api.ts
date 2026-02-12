@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User } from '@/types/models'
+import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User, PipelineDetail } from '@/types/models'
 
 export const apiSlice = createApi({
   reducerPath: 'api',
@@ -113,6 +113,9 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/topics/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['Topic'],
     }),
+    getTopicPipeline: builder.query<PipelineDetail, string>({
+      query: (id) => `/topics/${id}/pipeline`,
+    }),
     reorderTopics: builder.mutation<{ status: string }, { pinned: string[]; unpinned: string[] }>({
       query: ({ pinned, unpinned }) => ({
         url: '/topics/reorder',
@@ -175,6 +178,9 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/users/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['User'],
     }),
+    getUserPipeline: builder.query<PipelineDetail, string>({
+      query: (id) => `/users/${id}/pipeline`,
+    }),
     getUserTrend: builder.query<{ day: string; posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }[], string>({
       query: (id) => `/users/${id}/trend`,
     }),
@@ -206,6 +212,7 @@ export const {
   useGetTopicTrendQuery,
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
+  useGetTopicPipelineQuery,
   useListUsersQuery,
   useGetUserQuery,
   useCreateUserMutation,
@@ -215,5 +222,6 @@ export const {
   useDetachUserMutation,
   useReorderUsersMutation,
   useReanalyzeUserMutation,
+  useGetUserPipelineQuery,
   useGetUserTrendQuery,
 } = apiSlice

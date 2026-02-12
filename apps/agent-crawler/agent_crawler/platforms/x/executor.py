@@ -151,9 +151,22 @@ class XExecutor(BasePlatformExecutor):
                 query += " -is:retweet"
 
         logger.info("Executing search: query=%r tab=%s", query, tab)
+        await self._report_progress(task.id, {
+            "action": "search",
+            "target": query[:60],
+            "phase": "searching",
+            "message": f"Searching: {query[:50]}...",
+        })
         tweets = await search_tweets(
             session, query=query, tab=tab, max_tweets=max_tweets,
         )
+        await self._report_progress(task.id, {
+            "action": "search",
+            "target": query[:60],
+            "phase": "done",
+            "message": f"Found {len(tweets)} tweets",
+            "total_found": len(tweets),
+        })
 
         # Save as Content objects
         saved_ids = await self._save_contents(task, tweets)
@@ -215,6 +228,14 @@ class XExecutor(BasePlatformExecutor):
         """Handle single tweet fetch with replies."""
         payload = task.payload
         max_replies = payload.get("max_replies", 20)
+        tweet_id_str = payload.get("tweet_id") or payload.get("url", "")
+
+        await self._report_progress(task.id, {
+            "action": "tweet",
+            "target": tweet_id_str[:60],
+            "phase": "fetching",
+            "message": f"Fetching tweet {tweet_id_str[:20]}...",
+        })
 
         result = await fetch_tweet(
             session,
@@ -248,6 +269,7 @@ class XExecutor(BasePlatformExecutor):
         - Pre-loads known tweet IDs from PG to avoid re-processing
         - Target-driven: stops after ``target_new`` fresh tweets found
         - Tracks timeline exhaustion for future crawl cycles
+        - Reports real-time progress to Redis for UI display
 
         Note: Detail task dispatch (fetching comments/quotes for high-value
         tweets) is handled by the analyst pipeline's triage step, not here.
@@ -268,6 +290,31 @@ class XExecutor(BasePlatformExecutor):
         target_new = config.get("target_new_contents", 50)
         max_pages = config.get("max_scroll_pages", 50)
 
+        await self._report_progress(task.id, {
+            "action": "timeline",
+            "target": f"@{username}",
+            "phase": "loading",
+            "message": f"Loading @{username} timeline...",
+            "page": 0,
+            "max_pages": max_pages,
+            "new_count": 0,
+            "target_new": target_new,
+            "total_found": 0,
+        })
+
+        async def on_progress(page: int, new_count: int, total: int) -> None:
+            await self._report_progress(task.id, {
+                "action": "timeline",
+                "target": f"@{username}",
+                "phase": "scrolling",
+                "message": f"@{username}: page {page}/{max_pages} · {new_count} new / {target_new} target",
+                "page": page,
+                "max_pages": max_pages,
+                "new_count": new_count,
+                "target_new": target_new,
+                "total_found": total,
+            })
+
         tweets, exhausted = await fetch_timeline(
             session,
             username=username,
@@ -275,13 +322,38 @@ class XExecutor(BasePlatformExecutor):
             max_pages=max_pages,
             include_replies=config.get("include_replies_in_timeline", False),
             known_ids=known_ids,
+            on_progress=on_progress,
         )
+
+        await self._report_progress(task.id, {
+            "action": "timeline",
+            "target": f"@{username}",
+            "phase": "saving",
+            "message": f"Saving {len(tweets)} tweets...",
+            "page": max_pages,
+            "max_pages": max_pages,
+            "new_count": 0,
+            "target_new": target_new,
+            "total_found": len(tweets),
+        })
 
         saved_ids, new_count = await self._save_contents_dedup(task, tweets)
 
         # Update timeline exhaustion status on the user row
         if exhausted and user_id:
             await self._mark_timeline_exhausted(user_id)
+
+        await self._report_progress(task.id, {
+            "action": "timeline",
+            "target": f"@{username}",
+            "phase": "done",
+            "message": f"Done: {new_count} new tweets" + (" (exhausted)" if exhausted else ""),
+            "page": max_pages,
+            "max_pages": max_pages,
+            "new_count": new_count,
+            "target_new": target_new,
+            "total_found": len(tweets),
+        })
 
         return {
             "action": "timeline",
@@ -291,6 +363,23 @@ class XExecutor(BasePlatformExecutor):
             "new_count": new_count,
             "exhausted": exhausted,
         }
+
+    # ──────────────────────────────────────
+    # Progress reporting
+    # ──────────────────────────────────────
+
+    async def _report_progress(self, task_id: str, data: dict[str, Any]) -> None:
+        """Write real-time task progress to Redis for UI display."""
+        try:
+            import json as _json
+            data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await self._redis.set(
+                f"task:{task_id}:progress",
+                _json.dumps(data, ensure_ascii=False),
+                ex=3600,  # 1 hour TTL
+            )
+        except Exception:
+            pass  # best-effort, never block crawling
 
     # ──────────────────────────────────────
     # Helpers

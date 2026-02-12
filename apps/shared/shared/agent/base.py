@@ -139,17 +139,28 @@ class BaseAgent:
             await asyncio.sleep(10)
 
     # ──────────────────────────────────────────────
-    # Fan-in (generic topic pipeline countdown)
+    # Fan-in (generic pipeline countdown)
     # ──────────────────────────────────────────────
 
-    async def _handle_fan_in(self, task: Task) -> None:
-        """Decrement topic pending counter; trigger on_complete task if last."""
+    @staticmethod
+    def _extract_entity(task: Task) -> tuple[str, str] | tuple[None, None]:
+        """Extract (entity_type, entity_id) from a task payload."""
         topic_id = task.payload.get("topic_id")
-        if not topic_id:
+        if topic_id:
+            return "topic", topic_id
+        user_id = task.payload.get("user_id")
+        if user_id:
+            return "user", user_id
+        return None, None
+
+    async def _handle_fan_in(self, task: Task) -> None:
+        """Decrement entity pending counter; trigger on_complete task if last."""
+        entity_type, entity_id = self._extract_entity(task)
+        if not entity_id:
             return
 
-        pending_key = f"topic:{topic_id}:pending"
-        pipeline_key = f"topic:{topic_id}:pipeline"
+        pending_key = f"{entity_type}:{entity_id}:pending"
+        pipeline_key = f"{entity_type}:{entity_id}:pipeline"
 
         # Atomic: decrement pending + update progress
         pipe = self._redis.pipeline()
@@ -159,10 +170,11 @@ class BaseAgent:
         results = await pipe.execute()
         remaining = results[0]
 
-        logger.info("Topic %s: task done, remaining=%s", topic_id, max(remaining, 0))
+        logger.info("%s %s: task done, remaining=%s", entity_type, entity_id, max(remaining, 0))
 
         if remaining <= 0:
-            on_complete_raw = await self._redis.get(f"topic:{topic_id}:on_complete")
+            on_complete_key = f"{entity_type}:{entity_id}:on_complete"
+            on_complete_raw = await self._redis.get(on_complete_key)
             if on_complete_raw:
                 cfg = json.loads(on_complete_raw)
                 next_task = Task(
@@ -173,10 +185,18 @@ class BaseAgent:
                 await self._queue.push(next_task)
                 next_phase = cfg.get("next_phase", "summarizing")
                 await self._redis.hset(pipeline_key, "phase", next_phase)
-                await self._redis.delete(f"topic:{topic_id}:on_complete")
+                await self._redis.delete(on_complete_key)
                 logger.info(
-                    "Topic %s: fan-in complete, triggered %s", topic_id, next_task.label
+                    "%s %s: fan-in complete, triggered %s",
+                    entity_type, entity_id, next_task.label,
                 )
+
+            # Clean up task progress keys
+            task_ids_key = f"{entity_type}:{entity_id}:task_ids"
+            task_ids = await self._redis.smembers(task_ids_key)
+            if task_ids:
+                progress_keys = [f"task:{tid}:progress" for tid in task_ids]
+                await self._redis.delete(*progress_keys, task_ids_key)
 
     # ──────────────────────────────────────────────
     # Main loop
@@ -224,14 +244,25 @@ class BaseAgent:
                     self._tasks_completed += 1
 
                     # Push any new tasks produced by this execution
+                    sub_task_ids: list[str] = []
                     for new_task in result.new_tasks:
                         await self._queue.push(new_task)
+                        sub_task_ids.append(new_task.id)
                         logger.info(
                             "Pushed new task %s (label=%s) from task %s",
                             new_task.id,
                             new_task.label,
                             task.id,
                         )
+
+                    # Store sub-task IDs in Redis for pipeline progress tracking
+                    if sub_task_ids:
+                        et, eid = self._extract_entity(task)
+                        if et and eid:
+                            key = f"{et}:{eid}:task_ids"
+                            await self._redis.delete(key)
+                            await self._redis.sadd(key, *sub_task_ids)
+                            await self._redis.expire(key, 86400)
 
                 except Exception as e:
                     logger.error("Task %s failed: %s", task.id, e, exc_info=True)

@@ -9,6 +9,7 @@ so the caller can track whether the full history has been reached.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ..browser import XBrowserSession
@@ -22,6 +23,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_PAGES = 50
 DEFAULT_TARGET_NEW = 50
 
+# Progress callback signature: (page, new_count, total_found) -> None
+ProgressCallback = Callable[[int, int, int], Awaitable[None]]
+
 
 async def fetch_timeline(
     session: XBrowserSession,
@@ -30,6 +34,7 @@ async def fetch_timeline(
     target_new: int = DEFAULT_TARGET_NEW,
     include_replies: bool = False,
     known_ids: set[str] | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Fetch a user's timeline via GraphQL interception.
 
@@ -42,6 +47,8 @@ async def fetch_timeline(
         include_replies: If True, include replies in results.
         known_ids: Set of tweet IDs already stored in PG.  Used to
             distinguish new vs. already-crawled content.
+        on_progress: Optional async callback for real-time progress
+            reporting. Called with (page, new_count, total_found).
 
     Returns:
         ``(tweets, exhausted)`` — all collected tweets and a flag
@@ -107,6 +114,13 @@ async def fetch_timeline(
             page + 1, len(tweets), page_new,
             len(all_tweets), new_count, target_new,
         )
+
+        # Report progress
+        if on_progress:
+            try:
+                await on_progress(page + 1, new_count, len(all_tweets))
+            except Exception:
+                pass  # never block crawling for progress reporting
 
         # Target reached
         if new_count >= target_new:
