@@ -578,43 +578,68 @@ export function TopicDetailPage() {
       )}
 
       {/* Media pie chart */}
-      {showMediaPie && mediaPostsTotal != null && postsTotal != null && postsTotal > 0 && (
-        <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: 'Media', value: mediaPostsTotal },
-                  { name: 'Text only', value: postsTotal - mediaPostsTotal },
-                ]}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                dataKey="value"
-                stroke="none"
-              >
-                <Cell fill="var(--accent)" />
-                <Cell fill="var(--ink-4)" />
-              </Pie>
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null
-                  const d = payload[0]
-                  return (
-                    <div className="trend-tooltip">
-                      <div className="trend-tooltip-date">{d.name}</div>
-                      <div className="trend-tooltip-row">
-                        <span className="trend-tooltip-value">{d.value} posts</span>
-                      </div>
-                    </div>
-                  )
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {showMediaPie && mediaPostsTotal != null && postsTotal != null && postsTotal > 0 && (() => {
+        const pct = Math.round(mediaPostsTotal * 100 / postsTotal)
+        const textOnly = postsTotal - mediaPostsTotal
+        return (
+          <div className="trend-sparkline media-pie" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
+            <div className="media-pie-chart">
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Media', value: mediaPostsTotal },
+                      { name: 'Text only', value: textOnly },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={68}
+                    dataKey="value"
+                    stroke="none"
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    <Cell fill="var(--accent)" />
+                    <Cell fill="var(--ink-4)" />
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0]
+                      return (
+                        <div className="trend-tooltip">
+                          <div className="trend-tooltip-date">{d.name}</div>
+                          <div className="trend-tooltip-row">
+                            <span className="trend-tooltip-value">{d.value} posts</span>
+                          </div>
+                        </div>
+                      )
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Center label */}
+              <div className="media-pie-center">
+                <span className="media-pie-pct">{pct}%</span>
+                <span className="media-pie-label">media</span>
+              </div>
+            </div>
+            <div className="media-pie-legend">
+              <div className="media-pie-legend-row">
+                <span className="media-pie-dot" style={{ background: 'var(--accent)' }} />
+                <span className="media-pie-legend-label">Media</span>
+                <span className="media-pie-legend-value">{mediaPostsTotal}</span>
+              </div>
+              <div className="media-pie-legend-row">
+                <span className="media-pie-dot" style={{ background: 'var(--ink-4)' }} />
+                <span className="media-pie-legend-label">Text only</span>
+                <span className="media-pie-legend-value">{textOnly}</span>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Keywords */}
       {(topic.keywords ?? []).length > 0 && (

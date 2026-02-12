@@ -2204,6 +2204,78 @@ h3 {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Media pie chart */
+.media-pie {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.media-pie-chart {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+}
+
+.media-pie-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.media-pie-pct {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.media-pie-label {
+  font-size: 0.625rem;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.media-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.media-pie-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.media-pie-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.media-pie-legend-label {
+  color: var(--ink-2);
+}
+
+.media-pie-legend-value {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
 /* Trend chart tooltip */
 .trend-tooltip {
   background: var(--surface-card);
