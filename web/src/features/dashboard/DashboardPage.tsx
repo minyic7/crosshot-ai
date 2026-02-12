@@ -164,11 +164,13 @@ function TopicCard({
 }) {
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
   const d = index * 80
+  const [risen, setRisen] = useState(false)
 
   return (
     <div
-      className={`topic-card rise${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''} ${className}`}
-      style={{ animationDelay: `${180 + d}ms`, ...style }}
+      className={`topic-card${risen ? '' : ' rise'}${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''} ${className}`}
+      style={{ animationDelay: risen ? undefined : `${180 + d}ms`, ...style }}
+      onAnimationEnd={(e) => { if (e.animationName === 'rise') setRisen(true) }}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest('button, .topic-drag-handle')) return
         onClick(topic.id)
