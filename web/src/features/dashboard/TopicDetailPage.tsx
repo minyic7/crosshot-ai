@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image } from 'lucide-react'
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -15,6 +15,7 @@ import {
 } from '@/store/api'
 import type { TopicInsight } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
+import { useSSEChat } from '@/hooks/useSSEChat'
 
 function normalizeInsights(data: { alerts?: unknown[]; insights?: unknown[] } | null): TopicInsight[] {
   const result: TopicInsight[] = []
@@ -54,11 +55,6 @@ function fmtNum(n: unknown): string {
   return String(v)
 }
 
-interface ChatMsg {
-  role: 'user' | 'assistant'
-  content: string
-}
-
 /** Summary card with integrated chat — summary is the first "assistant" turn */
 function SummaryChat({
   topicId,
@@ -77,91 +73,19 @@ function SummaryChat({
   cycleId?: string
   insights: TopicInsight[]
 }) {
-  const [messages, setMessages] = useState<ChatMsg[]>([])
-  const [input, setInput] = useState('')
-  const [streaming, setStreaming] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const buildBody = useCallback(
+    (msgs: { role: string; content: string }[]) => ({
+      messages: [{ role: 'assistant', content: summary }, ...msgs]
+        .map((m) => ({ role: m.role, content: m.content })),
+    }),
+    [summary],
+  )
 
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [])
-
-  // auto-scroll when new messages arrive
-  useEffect(() => {
-    if (messages.length > 0) scrollToBottom()
-  }, [messages, scrollToBottom])
-
-  const send = async () => {
-    const text = input.trim()
-    if (!text || streaming) return
-    setInput('')
-
-    const userMsg: ChatMsg = { role: 'user', content: text }
-    // Include the summary as the initial assistant context
-    const contextMessages: ChatMsg[] = [
-      { role: 'assistant', content: summary },
-      ...messages,
-      userMsg,
-    ]
-    setMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '' }])
-    setStreaming(true)
-
-    try {
-      const res = await fetch(`/api/topics/${topicId}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: contextMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      })
-
-      if (!res.body) throw new Error('No response body')
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let accumulated = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()!
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const evt = JSON.parse(line.slice(6))
-            if (evt.t) {
-              accumulated += evt.t
-              setMessages((prev) => {
-                const copy = [...prev]
-                copy[copy.length - 1] = { role: 'assistant', content: accumulated }
-                return copy
-              })
-            }
-            if (evt.error) {
-              accumulated += `\n\n[Error: ${evt.error}]`
-              setMessages((prev) => {
-                const copy = [...prev]
-                copy[copy.length - 1] = { role: 'assistant', content: accumulated }
-                return copy
-              })
-            }
-          } catch { /* ignore parse errors */ }
-        }
-      }
-    } catch (err) {
-      setMessages((prev) => {
-        const copy = [...prev]
-        copy[copy.length - 1] = { role: 'assistant', content: `Error: ${err}` }
-        return copy
-      })
-    } finally {
-      setStreaming(false)
-    }
-  }
+  const { messages, input, setInput, streaming, send, handleKeyDown, scrollRef } = useSSEChat({
+    endpoint: `/api/topics/${topicId}/chat`,
+    buildBody,
+    mode: 'direct',
+  })
 
   const hasChat = messages.length > 0
 
@@ -183,7 +107,7 @@ function SummaryChat({
         </CardHeader>
 
         {/* Scrollable area: insights + summary + chat messages */}
-        <div ref={scrollRef} className="summary-chat-scroll">
+        <div className="summary-chat-scroll">
           {/* Insights — above the summary */}
           {insights.length > 0 && (
             <div className="summary-insights">
@@ -223,6 +147,7 @@ function SummaryChat({
               </div>
             </div>
           ))}
+          <div ref={scrollRef} />
         </div>
 
         {/* Chat input — always visible at the bottom */}
@@ -231,12 +156,7 @@ function SummaryChat({
             className="topic-chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                send()
-              }
-            }}
+            onKeyDown={handleKeyDown}
             placeholder="Ask about this analysis..."
             disabled={streaming}
             rows={1}

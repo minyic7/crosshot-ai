@@ -25,11 +25,13 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pin, RefreshCw, GripVertical,
   AlertTriangle,
-  Sparkles, Send, Loader2,
+  Sparkles, Send, Loader2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { Markdown } from '@/components/ui/Markdown'
+import { useSSEChat } from '@/hooks/useSSEChat'
 import {
   useListTopicsQuery,
   useCreateTopicMutation,
@@ -389,39 +391,7 @@ function ZoneGrid({
   )
 }
 
-// ─── SSE Helpers ─────────────────────────────────────────────
-
-function extractReplyFromPartial(raw: string): string {
-  const idx = raw.indexOf('"reply"')
-  if (idx === -1) return ''
-  const valStart = raw.indexOf('"', idx + 7)
-  if (valStart === -1) return ''
-  let result = ''
-  let i = valStart + 1
-  while (i < raw.length) {
-    if (raw[i] === '\\' && i + 1 < raw.length) {
-      const next = raw[i + 1]
-      if (next === '"') result += '"'
-      else if (next === 'n') result += '\n'
-      else if (next === '\\') result += '\\'
-      else result += next
-      i += 2
-    } else if (raw[i] === '"') {
-      break
-    } else {
-      result += raw[i]
-      i++
-    }
-  }
-  return result
-}
-
 // ─── Create Topic Modal ───────────────────────────────────────
-
-interface ChatMsg {
-  role: 'user' | 'assistant'
-  content: string
-}
 
 function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState('')
@@ -431,90 +401,41 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [keywords, setKeywords] = useState('')
   const [interval, setInterval] = useState('6')
   const [createTopic, { isLoading }] = useCreateTopicMutation()
+  const [formOpen, setFormOpen] = useState(true)
 
-  const [chatInput, setChatInput] = useState('')
-  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
-  const [streamingReply, setStreamingReply] = useState('')
-  const [isAssisting, setIsAssisting] = useState(false)
-  const chatEndRef = useRef<HTMLDivElement>(null)
+  const buildBody = useCallback(
+    (msgs: { role: string; content: string }[]) => ({ messages: msgs }),
+    [],
+  )
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages, streamingReply])
+  const handleSuggestion = useCallback((s: Record<string, unknown>) => {
+    if (s.name) setName(s.name as string)
+    if (s.icon) setIcon(s.icon as string)
+    if (s.description) setDescription(s.description as string)
+    if ((s.platforms as string[])?.length) setPlatforms(s.platforms as string[])
+    if ((s.keywords as string[])?.length) setKeywords((s.keywords as string[]).join(', '))
+    if (s.schedule_interval_hours) setInterval(String(s.schedule_interval_hours))
+    setFormOpen(false) // collapse form after AI fills it
+  }, [])
+
+  const {
+    messages: chatMessages, input: chatInput, setInput: setChatInput,
+    streaming: isAssisting, streamingText: streamingReply,
+    send: handleAsk, reset: resetChat, handleKeyDown, scrollRef: chatScrollRef,
+  } = useSSEChat({
+    endpoint: '/api/topics/assist',
+    buildBody,
+    mode: 'assist',
+    onSuggestion: handleSuggestion,
+  })
 
   const resetForm = () => {
-    setChatInput(''); setChatMessages([]); setStreamingReply(''); setIsAssisting(false)
+    resetChat()
     setName(''); setIcon('📊'); setDescription(''); setPlatforms(['x']); setKeywords(''); setInterval('6')
+    setFormOpen(true)
   }
 
   const emojiOptions = EMOJI_OPTIONS.includes(icon) ? EMOJI_OPTIONS : [icon, ...EMOJI_OPTIONS]
-
-  const handleAsk = async () => {
-    const q = chatInput.trim()
-    if (!q || isAssisting) return
-    const userMsg: ChatMsg = { role: 'user', content: q }
-    const newMessages = [...chatMessages, userMsg]
-    setChatMessages(newMessages)
-    setChatInput('')
-    setStreamingReply('')
-    setIsAssisting(true)
-
-    try {
-      const res = await fetch('/api/topics/assist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
-      })
-      if (!res.ok || !res.body) {
-        setChatMessages([...newMessages, { role: 'assistant', content: 'Failed to connect to AI.' }])
-        setIsAssisting(false)
-        return
-      }
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let accumulated = ''
-      let finalReply = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()!
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const evt = JSON.parse(line.slice(6))
-            if (evt.t) {
-              accumulated += evt.t
-              const partial = extractReplyFromPartial(accumulated)
-              if (partial) setStreamingReply(partial)
-            } else if (evt.done) {
-              finalReply = evt.reply || ''
-              const s = evt.suggestion
-              if (s) {
-                if (s.name) setName(s.name)
-                if (s.icon) setIcon(s.icon)
-                if (s.description) setDescription(s.description)
-                if (s.platforms?.length) setPlatforms(s.platforms)
-                if (s.keywords?.length) setKeywords(s.keywords.join(', '))
-                if (s.schedule_interval_hours) setInterval(String(s.schedule_interval_hours))
-              }
-            } else if (evt.error) {
-              finalReply = `Error: ${evt.error}`
-            }
-          } catch { /* skip malformed SSE */ }
-        }
-      }
-      setChatMessages([...newMessages, { role: 'assistant', content: finalReply || extractReplyFromPartial(accumulated) || accumulated }])
-      setStreamingReply('')
-    } catch {
-      setChatMessages([...newMessages, { role: 'assistant', content: 'Connection error.' }])
-    } finally {
-      setIsAssisting(false)
-    }
-  }
 
   const handleSubmit = async () => {
     if (!name.trim() || platforms.length === 0) return
@@ -549,84 +470,119 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     handleSubmit()
   }
 
+  // Form summary line for collapsed state
+  const formSummary = [
+    name && `${icon} ${name}`,
+    platforms.length > 0 && platforms.map((p) => p.toUpperCase()).join(', '),
+    keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
+    `${interval}h`,
+  ].filter(Boolean).join(' · ')
+
   return (
     <Modal open={open} onClose={onClose} title="New Topic" className="create-topic-panel">
-      <div className="stack-sm">
-        <div className="assist-section">
-          <div className="assist-label"><Sparkles size={13} /> AI Assist</div>
-          {(chatMessages.length > 0 || streamingReply) && (
-            <div className="assist-messages">
-              {chatMessages.map((m, i) => (
-                <div key={i} className={`assist-msg ${m.role}`}>
-                  <span className="assist-msg-text">{m.content}</span>
-                </div>
-              ))}
-              {streamingReply && (
-                <div className="assist-msg assistant">
-                  <span className="assist-msg-text">{streamingReply}<span className="assist-cursor" /></span>
-                </div>
-              )}
-              {isAssisting && !streamingReply && (
-                <div className="assist-msg assistant">
-                  <Loader2 size={13} className="assist-spinner" />
-                  <span className="assist-msg-text">Thinking...</span>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-          )}
-          <div className="assist-input-row">
-            <input
-              className="form-input assist-input"
+      <div className="create-topic-content">
+        {/* ── Chat Hero ── */}
+        <div className="create-topic-chat">
+          <div className="create-topic-chat-messages">
+            {chatMessages.length === 0 && !streamingReply && !isAssisting ? (
+              <div className="create-topic-chat-empty">
+                <Sparkles size={24} />
+                <p>Tell AI what you want to monitor,</p>
+                <p>or fill in the form below.</p>
+              </div>
+            ) : (
+              <>
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={`topic-chat-msg ${m.role}`}>
+                    <div className="topic-chat-msg-content">
+                      {m.role === 'assistant' ? <Markdown>{m.content}</Markdown> : m.content}
+                    </div>
+                  </div>
+                ))}
+                {streamingReply && (
+                  <div className="topic-chat-msg assistant">
+                    <div className="topic-chat-msg-content">
+                      <Markdown>{streamingReply}</Markdown>
+                      <span className="assist-cursor" />
+                    </div>
+                  </div>
+                )}
+                {isAssisting && !streamingReply && (
+                  <div className="topic-chat-msg assistant">
+                    <div className="topic-chat-msg-content">
+                      <Loader2 size={13} className="assist-spinner" />
+                      Thinking...
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            <div ref={chatScrollRef} />
+          </div>
+          <div className="create-topic-chat-input-row">
+            <textarea
+              className="topic-chat-input"
               placeholder="Describe what you want to monitor..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handleAsk()
-              }}
+              onKeyDown={handleKeyDown}
               disabled={isAssisting}
+              rows={1}
             />
             <button className="assist-send" onClick={handleAsk} disabled={!chatInput.trim() || isAssisting}>
               {isAssisting ? <Loader2 size={14} className="assist-spinner" /> : <Send size={14} />}
             </button>
           </div>
         </div>
-        <div className="assist-divider" />
-        <div className="form-group">
-          <label className="form-label">Icon</label>
-          <div className="emoji-picker">
-            {emojiOptions.map((e) => (
-              <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
-            ))}
+
+        {/* ── Compact Form ── */}
+        <div className="create-topic-form">
+          <div className="create-topic-form-header" onClick={() => setFormOpen(!formOpen)}>
+            <span className="form-label" style={{ margin: 0 }}>Topic Details</span>
+            {!formOpen && formSummary && (
+              <span className="create-topic-form-summary">{formSummary}</span>
+            )}
+            {formOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </div>
+          {formOpen && (
+            <div className="create-topic-form-fields">
+              <div className="form-group">
+                <label className="form-label">Icon</label>
+                <div className="emoji-picker">
+                  {emojiOptions.map((e) => (
+                    <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Input label="Name *" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
+                {nameError && <p className="form-error">{nameError}</p>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Platforms <span className="form-required">*</span></label>
+                <div className="platform-toggles">
+                  {PLATFORM_OPTIONS.map((p) => (
+                    <button
+                      key={p}
+                      className={`platform-toggle${platforms.includes(p) ? ' active' : ''}`}
+                      onClick={() => togglePlatform(p)}
+                    >{p.toUpperCase()}</button>
+                  ))}
+                </div>
+                {platformError && <p className="form-error">{platformError}</p>}
+              </div>
+              <Input label="Keywords" placeholder="e.g. Elon Musk, SpaceX" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
+              <div className="create-topic-form-full">
+                <Input label="Description" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
+              </div>
+              <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
+            </div>
+          )}
+          <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
+            <Plus size={16} />
+            {isLoading ? 'Creating...' : 'Create Topic'}
+          </button>
         </div>
-        <div>
-          <Input label="Name *" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
-          {nameError && <p className="form-error">{nameError}</p>}
-        </div>
-        <div className="form-group">
-          <label htmlFor="topic-description" className="form-label">Description</label>
-          <textarea id="topic-description" className="form-input form-textarea" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Platforms <span className="form-required">*</span></label>
-          <div className="platform-toggles">
-            {PLATFORM_OPTIONS.map((p) => (
-              <button
-                key={p}
-                className={`platform-toggle${platforms.includes(p) ? ' active' : ''}`}
-                onClick={() => togglePlatform(p)}
-              >{p.toUpperCase()}</button>
-            ))}
-          </div>
-          {platformError && <p className="form-error">{platformError}</p>}
-        </div>
-        <Input label="Keywords (comma-separated)" placeholder="e.g. Elon Musk, SpaceX, Tesla" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
-        <Input label="Refresh Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-        <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
-          <Plus size={16} />
-          {isLoading ? 'Creating...' : 'Create Topic'}
-        </button>
       </div>
     </Modal>
   )
