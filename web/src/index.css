@@ -1398,7 +1398,7 @@ h3 {
 }
 
 .topic-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-3px) scale(1.015);
   box-shadow: var(--shadow-card-hover);
   border-color: var(--glass-border-hover);
   background: var(--glass-hover);
