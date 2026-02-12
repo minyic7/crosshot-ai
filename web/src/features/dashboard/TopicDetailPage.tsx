@@ -173,12 +173,11 @@ function SummaryChat({
             <CardDescription>Summary</CardDescription>
             <button
               className="topic-card-refresh"
-              style={{ fontSize: '0.6875rem', padding: '3px 8px', gap: 4 }}
               onClick={onTranslate}
               disabled={translating}
+              title={translated ? 'Show original' : 'Translate to Chinese'}
             >
               {translating ? <Loader2 size={11} className="animate-spin" /> : <Languages size={11} />}
-              {translated ? 'Original' : '翻译'}
             </button>
           </div>
         </CardHeader>
@@ -469,9 +468,8 @@ export function TopicDetailPage() {
           </div>
         </div>
         <div className="topic-detail-actions">
-          <button className="topic-card-refresh" onClick={() => reanalyzeTopic(topic.id)} disabled={isReanalyzing}>
+          <button className="topic-card-refresh" onClick={() => reanalyzeTopic(topic.id)} disabled={isReanalyzing} title="Reanalyze">
             <RefreshCw size={13} className={isReanalyzing ? 'animate-spin' : ''} />
-            {isReanalyzing ? 'Analyzing...' : 'Reanalyze'}
           </button>
           <Button size="sm" variant="ghost" onClick={handleTogglePause}>
             {topic.status === 'active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
