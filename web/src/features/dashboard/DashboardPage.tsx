@@ -25,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pin, RefreshCw, GripVertical,
   AlertTriangle,
-  Sparkles, Send, Loader2, ChevronDown, ChevronUp,
+  Sparkles, Send, Loader2, ChevronDown, ChevronUp, User,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
@@ -394,10 +394,13 @@ function ZoneGrid({
 // ─── Create Topic Modal ───────────────────────────────────────
 
 function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [topicType, setTopicType] = useState<'topic' | 'creator'>('topic')
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('📊')
   const [description, setDescription] = useState('')
   const [platforms, setPlatforms] = useState<string[]>(['x'])
+  const [platform, setPlatform] = useState('x') // single platform for creator
+  const [profileUrl, setProfileUrl] = useState('')
   const [keywords, setKeywords] = useState('')
   const [interval, setInterval] = useState('6')
   const [createTopic, { isLoading }] = useCreateTopicMutation()
@@ -412,9 +415,13 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     if (s.name) setName(s.name as string)
     if (s.icon) setIcon(s.icon as string)
     if (s.description) setDescription(s.description as string)
-    if ((s.platforms as string[])?.length) setPlatforms(s.platforms as string[])
+    if ((s.platforms as string[])?.length) {
+      setPlatforms(s.platforms as string[])
+      setPlatform((s.platforms as string[])[0])
+    }
     if ((s.keywords as string[])?.length) setKeywords((s.keywords as string[]).join(', '))
     if (s.schedule_interval_hours) setInterval(String(s.schedule_interval_hours))
+    if (s.profile_url) setProfileUrl(s.profile_url as string)
     setFormOpen(false) // collapse form after AI fills it
   }, [])
 
@@ -431,26 +438,45 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
 
   const resetForm = () => {
     resetChat()
-    setName(''); setIcon('📊'); setDescription(''); setPlatforms(['x']); setKeywords(''); setInterval('6')
-    setFormOpen(true)
+    setName(''); setIcon('📊'); setDescription(''); setPlatforms(['x']); setPlatform('x')
+    setProfileUrl(''); setKeywords(''); setInterval('6'); setFormOpen(true)
+  }
+
+  const switchTab = (t: 'topic' | 'creator') => {
+    if (t === topicType) return
+    setTopicType(t)
+    resetForm()
+    setIcon(t === 'creator' ? '👤' : '📊')
   }
 
   const emojiOptions = EMOJI_OPTIONS.includes(icon) ? EMOJI_OPTIONS : [icon, ...EMOJI_OPTIONS]
 
   const handleSubmit = async () => {
-    if (!name.trim() || platforms.length === 0) return
+    if (topicType === 'topic') {
+      if (!name.trim() || platforms.length === 0) return
+    } else {
+      if (!name.trim() || !profileUrl.trim()) return
+    }
+
     let finalDesc = description.trim()
     if (chatMessages.length > 0) {
       const convo = chatMessages.map((m) => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')
       finalDesc = finalDesc ? `${finalDesc}\n\n---\nAI Assist Log:\n${convo}` : `AI Assist Log:\n${convo}`
     }
+
+    const config: Record<string, unknown> = { schedule_interval_hours: Number(interval) || 6 }
+    if (topicType === 'creator') {
+      config.profile_url = profileUrl.trim()
+    }
+
     await createTopic({
+      type: topicType,
       name: name.trim(),
       icon,
       description: finalDesc || undefined,
-      platforms,
+      platforms: topicType === 'creator' ? [platform] : platforms,
       keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
-      config: { schedule_interval_hours: Number(interval) || 6 },
+      config,
     })
     resetForm()
     onClose()
@@ -461,34 +487,73 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   }
 
   const [submitted, setSubmitted] = useState(false)
-  const nameError = submitted && !name.trim() ? 'Topic name is required' : ''
-  const platformError = submitted && platforms.length === 0 ? 'Select at least one platform' : ''
+  const nameError = submitted && !name.trim()
+    ? (topicType === 'creator' ? 'Creator name is required' : 'Topic name is required')
+    : ''
+  const platformError = submitted && topicType === 'topic' && platforms.length === 0 ? 'Select at least one platform' : ''
+  const urlError = submitted && topicType === 'creator' && !profileUrl.trim() ? 'Profile URL is required' : ''
 
   const handleSubmitWithValidation = () => {
     setSubmitted(true)
-    if (!name.trim() || platforms.length === 0) return
+    if (topicType === 'topic' && (!name.trim() || platforms.length === 0)) return
+    if (topicType === 'creator' && (!name.trim() || !profileUrl.trim())) return
     handleSubmit()
   }
 
   // Form summary line for collapsed state
-  const formSummary = [
-    name && `${icon} ${name}`,
-    platforms.length > 0 && platforms.map((p) => p.toUpperCase()).join(', '),
-    keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
-    `${interval}h`,
-  ].filter(Boolean).join(' · ')
+  const formSummary = topicType === 'creator'
+    ? [
+        name && `${icon} ${name}`,
+        platform.toUpperCase(),
+        profileUrl && 'URL set',
+        keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
+        `${interval}h`,
+      ].filter(Boolean).join(' · ')
+    : [
+        name && `${icon} ${name}`,
+        platforms.length > 0 && platforms.map((p) => p.toUpperCase()).join(', '),
+        keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
+        `${interval}h`,
+      ].filter(Boolean).join(' · ')
 
   return (
-    <Modal open={open} onClose={onClose} title="New Topic" className="create-topic-panel">
+    <Modal open={open} onClose={onClose} title={topicType === 'creator' ? 'New Creator' : 'New Topic'} className="create-topic-panel">
       <div className="create-topic-content">
+        {/* ── Tab Switcher ── */}
+        <div className="create-topic-tabs">
+          <button
+            className={`create-topic-tab${topicType === 'topic' ? ' active' : ''}`}
+            onClick={() => switchTab('topic')}
+          >
+            <Sparkles size={14} />
+            Topic
+          </button>
+          <button
+            className={`create-topic-tab${topicType === 'creator' ? ' active' : ''}`}
+            onClick={() => switchTab('creator')}
+          >
+            <User size={14} />
+            Creator
+          </button>
+        </div>
+
         {/* ── Chat Hero ── */}
         <div className="create-topic-chat">
           <div className="create-topic-chat-messages">
             {chatMessages.length === 0 && !streamingReply && !isAssisting ? (
               <div className="create-topic-chat-empty">
                 <Sparkles size={24} />
-                <p>Tell AI what you want to monitor,</p>
-                <p>or fill in the form below.</p>
+                {topicType === 'creator' ? (
+                  <>
+                    <p>Tell AI which creator to follow,</p>
+                    <p>or fill in the form below.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Tell AI what you want to monitor,</p>
+                    <p>or fill in the form below.</p>
+                  </>
+                )}
               </div>
             ) : (
               <>
@@ -522,7 +587,9 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
           <div className="create-topic-chat-input-row">
             <textarea
               className="topic-chat-input"
-              placeholder="Describe what you want to monitor..."
+              placeholder={topicType === 'creator'
+                ? 'Describe the creator you want to follow...'
+                : 'Describe what you want to monitor...'}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -538,49 +605,90 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         {/* ── Compact Form ── */}
         <div className="create-topic-form">
           <div className="create-topic-form-header" onClick={() => setFormOpen(!formOpen)}>
-            <span className="form-label" style={{ margin: 0 }}>Topic Details</span>
+            <span className="form-label" style={{ margin: 0 }}>
+              {topicType === 'creator' ? 'Creator Details' : 'Topic Details'}
+            </span>
             {!formOpen && formSummary && (
               <span className="create-topic-form-summary">{formSummary}</span>
             )}
             {formOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </div>
           {formOpen && (
-            <div className="create-topic-form-fields">
-              <div className="form-group">
-                <label className="form-label">Icon</label>
-                <div className="emoji-picker">
-                  {emojiOptions.map((e) => (
-                    <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
-                  ))}
+            topicType === 'creator' ? (
+              /* ── Creator Form ── */
+              <div className="create-topic-form-fields">
+                <div className="form-group">
+                  <label className="form-label">Icon</label>
+                  <div className="emoji-picker">
+                    {emojiOptions.map((e) => (
+                      <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <Input label="Name *" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
-                {nameError && <p className="form-error">{nameError}</p>}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Platforms <span className="form-required">*</span></label>
-                <div className="platform-toggles">
-                  {PLATFORM_OPTIONS.map((p) => (
-                    <button
-                      key={p}
-                      className={`platform-toggle${platforms.includes(p) ? ' active' : ''}`}
-                      onClick={() => togglePlatform(p)}
-                    >{p.toUpperCase()}</button>
-                  ))}
+                <div>
+                  <Input label="Name *" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
+                  {nameError && <p className="form-error">{nameError}</p>}
                 </div>
-                {platformError && <p className="form-error">{platformError}</p>}
+                <div className="form-group">
+                  <label className="form-label">Platform <span className="form-required">*</span></label>
+                  <div className="platform-toggles">
+                    {PLATFORM_OPTIONS.map((p) => (
+                      <button
+                        key={p}
+                        className={`platform-toggle${platform === p ? ' active' : ''}`}
+                        onClick={() => setPlatform(p)}
+                      >{p.toUpperCase()}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Input label="Profile URL *" placeholder="https://x.com/elonmusk" value={profileUrl} onChange={(e) => setProfileUrl(e.target.value)} />
+                  {urlError && <p className="form-error">{urlError}</p>}
+                </div>
+                <div className="create-topic-form-full">
+                  <Input label="Keywords" placeholder="Optional additional keywords..." value={keywords} onChange={(e) => setKeywords(e.target.value)} />
+                </div>
+                <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
               </div>
-              <Input label="Keywords" placeholder="e.g. Elon Musk, SpaceX" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
-              <div className="create-topic-form-full">
-                <Input label="Description" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
+            ) : (
+              /* ── Topic Form ── */
+              <div className="create-topic-form-fields">
+                <div className="form-group">
+                  <label className="form-label">Icon</label>
+                  <div className="emoji-picker">
+                    {emojiOptions.map((e) => (
+                      <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Input label="Name *" placeholder="e.g. AI News" value={name} onChange={(e) => setName(e.target.value)} />
+                  {nameError && <p className="form-error">{nameError}</p>}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Platforms <span className="form-required">*</span></label>
+                  <div className="platform-toggles">
+                    {PLATFORM_OPTIONS.map((p) => (
+                      <button
+                        key={p}
+                        className={`platform-toggle${platforms.includes(p) ? ' active' : ''}`}
+                        onClick={() => togglePlatform(p)}
+                      >{p.toUpperCase()}</button>
+                    ))}
+                  </div>
+                  {platformError && <p className="form-error">{platformError}</p>}
+                </div>
+                <Input label="Keywords" placeholder="e.g. Elon Musk, SpaceX" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
+                <div className="create-topic-form-full">
+                  <Input label="Description" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
+                </div>
+                <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
               </div>
-              <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-            </div>
+            )
           )}
           <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
             <Plus size={16} />
-            {isLoading ? 'Creating...' : 'Create Topic'}
+            {isLoading ? 'Creating...' : topicType === 'creator' ? 'Create Creator' : 'Create Topic'}
           </button>
         </div>
       </div>

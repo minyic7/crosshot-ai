@@ -25,6 +25,7 @@ router = APIRouter(tags=["topics"])
 
 
 class TopicCreate(BaseModel):
+    type: str = "topic"
     name: str
     icon: str = "📊"
     description: str | None = None
@@ -34,6 +35,7 @@ class TopicCreate(BaseModel):
 
 
 class TopicUpdate(BaseModel):
+    type: str | None = None
     name: str | None = None
     icon: str | None = None
     description: str | None = None
@@ -64,6 +66,7 @@ class TopicAssistRequest(BaseModel):
 def _topic_to_dict(t: TopicRow) -> dict:
     return {
         "id": str(t.id),
+        "type": t.type,
         "name": t.name,
         "icon": t.icon,
         "description": t.description,
@@ -126,6 +129,7 @@ async def create_topic(body: TopicCreate) -> dict:
 
     async with factory() as session:
         topic = TopicRow(
+            type=body.type,
             name=body.name,
             icon=body.icon,
             description=body.description,

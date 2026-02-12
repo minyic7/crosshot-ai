@@ -139,6 +139,7 @@ class TopicRow(Base):
     __tablename__ = "topics"
 
     id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    type: Mapped[str] = mapped_column(String(16), nullable=False, default="topic")  # 'topic' | 'creator'
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     icon: Mapped[str] = mapped_column(String(8), nullable=False, default="📊")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

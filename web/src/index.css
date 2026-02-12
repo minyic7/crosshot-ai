@@ -2913,6 +2913,44 @@ h3 {
   padding: 20px;
 }
 
+/* Tab switcher */
+.create-topic-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-raised);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.create-topic-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.create-topic-tab:hover:not(.active) {
+  color: var(--foreground-default);
+  background: var(--surface-hover);
+}
+
+.create-topic-tab.active {
+  background: var(--surface-default);
+  color: var(--foreground-default);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
 /* Chat-hero layout */
 .create-topic-content {
   display: flex;

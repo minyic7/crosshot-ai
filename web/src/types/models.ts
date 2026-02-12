@@ -134,6 +134,7 @@ export interface TopicPipeline {
 
 export interface Topic {
   id: string
+  type: string
   name: string
   icon: string
   description: string | null

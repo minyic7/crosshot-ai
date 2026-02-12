@@ -93,7 +93,7 @@ export const apiSlice = createApi({
       query: (id) => `/topics/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Topic', id }],
     }),
-    createTopic: builder.mutation<Topic, { name: string; icon?: string; description?: string; platforms: string[]; keywords: string[]; config?: Record<string, unknown> }>({
+    createTopic: builder.mutation<Topic, { type?: string; name: string; icon?: string; description?: string; platforms: string[]; keywords: string[]; config?: Record<string, unknown> }>({
       query: (body) => ({ url: '/topics', method: 'POST', body }),
       transformResponse: (res: { topic: Topic }) => res.topic,
       invalidatesTags: ['Topic'],
