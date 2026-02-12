@@ -254,22 +254,26 @@ function formatDay(day: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-type TrendKey = 'posts' | 'likes' | 'views'
+type TrendKey = 'posts' | 'likes' | 'views' | 'retweets' | 'replies'
 
 const TREND_META: Record<TrendKey, { color: string }> = {
   posts: { color: 'var(--accent)' },
   likes: { color: 'var(--positive)' },
   views: { color: 'var(--blue)' },
+  retweets: { color: 'var(--accent)' },
+  replies: { color: 'var(--ink-2)' },
 }
 
+type TrendPoint = { posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }
+
 /** Sum all periods for a metric */
-function getTrendTotal(trend: { posts: number; likes: number; views: number }[] | undefined, key: TrendKey): number | null {
+function getTrendTotal(trend: TrendPoint[] | undefined, key: keyof TrendPoint): number | null {
   if (!trend || trend.length === 0) return null
   return trend.reduce((sum, d) => sum + d[key], 0)
 }
 
 /** Compute the latest period's value as delta */
-function getLatestDelta(trend: { posts: number; likes: number; views: number }[] | undefined, key: TrendKey): number | null {
+function getLatestDelta(trend: TrendPoint[] | undefined, key: keyof TrendPoint): number | null {
   if (!trend || trend.length === 0) return null
   return trend[trend.length - 1][key]
 }
@@ -287,7 +291,7 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
 }
 
 /** Compact sparkline chart that expands below the clicked stat */
-function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: { day: string; posts: number; likes: number; views: number }[]; metricKey: TrendKey; anchorLeft: number }) {
+function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint & { day: string })[]; metricKey: TrendKey; anchorLeft: number }) {
   const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
 
@@ -406,8 +410,15 @@ export function TopicDetailPage() {
   const postsDelta = getLatestDelta(trend, 'posts')
   const likesDelta = getLatestDelta(trend, 'likes')
   const viewsDelta = getLatestDelta(trend, 'views')
+  const retweetsDelta = getLatestDelta(trend, 'retweets')
+  const repliesDelta = getLatestDelta(trend, 'replies')
   const likesTotal = getTrendTotal(trend, 'likes')
   const viewsTotal = getTrendTotal(trend, 'views')
+  const retweetsTotal = getTrendTotal(trend, 'retweets')
+  const repliesTotal = getTrendTotal(trend, 'replies')
+  const mediaPostsTotal = getTrendTotal(trend, 'media_posts')
+  const postsTotal = getTrendTotal(trend, 'posts')
+  const mediaPct = (postsTotal && mediaPostsTotal != null) ? Math.round(mediaPostsTotal * 100 / postsTotal) : null
 
   const handleTogglePause = async () => {
     await updateTopic({ id: topic.id, status: topic.status === 'active' ? 'paused' : 'active' })
@@ -508,30 +519,38 @@ export function TopicDetailPage() {
             </div>
           </>
         )}
-        {metrics.total_retweets != null && (
+        {(retweetsTotal != null || metrics.total_retweets != null) && (
           <>
             <div className="topic-detail-stat-sep" />
-            <div className="topic-detail-stat highlight">
+            <div
+              className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'retweets' ? 'expanded' : ''}`}
+              onClick={(e) => hasTrend && toggleMetric('retweets', e)}
+            >
               <Repeat2 size={12} />
-              <span className="topic-detail-stat-num">{fmtNum(metrics.total_retweets)}</span>
+              <span className="topic-detail-stat-num">{fmtNum(retweetsTotal ?? metrics.total_retweets)}</span>
+              {retweetsDelta != null && retweetsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(retweetsDelta)}</span>}
             </div>
           </>
         )}
-        {metrics.total_replies != null && (
+        {(repliesTotal != null || metrics.total_replies != null) && (
           <>
             <div className="topic-detail-stat-sep" />
-            <div className="topic-detail-stat highlight">
+            <div
+              className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'replies' ? 'expanded' : ''}`}
+              onClick={(e) => hasTrend && toggleMetric('replies', e)}
+            >
               <MessageSquare size={12} />
-              <span className="topic-detail-stat-num">{fmtNum(metrics.total_replies)}</span>
+              <span className="topic-detail-stat-num">{fmtNum(repliesTotal ?? metrics.total_replies)}</span>
+              {repliesDelta != null && repliesDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(repliesDelta)}</span>}
             </div>
           </>
         )}
-        {metrics.with_media_pct != null && (
+        {(mediaPct != null || metrics.with_media_pct != null) && (
           <>
             <div className="topic-detail-stat-sep" />
             <div className="topic-detail-stat highlight">
               <Image size={12} />
-              <span className="topic-detail-stat-num">{fmtNum(metrics.with_media_pct)}%</span>
+              <span className="topic-detail-stat-num">{mediaPct ?? fmtNum(metrics.with_media_pct)}%</span>
             </div>
           </>
         )}

@@ -222,7 +222,13 @@ async def get_topic_trend(topic_id: str, days: int = 30) -> list[dict]:
                        ) AS period,
                        COUNT(*) AS posts,
                        COALESCE(SUM((metrics->>'like_count')::int), 0) AS likes,
-                       COALESCE(SUM((metrics->>'views_count')::int), 0) AS views
+                       COALESCE(SUM((metrics->>'views_count')::int), 0) AS views,
+                       COALESCE(SUM((metrics->>'retweet_count')::int), 0) AS retweets,
+                       COALESCE(SUM((metrics->>'reply_count')::int), 0) AS replies,
+                       COUNT(*) FILTER (
+                           WHERE data->'media' IS NOT NULL
+                             AND jsonb_array_length(data->'media') > 0
+                       ) AS media_posts
                 FROM contents
                 WHERE topic_id = :tid AND crawled_at >= :since
                 GROUP BY period
@@ -231,7 +237,15 @@ async def get_topic_trend(topic_id: str, days: int = 30) -> list[dict]:
             {"tid": topic_id, "since": since, "interval": interval_secs},
         )
         return [
-            {"day": r.period.strftime("%Y-%m-%d %H:%M"), "posts": r.posts, "likes": r.likes, "views": r.views}
+            {
+                "day": r.period.strftime("%Y-%m-%d %H:%M"),
+                "posts": r.posts,
+                "likes": r.likes,
+                "views": r.views,
+                "retweets": r.retweets,
+                "replies": r.replies,
+                "media_posts": r.media_posts,
+            }
             for r in result
         ]
 
