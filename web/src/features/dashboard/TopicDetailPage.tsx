@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image } from 'lucide-react'
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -260,8 +260,8 @@ const TREND_META: Record<TrendKey, { color: string }> = {
   posts: { color: 'var(--accent)' },
   likes: { color: 'var(--positive)' },
   views: { color: 'var(--blue)' },
-  retweets: { color: 'var(--accent)' },
-  replies: { color: 'var(--ink-2)' },
+  retweets: { color: 'var(--warning)' },
+  replies: { color: 'var(--lavender)' },
 }
 
 type TrendPoint = { posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }
@@ -332,6 +332,7 @@ export function TopicDetailPage() {
   const [translating, setTranslating] = useState(false)
   const [expandedMetric, setExpandedMetric] = useState<TrendKey | null>(null)
   const [anchorLeft, setAnchorLeft] = useState(0)
+  const [showMediaPie, setShowMediaPie] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
 
   const handleTranslate = useCallback(async (text: string) => {
@@ -391,10 +392,10 @@ export function TopicDetailPage() {
   const hasTrend = trend && trend.length >= 2
 
   const toggleMetric = (key: TrendKey, e: React.MouseEvent) => {
+    setShowMediaPie(false)
     if (expandedMetric === key) {
       setExpandedMetric(null)
     } else {
-      // Compute offset relative to the stats bar
       const statEl = e.currentTarget as HTMLElement
       const barEl = statsRef.current
       if (barEl) {
@@ -404,6 +405,18 @@ export function TopicDetailPage() {
       }
       setExpandedMetric(key)
     }
+  }
+
+  const toggleMediaPie = (e: React.MouseEvent) => {
+    setExpandedMetric(null)
+    const statEl = e.currentTarget as HTMLElement
+    const barEl = statsRef.current
+    if (barEl) {
+      const barRect = barEl.getBoundingClientRect()
+      const statRect = statEl.getBoundingClientRect()
+      setAnchorLeft(statRect.left - barRect.left + statRect.width / 2)
+    }
+    setShowMediaPie((prev) => !prev)
   }
 
   // Compute totals and deltas from trend data
@@ -548,7 +561,10 @@ export function TopicDetailPage() {
         {(mediaPct != null || metrics.with_media_pct != null) && (
           <>
             <div className="topic-detail-stat-sep" />
-            <div className="topic-detail-stat highlight">
+            <div
+              className={`topic-detail-stat highlight ${mediaPostsTotal != null ? 'clickable' : ''} ${showMediaPie ? 'expanded' : ''}`}
+              onClick={(e) => mediaPostsTotal != null && toggleMediaPie(e)}
+            >
               <Image size={12} />
               <span className="topic-detail-stat-num">{mediaPct ?? fmtNum(metrics.with_media_pct)}%</span>
             </div>
@@ -559,6 +575,45 @@ export function TopicDetailPage() {
       {/* Expanded sparkline — slides open below stats bar */}
       {expandedMetric && hasTrend && (
         <TrendSparkline trend={trend} metricKey={expandedMetric} anchorLeft={anchorLeft} />
+      )}
+
+      {/* Media pie chart */}
+      {showMediaPie && mediaPostsTotal != null && postsTotal != null && postsTotal > 0 && (
+        <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'Media', value: mediaPostsTotal },
+                  { name: 'Text only', value: postsTotal - mediaPostsTotal },
+                ]}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                dataKey="value"
+                stroke="none"
+              >
+                <Cell fill="var(--accent)" />
+                <Cell fill="var(--ink-4)" />
+              </Pie>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]
+                  return (
+                    <div className="trend-tooltip">
+                      <div className="trend-tooltip-date">{d.name}</div>
+                      <div className="trend-tooltip-row">
+                        <span className="trend-tooltip-value">{d.value} posts</span>
+                      </div>
+                    </div>
+                  )
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       {/* Keywords */}
