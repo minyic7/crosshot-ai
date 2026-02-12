@@ -4773,15 +4773,18 @@ h3 {
   /* Create topic/creator modal — mobile */
   .create-topic-panel {
     padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     max-width: 100%;
   }
 
   .create-topic-content {
     height: auto;
+    max-height: none;
   }
 
   .create-topic-chat {
-    min-height: 120px;
+    min-height: 100px;
+    flex: none;
   }
 
   .create-topic-form {
