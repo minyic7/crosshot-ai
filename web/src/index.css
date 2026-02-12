@@ -2491,6 +2491,11 @@ h3 {
   color: var(--ink);
   outline: none;
   transition: border-color 0.2s;
+  resize: none;
+  overflow-y: hidden;
+  min-height: 36px;
+  max-height: 120px;
+  field-sizing: content;
 }
 .topic-chat-input:focus {
   border-color: var(--accent);

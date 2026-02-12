@@ -228,13 +228,19 @@ function SummaryChat({
 
         {/* Chat input — always visible at the bottom */}
         <div className="summary-chat-input-row">
-          <input
+          <textarea
             className="topic-chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                send()
+              }
+            }}
             placeholder="Ask about this analysis..."
             disabled={streaming}
+            rows={1}
           />
           <Button size="sm" onClick={send} disabled={streaming || !input.trim()}>
             <Send size={14} />
