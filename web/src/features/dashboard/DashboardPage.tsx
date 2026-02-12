@@ -1025,7 +1025,7 @@ export function DashboardPage() {
         </div>
         <button className="btn-accent" onClick={() => setShowCreate(true)}>
           <Plus size={15} />
-          New Topic
+          New
         </button>
       </div>
 
@@ -1101,10 +1101,10 @@ export function DashboardPage() {
             <div className="topic-empty-state pop">
               <span style={{ fontSize: '2.5rem' }}>📊</span>
               <h3>No {filter.toLowerCase()} topics found</h3>
-              <p>Create your first monitoring topic to get started</p>
+              <p>Create your first topic or user to get started</p>
               <button className="btn-accent" onClick={() => setShowCreate(true)}>
                 <Plus size={15} />
-                Create Topic
+                Create
               </button>
             </div>
           )}
