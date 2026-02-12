@@ -477,6 +477,7 @@ export function TopicDetailPage() {
       </div>
 
       {/* Compact info + metrics bar */}
+      <div className="topic-detail-stats-wrapper">
       <div ref={statsRef} className="topic-detail-stats pop" style={{ animationDelay: '80ms' }}>
         <div className="topic-detail-stat">
           <span className="topic-detail-stat-label">Created</span>
@@ -641,6 +642,7 @@ export function TopicDetailPage() {
           </div>
         )
       })()}
+      </div>
 
       {/* Keywords */}
       {(topic.keywords ?? []).length > 0 && (

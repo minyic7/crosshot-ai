@@ -2188,8 +2188,17 @@ h3 {
   color: var(--positive);
 }
 
-/* Compact sparkline below clicked stat */
+/* Stats bar + overlay charts wrapper */
+.topic-detail-stats-wrapper {
+  position: relative;
+}
+
+/* Compact sparkline overlaying below stats bar */
 .trend-sparkline {
+  position: absolute;
+  top: 100%;
+  z-index: 20;
+  margin-top: 6px;
   width: 280px;
   background: var(--glass);
   backdrop-filter: blur(12px);
@@ -2197,6 +2206,7 @@ h3 {
   border-radius: 12px;
   padding: 16px;
   animation: slideDown 0.2s ease;
+  box-shadow: var(--shadow-card);
 }
 
 @keyframes slideDown {
