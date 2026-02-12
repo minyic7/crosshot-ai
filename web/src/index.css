@@ -2155,18 +2155,48 @@ h3 {
   flex-shrink: 0;
 }
 
-/* Summary + Trend two-column layout */
-.topic-detail-main {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 16px;
-  align-items: start;
+/* Clickable stat with trend */
+.topic-detail-stat.clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  transition: background 0.15s ease;
 }
 
-@media (max-width: 900px) {
-  .topic-detail-main {
-    grid-template-columns: 1fr;
-  }
+.topic-detail-stat.clickable:hover {
+  background: var(--surface-hover);
+}
+
+.topic-detail-stat.expanded {
+  background: var(--surface-hover);
+}
+
+/* Delta badge next to stat number */
+.topic-detail-stat-delta {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.topic-detail-stat-delta.positive {
+  color: var(--positive);
+}
+
+/* Sparkline that expands below stats bar */
+.trend-sparkline {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px 8px 4px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Trend chart tooltip */
@@ -2174,7 +2204,7 @@ h3 {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   box-shadow: var(--shadow-card);
   font-size: 0.75rem;
 }
@@ -2182,55 +2212,17 @@ h3 {
 .trend-tooltip-date {
   font-weight: 600;
   color: var(--ink);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .trend-tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
   color: var(--ink-2);
-}
-
-.trend-tooltip-label {
-  text-transform: capitalize;
 }
 
 .trend-tooltip-value {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
-}
-
-/* Trend metric toggle */
-.trend-toggle {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 8px;
-  background: var(--surface-hover);
-}
-
-.trend-toggle-btn {
-  padding: 3px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink-3);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.trend-toggle-btn:hover {
-  color: var(--ink-2);
-}
-
-.trend-toggle-btn.active {
-  background: var(--surface-card);
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 /* Topic Chat */

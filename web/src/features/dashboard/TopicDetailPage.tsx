@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -250,86 +250,58 @@ function formatDay(day: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-const TREND_METRICS = [
-  { key: 'posts', label: 'Posts', color: 'var(--accent)' },
-  { key: 'likes', label: 'Likes', color: 'var(--positive)' },
-  { key: 'views', label: 'Views', color: 'var(--blue)' },
-] as const
+type TrendKey = 'posts' | 'likes' | 'views'
 
-function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; dataKey: string }[]; label?: string }) {
+const TREND_META: Record<TrendKey, { color: string }> = {
+  posts: { color: 'var(--accent)' },
+  likes: { color: 'var(--positive)' },
+  views: { color: 'var(--blue)' },
+}
+
+/** Compute the latest day's value as delta */
+function getLatestDelta(trend: { posts: number; likes: number; views: number }[] | undefined, key: TrendKey): number | null {
+  if (!trend || trend.length === 0) return null
+  return trend[trend.length - 1][key]
+}
+
+function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
   if (!active || !payload?.length) return null
   return (
     <div className="trend-tooltip">
       <div className="trend-tooltip-date">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} className="trend-tooltip-row">
-          <span className="trend-tooltip-value">{fmtNum(p.value)}</span>
-        </div>
-      ))}
+      <div className="trend-tooltip-row">
+        <span className="trend-tooltip-value">{fmtNum(payload[0].value)}</span>
+      </div>
     </div>
   )
 }
 
-function EngagementTrend({ topicId }: { topicId: string }) {
-  const { data: trend, isLoading } = useGetTopicTrendQuery(topicId)
-  const [active, setActive] = useState<'posts' | 'likes' | 'views'>('posts')
-
-  if (isLoading) return <div style={{ height: 200 }}><Skeleton className="w-full h-full" /></div>
-  if (!trend || trend.length < 2) return null
-
+/** Compact sparkline chart that expands below the stats bar */
+function TrendSparkline({ trend, metricKey }: { trend: { day: string; posts: number; likes: number; views: number }[]; metricKey: TrendKey }) {
+  const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
-  const metric = TREND_METRICS.find(m => m.key === active)!
 
   return (
-    <Card>
-      <CardContent>
-        <CardHeader className="mb-3">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <CardDescription style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <BarChart3 size={14} /> Activity Trend
-            </CardDescription>
-            <div className="trend-toggle">
-              {TREND_METRICS.map(m => (
-                <button
-                  key={m.key}
-                  className={`trend-toggle-btn ${active === m.key ? 'active' : ''}`}
-                  onClick={() => setActive(m.key as typeof active)}
-                  style={active === m.key ? { color: m.color } : undefined}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardHeader>
-        <div style={{ width: '100%', height: 200 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gradActive" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={metric.color} stopOpacity={0.25} />
-                  <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" strokeOpacity={0.5} />
-              <XAxis
-                dataKey="day"
-                tick={{ fill: 'var(--ink-3)', fontSize: 11 }}
-                axisLine={{ stroke: 'var(--border-default)' }}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fill: 'var(--ink-3)', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<TrendTooltip />} />
-              <Area type="monotone" dataKey={active} stroke={metric.color} strokeWidth={2} fill="url(#gradActive)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="trend-sparkline">
+      <ResponsiveContainer width="100%" height={120}>
+        <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`grad-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={meta.color} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={meta.color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="day"
+            tick={{ fill: 'var(--ink-3)', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip content={<TrendTooltip />} />
+          <Area type="monotone" dataKey={metricKey} stroke={meta.color} strokeWidth={2} fill={`url(#grad-${metricKey})`} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
 
@@ -337,12 +309,14 @@ export function TopicDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: topic, isLoading, isError } = useGetTopicQuery(id ?? '', { skip: !id, pollingInterval: 10000 })
+  const { data: trend } = useGetTopicTrendQuery(id ?? '', { skip: !id })
   const [reanalyzeTopic, { isLoading: isReanalyzing }] = useReanalyzeTopicMutation()
   const [updateTopic] = useUpdateTopicMutation()
   const [deleteTopic] = useDeleteTopicMutation()
   const { fmt } = useTimezone()
   const [translated, setTranslated] = useState('')
   const [translating, setTranslating] = useState(false)
+  const [expandedMetric, setExpandedMetric] = useState<TrendKey | null>(null)
 
   const handleTranslate = useCallback(async (text: string) => {
     if (translating || translated) { setTranslated(''); return }
@@ -398,6 +372,16 @@ export function TopicDetailPage() {
 
   const insights = normalizeInsights(topic.summary_data)
   const metrics = (topic.summary_data?.metrics ?? {}) as Record<string, unknown>
+  const hasTrend = trend && trend.length >= 2
+
+  const toggleMetric = (key: TrendKey) => {
+    setExpandedMetric(prev => prev === key ? null : key)
+  }
+
+  // Compute deltas from trend data
+  const postsDelta = getLatestDelta(trend, 'posts')
+  const likesDelta = getLatestDelta(trend, 'likes')
+  const viewsDelta = getLatestDelta(trend, 'views')
 
   const handleTogglePause = async () => {
     await updateTopic({ id: topic.id, status: topic.status === 'active' ? 'paused' : 'active' })
@@ -463,26 +447,38 @@ export function TopicDetailPage() {
           </span>
         </div>
         <div className="topic-detail-stat-sep" />
-        <div className="topic-detail-stat highlight">
+        <div
+          className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'posts' ? 'expanded' : ''}`}
+          onClick={() => hasTrend && toggleMetric('posts')}
+        >
           <BarChart3 size={13} />
           <span className="topic-detail-stat-num">{fmtNum(topic.total_contents)}</span>
           <span className="topic-detail-stat-label">posts</span>
+          {postsDelta != null && postsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(postsDelta)}</span>}
         </div>
         {metrics.total_likes != null && (
           <>
             <div className="topic-detail-stat-sep" />
-            <div className="topic-detail-stat highlight">
+            <div
+              className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'likes' ? 'expanded' : ''}`}
+              onClick={() => hasTrend && toggleMetric('likes')}
+            >
               <Heart size={12} />
               <span className="topic-detail-stat-num">{fmtNum(metrics.total_likes)}</span>
+              {likesDelta != null && likesDelta > 0 && <span className="topic-detail-stat-delta positive">+{fmtNum(likesDelta)}</span>}
             </div>
           </>
         )}
         {metrics.total_views != null && (
           <>
             <div className="topic-detail-stat-sep" />
-            <div className="topic-detail-stat highlight">
+            <div
+              className={`topic-detail-stat highlight ${hasTrend ? 'clickable' : ''} ${expandedMetric === 'views' ? 'expanded' : ''}`}
+              onClick={() => hasTrend && toggleMetric('views')}
+            >
               <Eye size={12} />
               <span className="topic-detail-stat-num">{fmtNum(metrics.total_views)}</span>
+              {viewsDelta != null && viewsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(viewsDelta)}</span>}
             </div>
           </>
         )}
@@ -515,6 +511,11 @@ export function TopicDetailPage() {
         )}
       </div>
 
+      {/* Expanded sparkline — slides open below stats bar */}
+      {expandedMetric && hasTrend && (
+        <TrendSparkline trend={trend} metricKey={expandedMetric} />
+      )}
+
       {/* Keywords */}
       {(topic.keywords ?? []).length > 0 && (
         <div className="topic-card-tags" style={{ padding: 0 }}>
@@ -522,21 +523,18 @@ export function TopicDetailPage() {
         </div>
       )}
 
-      {/* Summary + Trend side by side */}
-      <div className="topic-detail-main">
-        {topic.last_summary && (
-          <SummaryChat
-            topicId={topic.id}
-            summary={topic.last_summary}
-            translated={translated}
-            translating={translating}
-            onTranslate={() => handleTranslate(topic.last_summary!)}
-            cycleId={topic.summary_data?.cycle_id}
-            insights={insights}
-          />
-        )}
-        <EngagementTrend topicId={topic.id} />
-      </div>
+      {/* Summary + Chat (integrated) */}
+      {topic.last_summary && (
+        <SummaryChat
+          topicId={topic.id}
+          summary={topic.last_summary}
+          translated={translated}
+          translating={translating}
+          onTranslate={() => handleTranslate(topic.last_summary!)}
+          cycleId={topic.summary_data?.cycle_id}
+          insights={insights}
+        />
+      )}
 
       {/* Raw data */}
       {topic.summary_data && (
