@@ -2195,7 +2195,7 @@ h3 {
   backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
-  padding: 12px 4px 4px;
+  padding: 16px;
   animation: slideDown 0.2s ease;
 }
 
