@@ -2907,10 +2907,12 @@ h3 {
   text-align: center;
 }
 
-/* Create topic modal */
+/* Create topic modal — flex column so button stays fixed at bottom */
 .create-topic-panel {
   max-width: 560px;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Tab switcher */
@@ -2951,11 +2953,14 @@ h3 {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-/* Chat-hero layout */
+/* Chat-hero layout — scrollable area above the fixed button */
 .create-topic-content {
   display: flex;
   flex-direction: column;
-  height: min(calc(100vh - 160px), 600px);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .create-topic-chat {
@@ -3011,9 +3016,6 @@ h3 {
   padding-top: 10px;
   margin-top: 10px;
   flex-shrink: 0;
-  max-height: 50%;
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .create-topic-form-header {
@@ -4777,19 +4779,8 @@ h3 {
     max-width: 100%;
   }
 
-  .create-topic-content {
-    height: auto;
-    max-height: none;
-  }
-
   .create-topic-chat {
     min-height: 100px;
-    flex: none;
-  }
-
-  .create-topic-form {
-    max-height: none;
-    overflow-y: visible;
   }
 
   .create-topic-form-fields {
