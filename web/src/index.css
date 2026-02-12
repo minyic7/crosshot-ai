@@ -4790,6 +4790,27 @@ h3 {
   .create-topic-form-full {
     grid-column: 1;
   }
+
+  /* FAB-style create button on mobile */
+  .btn-create {
+    position: absolute;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    z-index: 10;
+  }
+
+  .btn-create-label {
+    display: none;
+  }
 }
 
 /* Masonry breakpoints */

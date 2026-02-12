@@ -689,10 +689,12 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
       </div>
 
-      {/* ── Submit — fixed footer, always visible ── */}
+      {/* ── Submit ── */}
       <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
-        <Plus size={16} />
-        {isLoading ? 'Creating...' : topicType === 'creator' ? 'Create Creator' : 'Create Topic'}
+        {isLoading ? <Loader2 size={18} className="assist-spinner" /> : <Plus size={18} />}
+        <span className="btn-create-label">
+          {isLoading ? 'Creating...' : topicType === 'creator' ? 'Create Creator' : 'Create Topic'}
+        </span>
       </button>
     </Modal>
   )
