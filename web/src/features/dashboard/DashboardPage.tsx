@@ -25,7 +25,8 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pin, RefreshCw, GripVertical,
   AlertTriangle,
-  Sparkles, Send, Loader2, ChevronDown, ChevronUp, User,
+  Sparkles, Send, Loader2, User,
+  Pencil, X, Check, Link2,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
@@ -406,45 +407,290 @@ function ZoneGrid({
   )
 }
 
+// ─── Proposal Types ──────────────────────────────────────────
+
+type ProposalType = 'create_topic' | 'create_user' | 'subscribe'
+
+interface ProposalBase {
+  _id: string
+  type: ProposalType
+  _status?: 'pending' | 'creating' | 'done' | 'error'
+  _error?: string
+}
+
+interface CreateTopicProposal extends ProposalBase {
+  type: 'create_topic'
+  name: string
+  icon: string
+  description: string
+  platforms: string[]
+  keywords: string[]
+  schedule_interval_hours: number
+}
+
+interface CreateUserProposal extends ProposalBase {
+  type: 'create_user'
+  name: string
+  platform: string
+  profile_url: string
+  username: string
+  schedule_interval_hours: number
+}
+
+interface SubscribeProposal extends ProposalBase {
+  type: 'subscribe'
+  user_ref: string
+  topic_ref: string
+}
+
+type Proposal = CreateTopicProposal | CreateUserProposal | SubscribeProposal
+
+function proposalSummary(p: Proposal): string {
+  if (p.type === 'create_topic') {
+    const kw = p.keywords.length > 0 ? `${p.keywords.length} kw` : ''
+    return [p.platforms.map((x) => x.toUpperCase()).join(', '), kw, `${p.schedule_interval_hours}h`].filter(Boolean).join(' · ')
+  }
+  if (p.type === 'create_user') {
+    return [p.platform.toUpperCase(), p.username ? `@${p.username}` : '', `${p.schedule_interval_hours}h`].filter(Boolean).join(' · ')
+  }
+  return `${p.user_ref} → ${p.topic_ref}`
+}
+
+function proposalIcon(p: Proposal): React.ReactNode {
+  if (p.type === 'create_topic') return <Sparkles size={12} />
+  if (p.type === 'create_user') return <User size={12} />
+  return <Link2 size={12} />
+}
+
+function proposalLabel(p: Proposal): string {
+  if (p.type === 'create_topic') return p.name || 'New Topic'
+  if (p.type === 'create_user') return p.name || 'New User'
+  return `Link ${p.user_ref} → ${p.topic_ref}`
+}
+
+// ─── Proposal Card ───────────────────────────────────────────
+
+function ProposalCard({
+  proposal: p,
+  editing,
+  onEdit,
+  onDone,
+  onChange,
+  onRemove,
+}: {
+  proposal: Proposal
+  editing: boolean
+  onEdit: () => void
+  onDone: () => void
+  onChange: (updated: Proposal) => void
+  onRemove: () => void
+}) {
+  const isSubmitting = p._status === 'creating'
+  const isDone = p._status === 'done'
+  const isError = p._status === 'error'
+
+  if (!editing) {
+    return (
+      <div className={`proposal-card${isDone ? ' done' : ''}${isError ? ' error' : ''}`}>
+        <span className="proposal-card-type">{proposalIcon(p)}</span>
+        <div className="proposal-card-info">
+          <span className="proposal-card-name">{proposalLabel(p)}</span>
+          <span className="proposal-card-meta">{proposalSummary(p)}</span>
+        </div>
+        <div className="proposal-card-actions">
+          {isSubmitting && <Loader2 size={12} className="assist-spinner" />}
+          {isDone && <Check size={12} style={{ color: 'var(--positive)' }} />}
+          {isError && <span className="proposal-card-error" title={p._error}>!</span>}
+          {!isSubmitting && !isDone && (
+            <>
+              <button className="proposal-card-btn" onClick={onEdit} title="Edit"><Pencil size={12} /></button>
+              <button className="proposal-card-btn" onClick={onRemove} title="Remove"><X size={12} /></button>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Edit Mode ──
+  if (p.type === 'create_topic') {
+    const tp = p as CreateTopicProposal
+    const emojiOpts = EMOJI_OPTIONS.includes(tp.icon) ? EMOJI_OPTIONS : [tp.icon, ...EMOJI_OPTIONS]
+    return (
+      <div className="proposal-card editing">
+        <div className="proposal-card-edit-header">
+          <span className="proposal-card-type">{proposalIcon(p)}</span>
+          <span style={{ flex: 1, fontWeight: 500, fontSize: '0.8125rem' }}>Edit Topic</span>
+          <button className="proposal-card-btn" onClick={onDone} title="Done"><Check size={14} /></button>
+        </div>
+        <div className="proposal-card-edit-fields">
+          <div className="form-group">
+            <label className="form-label">Icon</label>
+            <div className="emoji-picker">
+              {emojiOpts.map((e) => (
+                <button key={e} className={`emoji-option${e === tp.icon ? ' selected' : ''}`}
+                  onClick={() => onChange({ ...tp, icon: e })}>{e}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Input label="Name *" value={tp.name} onChange={(e) => onChange({ ...tp, name: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Platforms</label>
+            <div className="platform-toggles">
+              {PLATFORM_OPTIONS.map((pl) => (
+                <button key={pl}
+                  className={`platform-toggle${tp.platforms.includes(pl) ? ' active' : ''}`}
+                  onClick={() => {
+                    const next = tp.platforms.includes(pl)
+                      ? tp.platforms.filter((x) => x !== pl)
+                      : [...tp.platforms, pl]
+                    if (next.length > 0) onChange({ ...tp, platforms: next })
+                  }}
+                >{pl.toUpperCase()}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Input label="Keywords" value={tp.keywords.join(', ')}
+              onChange={(e) => onChange({ ...tp, keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean) })} />
+          </div>
+          <div className="create-topic-form-full">
+            <Input label="Description" value={tp.description}
+              onChange={(e) => onChange({ ...tp, description: e.target.value })} />
+          </div>
+          <div>
+            <Input label="Interval (h)" type="number" min={1} value={String(tp.schedule_interval_hours)}
+              onChange={(e) => onChange({ ...tp, schedule_interval_hours: Number(e.target.value) || 6 })} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (p.type === 'create_user') {
+    const up = p as CreateUserProposal
+    return (
+      <div className="proposal-card editing">
+        <div className="proposal-card-edit-header">
+          <span className="proposal-card-type">{proposalIcon(p)}</span>
+          <span style={{ flex: 1, fontWeight: 500, fontSize: '0.8125rem' }}>Edit User</span>
+          <button className="proposal-card-btn" onClick={onDone} title="Done"><Check size={14} /></button>
+        </div>
+        <div className="proposal-card-edit-fields">
+          <div>
+            <Input label="Name *" value={up.name} onChange={(e) => onChange({ ...up, name: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Platform</label>
+            <div className="platform-toggles">
+              {PLATFORM_OPTIONS.map((pl) => (
+                <button key={pl}
+                  className={`platform-toggle${up.platform === pl ? ' active' : ''}`}
+                  onClick={() => onChange({ ...up, platform: pl })}
+                >{pl.toUpperCase()}</button>
+              ))}
+            </div>
+          </div>
+          <div className="create-topic-form-full">
+            <Input label="Profile URL *" placeholder="https://x.com/username" value={up.profile_url}
+              onChange={(e) => {
+                const url = e.target.value
+                const m = url.match(/(?:x\.com|twitter\.com)\/(@?\w+)/i)
+                const username = m ? m[1].replace('@', '') : up.username
+                onChange({ ...up, profile_url: url, username })
+              }} />
+          </div>
+          <div>
+            <Input label="Username" value={up.username}
+              onChange={(e) => onChange({ ...up, username: e.target.value })} />
+          </div>
+          <div>
+            <Input label="Interval (h)" type="number" min={1} value={String(up.schedule_interval_hours)}
+              onChange={(e) => onChange({ ...up, schedule_interval_hours: Number(e.target.value) || 6 })} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // subscribe
+  const sp = p as SubscribeProposal
+  return (
+    <div className="proposal-card editing">
+      <div className="proposal-card-edit-header">
+        <span className="proposal-card-type">{proposalIcon(p)}</span>
+        <span style={{ flex: 1, fontWeight: 500, fontSize: '0.8125rem' }}>Edit Link</span>
+        <button className="proposal-card-btn" onClick={onDone} title="Done"><Check size={14} /></button>
+      </div>
+      <div className="proposal-card-edit-fields">
+        <div>
+          <Input label="User (name/username)" value={sp.user_ref}
+            onChange={(e) => onChange({ ...sp, user_ref: e.target.value })} />
+        </div>
+        <div>
+          <Input label="Topic name" value={sp.topic_ref}
+            onChange={(e) => onChange({ ...sp, topic_ref: e.target.value })} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Create Topic Modal ───────────────────────────────────────
 
 function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [topicType, setTopicType] = useState<'topic' | 'user'>('topic')
-  const [name, setName] = useState('')
-  const [icon, setIcon] = useState('📊')
-  const [description, setDescription] = useState('')
-  const [platforms, setPlatforms] = useState<string[]>(['x'])
-  const [platform, setPlatform] = useState('x') // single platform for user
-  const [profileUrl, setProfileUrl] = useState('')
-  const [keywords, setKeywords] = useState('')
-  const [interval, setInterval] = useState('6')
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
-  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+
   const { data: allUsers } = useListUsersQuery()
   const { data: allTopics } = useListTopicsQuery()
-  const [createTopic, { isLoading: topicLoading }] = useCreateTopicMutation()
-  const [createUser, { isLoading: userLoading }] = useCreateUserMutation()
+  const [createTopic] = useCreateTopicMutation()
+  const [createUser] = useCreateUserMutation()
   const [attachUser] = useAttachUserMutation()
-  const isLoading = topicLoading || userLoading
-  const [formOpen, setFormOpen] = useState(true)
 
   const buildBody = useCallback(
     (msgs: { role: string; content: string }[]) => ({ messages: msgs }),
     [],
   )
 
-  const handleSuggestion = useCallback((s: Record<string, unknown>) => {
-    if (s.name) setName(s.name as string)
-    if (s.icon) setIcon(s.icon as string)
-    if (s.description) setDescription(s.description as string)
-    if ((s.platforms as string[])?.length) {
-      setPlatforms(s.platforms as string[])
-      setPlatform((s.platforms as string[])[0])
+  const handleActions = useCallback((actions: Record<string, unknown>[]) => {
+    const newProposals: Proposal[] = []
+    for (const a of actions) {
+      const _id = crypto.randomUUID()
+      if (a.type === 'create_topic') {
+        newProposals.push({
+          _id, type: 'create_topic',
+          name: (a.name as string) || '',
+          icon: (a.icon as string) || '📊',
+          description: (a.description as string) || '',
+          platforms: (a.platforms as string[]) || ['x'],
+          keywords: (a.keywords as string[]) || [],
+          schedule_interval_hours: (a.schedule_interval_hours as number) || 6,
+        })
+      } else if (a.type === 'create_user') {
+        newProposals.push({
+          _id, type: 'create_user',
+          name: (a.name as string) || '',
+          platform: (a.platform as string) || 'x',
+          profile_url: (a.profile_url as string) || '',
+          username: (a.username as string) || '',
+          schedule_interval_hours: (a.schedule_interval_hours as number) || 6,
+        })
+      } else if (a.type === 'subscribe') {
+        newProposals.push({
+          _id, type: 'subscribe',
+          user_ref: (a.user_ref as string) || '',
+          topic_ref: (a.topic_ref as string) || '',
+        })
+      }
     }
-    if ((s.keywords as string[])?.length) setKeywords((s.keywords as string[]).join(', '))
-    if (s.schedule_interval_hours) setInterval(String(s.schedule_interval_hours))
-    if (s.profile_url) setProfileUrl(s.profile_url as string)
-    setFormOpen(false) // collapse form after AI fills it
+    if (newProposals.length > 0) {
+      setProposals((prev) => [...prev, ...newProposals])
+    }
   }, [])
 
   const {
@@ -455,150 +701,123 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     endpoint: '/api/topics/assist',
     buildBody,
     mode: 'assist',
-    onSuggestion: handleSuggestion,
+    onActions: handleActions,
   })
 
-  const resetForm = () => {
+  const resetAll = useCallback(() => {
     resetChat()
-    setName(''); setIcon('📊'); setDescription(''); setPlatforms(['x']); setPlatform('x')
-    setProfileUrl(''); setKeywords(''); setInterval('6'); setFormOpen(true)
-    setSelectedUserIds([]); setSelectedTopicIds([])
+    setProposals([])
+    setEditingId(null)
+    setManualOpen(false)
+  }, [resetChat])
+
+  const addManual = (type: 'topic' | 'user') => {
+    const _id = crypto.randomUUID()
+    const p: Proposal = type === 'topic'
+      ? { _id, type: 'create_topic', name: '', icon: '📊', description: '', platforms: ['x'], keywords: [], schedule_interval_hours: 6 }
+      : { _id, type: 'create_user', name: '', platform: 'x', profile_url: '', username: '', schedule_interval_hours: 6 }
+    setProposals((prev) => [...prev, p])
+    setEditingId(_id)
+    setManualOpen(false)
   }
 
-  const switchTab = (t: 'topic' | 'user') => {
-    if (t === topicType) return
-    setTopicType(t)
-    resetForm()
-    setIcon(t === 'user' ? '👤' : '📊')
-  }
+  const handleSubmitAll = async () => {
+    if (proposals.length === 0 || submitting) return
+    setSubmitting(true)
+    setEditingId(null)
 
-  const emojiOptions = EMOJI_OPTIONS.includes(icon) ? EMOJI_OPTIONS : [icon, ...EMOJI_OPTIONS]
+    const createdTopics = new Map<string, string>()
+    const createdUsers = new Map<string, string>()
+    let failCount = 0
 
-  const handleSubmit = async () => {
-    if (topicType === 'topic') {
-      if (!name.trim() || platforms.length === 0) return
-    } else {
-      if (!name.trim() || !profileUrl.trim()) return
+    // Helper to update a single proposal's status
+    const setStatus = (id: string, status: Proposal['_status'], error?: string) => {
+      if (status === 'error') failCount++
+      setProposals((prev) => prev.map((p) => p._id === id ? { ...p, _status: status, _error: error } : p))
     }
 
-    let finalDesc = description.trim()
-    if (chatMessages.length > 0) {
-      const convo = chatMessages.map((m) => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')
-      finalDesc = finalDesc ? `${finalDesc}\n\n---\nAI Assist Log:\n${convo}` : `AI Assist Log:\n${convo}`
-    }
-
-    const config: Record<string, unknown> = { schedule_interval_hours: Number(interval) || 6 }
-
-    if (topicType === 'user') {
-      // Extract username from profile URL (e.g. https://x.com/elonmusk → elonmusk)
-      const urlStr = profileUrl.trim()
-      const usernameMatch = urlStr.match(/(?:x\.com|twitter\.com)\/(@?\w+)/i)
-      const username = usernameMatch ? usernameMatch[1].replace('@', '') : undefined
-
-      await createUser({
-        name: name.trim(),
-        platform,
-        profile_url: urlStr,
-        username,
-        config,
-        topic_ids: selectedTopicIds.length > 0 ? selectedTopicIds : undefined,
-      })
-    } else {
-      const result = await createTopic({
-        type: 'topic',
-        name: name.trim(),
-        icon,
-        description: finalDesc || undefined,
-        platforms,
-        keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
-        config,
-      }).unwrap()
-
-      // Attach selected users to the newly created topic
-      if (selectedUserIds.length > 0 && result?.id) {
-        await Promise.all(
-          selectedUserIds.map((uid) => attachUser({ userId: uid, topicId: result.id }))
-        )
+    // 1. Create topics
+    for (const p of proposals.filter((p) => p.type === 'create_topic')) {
+      const tp = p as CreateTopicProposal
+      if (!tp.name.trim()) { setStatus(tp._id, 'error', 'Name required'); continue }
+      setStatus(tp._id, 'creating')
+      try {
+        const result = await createTopic({
+          type: 'topic', name: tp.name.trim(), icon: tp.icon,
+          description: tp.description || undefined,
+          platforms: tp.platforms,
+          keywords: tp.keywords,
+          config: { schedule_interval_hours: tp.schedule_interval_hours },
+        }).unwrap()
+        createdTopics.set(tp.name.trim(), result.id)
+        setStatus(tp._id, 'done')
+      } catch (e) {
+        setStatus(tp._id, 'error', String(e))
       }
     }
-    resetForm()
-    onClose()
+
+    // 2. Create users
+    for (const p of proposals.filter((p) => p.type === 'create_user')) {
+      const up = p as CreateUserProposal
+      if (!up.name.trim() || !up.profile_url.trim()) { setStatus(up._id, 'error', 'Name & URL required'); continue }
+      setStatus(up._id, 'creating')
+      try {
+        const result = await createUser({
+          name: up.name.trim(), platform: up.platform,
+          profile_url: up.profile_url.trim(),
+          username: up.username || undefined,
+          config: { schedule_interval_hours: up.schedule_interval_hours },
+        }).unwrap()
+        createdUsers.set(up.name.trim(), result.id)
+        if (up.username) createdUsers.set(up.username, result.id)
+        setStatus(up._id, 'done')
+      } catch (e) {
+        setStatus(up._id, 'error', String(e))
+      }
+    }
+
+    // 3. Process subscriptions
+    for (const p of proposals.filter((p) => p.type === 'subscribe')) {
+      const sp = p as SubscribeProposal
+      setStatus(sp._id, 'creating')
+      const userId = createdUsers.get(sp.user_ref)
+        || allUsers?.find((u) => u.name === sp.user_ref || u.username === sp.user_ref)?.id
+      const topicId = createdTopics.get(sp.topic_ref)
+        || allTopics?.find((t) => t.name === sp.topic_ref)?.id
+      if (userId && topicId) {
+        try {
+          await attachUser({ userId, topicId })
+          setStatus(sp._id, 'done')
+        } catch (e) {
+          setStatus(sp._id, 'error', String(e))
+        }
+      } else {
+        setStatus(sp._id, 'error', `Could not resolve: ${!userId ? sp.user_ref : sp.topic_ref}`)
+      }
+    }
+
+    setSubmitting(false)
+
+    // If all succeeded, close after a brief delay
+    if (failCount === 0) {
+      setTimeout(() => { resetAll(); onClose() }, 600)
+    }
   }
 
-  const togglePlatform = (p: string) => {
-    setPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])
-  }
-
-  const [submitted, setSubmitted] = useState(false)
-  const nameError = submitted && !name.trim()
-    ? (topicType === 'user' ? 'User name is required' : 'Topic name is required')
-    : ''
-  const platformError = submitted && topicType === 'topic' && platforms.length === 0 ? 'Select at least one platform' : ''
-  const urlError = submitted && topicType === 'user' && !profileUrl.trim() ? 'Profile URL is required' : ''
-
-  const handleSubmitWithValidation = () => {
-    setSubmitted(true)
-    if (topicType === 'topic' && (!name.trim() || platforms.length === 0)) return
-    if (topicType === 'user' && (!name.trim() || !profileUrl.trim())) return
-    handleSubmit()
-  }
-
-  // Form summary line for collapsed state
-  const formSummary = topicType === 'user'
-    ? [
-        name && `${icon} ${name}`,
-        platform.toUpperCase(),
-        profileUrl && 'URL set',
-        keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
-        selectedTopicIds.length > 0 && `${selectedTopicIds.length} topics`,
-        `${interval}h`,
-      ].filter(Boolean).join(' · ')
-    : [
-        name && `${icon} ${name}`,
-        platforms.length > 0 && platforms.map((p) => p.toUpperCase()).join(', '),
-        keywords && `${keywords.split(',').filter(Boolean).length} keywords`,
-        selectedUserIds.length > 0 && `${selectedUserIds.length} users`,
-        `${interval}h`,
-      ].filter(Boolean).join(' · ')
+  // Count pending (not yet submitted) proposals
+  const pendingCount = proposals.filter((p) => !p._status || p._status === 'pending' || p._status === 'error').length
 
   return (
-    <Modal open={open} onClose={onClose} title={topicType === 'user' ? 'New User' : 'New Topic'} className="create-topic-panel">
+    <Modal open={open} onClose={() => { resetAll(); onClose() }} title="Create" className="create-topic-panel">
       <div className="create-topic-content">
-        {/* ── Tab Switcher ── */}
-        <div className="create-topic-tabs">
-          <button
-            className={`create-topic-tab${topicType === 'topic' ? ' active' : ''}`}
-            onClick={() => switchTab('topic')}
-          >
-            <Sparkles size={14} />
-            Topic
-          </button>
-          <button
-            className={`create-topic-tab${topicType === 'user' ? ' active' : ''}`}
-            onClick={() => switchTab('user')}
-          >
-            <User size={14} />
-            User
-          </button>
-        </div>
-
-        {/* ── Chat Hero ── */}
+        {/* ── Chat Area ── */}
         <div className="create-topic-chat">
           <div className="create-topic-chat-messages">
             {chatMessages.length === 0 && !streamingReply && !isAssisting ? (
               <div className="create-topic-chat-empty">
                 <Sparkles size={24} />
-                {topicType === 'user' ? (
-                  <>
-                    <p>Tell AI which user to follow,</p>
-                    <p>or fill in the form below.</p>
-                  </>
-                ) : (
-                  <>
-                    <p>Tell AI what you want to monitor,</p>
-                    <p>or fill in the form below.</p>
-                  </>
-                )}
+                <p>Tell AI what you want to monitor or follow,</p>
+                <p>or add manually below.</p>
               </div>
             ) : (
               <>
@@ -632,9 +851,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
           <div className="create-topic-chat-input-row">
             <textarea
               className="topic-chat-input"
-              placeholder={topicType === 'user'
-                ? 'Describe the user you want to follow...'
-                : 'Describe what you want to monitor...'}
+              placeholder="Describe what you want to monitor or follow..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -647,145 +864,58 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
         </div>
 
-        {/* ── Compact Form ── */}
-        <div className="create-topic-form">
-          <div className="create-topic-form-header" onClick={() => setFormOpen(!formOpen)}>
-            <span className="form-label" style={{ margin: 0 }}>
-              {topicType === 'user' ? 'User Details' : 'Topic Details'}
-            </span>
-            {!formOpen && formSummary && (
-              <span className="create-topic-form-summary">{formSummary}</span>
-            )}
-            {formOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {/* ── Proposal List ── */}
+        <div className="proposal-list">
+          {proposals.length > 0 && (
+            <div className="proposal-list-header">
+              <span>Pending Actions ({proposals.length})</span>
+            </div>
+          )}
+          <div className="proposal-list-cards">
+            {proposals.map((p) => (
+              <ProposalCard
+                key={p._id}
+                proposal={p}
+                editing={editingId === p._id}
+                onEdit={() => setEditingId(p._id)}
+                onDone={() => setEditingId(null)}
+                onChange={(updated) => setProposals((prev) => prev.map((x) => x._id === p._id ? updated : x))}
+                onRemove={() => { setProposals((prev) => prev.filter((x) => x._id !== p._id)); if (editingId === p._id) setEditingId(null) }}
+              />
+            ))}
           </div>
-          {formOpen && (
-            topicType === 'user' ? (
-              /* ── Creator Form ── */
-              <div className="create-topic-form-fields">
-                <div className="form-group">
-                  <label className="form-label">Icon</label>
-                  <div className="emoji-picker">
-                    {emojiOptions.map((e) => (
-                      <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
-                    ))}
-                  </div>
+
+          {/* Manual add (collapsed by default) */}
+          {!submitting && (
+            <div className="proposal-manual">
+              {manualOpen ? (
+                <div className="proposal-manual-buttons">
+                  <button className="proposal-manual-btn" onClick={() => addManual('topic')}>
+                    <Sparkles size={12} /> + Topic
+                  </button>
+                  <button className="proposal-manual-btn" onClick={() => addManual('user')}>
+                    <User size={12} /> + User
+                  </button>
                 </div>
-                <div>
-                  <Input label="Name *" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
-                  {nameError && <p className="form-error">{nameError}</p>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Platform <span className="form-required">*</span></label>
-                  <div className="platform-toggles">
-                    {PLATFORM_OPTIONS.map((p) => (
-                      <button
-                        key={p}
-                        className={`platform-toggle${platform === p ? ' active' : ''}`}
-                        onClick={() => setPlatform(p)}
-                      >{p.toUpperCase()}</button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <Input label="Profile URL *" placeholder="https://x.com/elonmusk" value={profileUrl} onChange={(e) => setProfileUrl(e.target.value)} />
-                  {urlError && <p className="form-error">{urlError}</p>}
-                </div>
-                <div className="create-topic-form-full">
-                  <Input label="Keywords" placeholder="Optional additional keywords..." value={keywords} onChange={(e) => setKeywords(e.target.value)} />
-                </div>
-                {/* Topic picker for user */}
-                <div className="create-topic-form-full">
-                  <label className="form-label">Attach to Topics</label>
-                  {(allTopics ?? []).length > 0 ? (
-                    <div className="entity-picker-chips">
-                      {(allTopics ?? []).map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          className={`entity-chip${selectedTopicIds.includes(t.id) ? ' selected' : ''}`}
-                          onClick={() => setSelectedTopicIds((prev) =>
-                            prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id]
-                          )}
-                        >
-                          <span>{t.icon}</span>
-                          {t.name}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="entity-picker-empty">No topics yet — create one from the Topic tab</p>
-                  )}
-                </div>
-                <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-              </div>
-            ) : (
-              /* ── Topic Form ── */
-              <div className="create-topic-form-fields">
-                <div className="form-group">
-                  <label className="form-label">Icon</label>
-                  <div className="emoji-picker">
-                    {emojiOptions.map((e) => (
-                      <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <Input label="Name *" placeholder="e.g. AI News" value={name} onChange={(e) => setName(e.target.value)} />
-                  {nameError && <p className="form-error">{nameError}</p>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Platforms <span className="form-required">*</span></label>
-                  <div className="platform-toggles">
-                    {PLATFORM_OPTIONS.map((p) => (
-                      <button
-                        key={p}
-                        className={`platform-toggle${platforms.includes(p) ? ' active' : ''}`}
-                        onClick={() => togglePlatform(p)}
-                      >{p.toUpperCase()}</button>
-                    ))}
-                  </div>
-                  {platformError && <p className="form-error">{platformError}</p>}
-                </div>
-                <Input label="Keywords" placeholder="e.g. Elon Musk, SpaceX" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
-                <div className="create-topic-form-full">
-                  <Input label="Description" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
-                </div>
-                {/* User picker for topic */}
-                <div className="create-topic-form-full">
-                  <label className="form-label">Subscribed Users</label>
-                  {(allUsers ?? []).length > 0 ? (
-                    <div className="entity-picker-chips">
-                      {(allUsers ?? []).map((u) => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          className={`entity-chip${selectedUserIds.includes(u.id) ? ' selected' : ''}`}
-                          onClick={() => setSelectedUserIds((prev) =>
-                            prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]
-                          )}
-                        >
-                          <User size={12} />
-                          {u.username ? `@${u.username}` : u.name}
-                          <span className="entity-chip-platform">{u.platform.toUpperCase()}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="entity-picker-empty">No users yet — create one from the User tab</p>
-                  )}
-                </div>
-                <Input label="Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-              </div>
-            )
+              ) : (
+                <button className="proposal-manual-toggle" onClick={() => setManualOpen(true)}>
+                  or add manually ▸
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Submit ── */}
-      <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
-        {isLoading ? <Loader2 size={18} className="assist-spinner" /> : <Plus size={18} />}
+      {/* ── Submit All ── */}
+      <button
+        className="btn btn-create"
+        disabled={pendingCount === 0 || submitting}
+        onClick={handleSubmitAll}
+      >
+        {submitting ? <Loader2 size={18} className="assist-spinner" /> : <Plus size={18} />}
         <span className="btn-create-label">
-          {isLoading ? 'Creating...' : topicType === 'user' ? 'Create User' : 'Create Topic'}
+          {submitting ? 'Creating...' : `Submit All (${pendingCount})`}
         </span>
       </button>
     </Modal>

@@ -3248,6 +3248,204 @@ h3 {
   margin: 4px 0 0;
 }
 
+/* ── Proposal List (Create Modal) ── */
+.proposal-list {
+  border-top: 1px solid var(--glass-strong);
+  padding: 8px 0 0;
+  margin-top: 4px;
+}
+
+.proposal-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--foreground-muted);
+  padding: 0 2px 6px;
+}
+
+.proposal-list-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.proposal-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-strong);
+  background: var(--glass-light);
+  transition: all 0.15s ease;
+}
+
+.proposal-card:hover {
+  border-color: var(--accent-glow);
+  background: var(--glass);
+}
+
+.proposal-card.done {
+  opacity: 0.5;
+  border-color: var(--positive);
+}
+
+.proposal-card.error {
+  border-color: var(--negative);
+}
+
+.proposal-card.editing {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 10px;
+  border-color: var(--accent-glow);
+  background: var(--glass);
+}
+
+.proposal-card-type {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--accent-surface);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.proposal-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.proposal-card-name {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proposal-card-meta {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.625rem;
+  color: var(--ink-3);
+}
+
+.proposal-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.proposal-card-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.proposal-card-btn:hover {
+  background: var(--glass-strong);
+  color: var(--ink);
+}
+
+.proposal-card-error {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--negative);
+}
+
+.proposal-card-edit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+
+.proposal-card-edit-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.proposal-card-edit-fields .form-group {
+  gap: 4px;
+}
+
+.proposal-card-edit-fields .form-label {
+  font-size: 0.6875rem;
+}
+
+.proposal-manual {
+  padding: 6px 2px 0;
+}
+
+.proposal-manual-toggle {
+  display: inline;
+  border: none;
+  background: none;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.proposal-manual-toggle:hover {
+  color: var(--accent);
+}
+
+.proposal-manual-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.proposal-manual-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px dashed var(--glass-strong);
+  border-radius: 8px;
+  background: transparent;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.proposal-manual-btn:hover {
+  border-color: var(--accent-glow);
+  color: var(--accent);
+  background: var(--accent-surface);
+}
+
 /* Shared assist utilities (send button, spinner, cursor) */
 .assist-send {
   width: 34px;

@@ -38,12 +38,12 @@ interface UseSSEChatOptions {
   buildBody: (messages: ChatMsg[]) => object
   /**
    * - `'assist'`: accumulates raw tokens, uses extractReplyFromPartial(),
-   *   handles `done` event with reply + suggestion
+   *   handles `done` event with reply + actions
    * - `'direct'`: evt.t tokens are the reply text, appended to last message
    */
   mode: 'assist' | 'direct'
-  /** Called when a suggestion is received (assist mode only) */
-  onSuggestion?: (suggestion: Record<string, unknown>) => void
+  /** Called when actions are received (assist mode only) */
+  onActions?: (actions: Record<string, unknown>[]) => void
 }
 
 interface UseSSEChatReturn {
@@ -63,7 +63,7 @@ export function useSSEChat({
   endpoint,
   buildBody,
   mode,
-  onSuggestion,
+  onActions,
 }: UseSSEChatOptions): UseSSEChatReturn {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -162,8 +162,8 @@ export function useSSEChat({
                 if (partial) setStreamingText(partial)
               } else if (evt.done) {
                 finalReply = evt.reply || ''
-                if (evt.suggestion && onSuggestion) {
-                  onSuggestion(evt.suggestion)
+                if (evt.actions?.length && onActions) {
+                  onActions(evt.actions)
                 }
               } else if (evt.error) {
                 finalReply = `Error: ${evt.error}`
@@ -193,7 +193,7 @@ export function useSSEChat({
     } finally {
       setStreaming(false)
     }
-  }, [input, streaming, messages, endpoint, buildBody, mode, onSuggestion])
+  }, [input, streaming, messages, endpoint, buildBody, mode, onActions])
 
   const reset = useCallback(() => {
     setMessages([])
