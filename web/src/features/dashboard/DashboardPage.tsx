@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
+  defaultDropAnimationSideEffects,
   PointerSensor,
   useSensor,
   useSensors,
@@ -880,7 +881,11 @@ export function DashboardPage() {
             </div>
           )}
 
-          <DragOverlay dropAnimation={null}>
+          <DragOverlay dropAnimation={{
+            duration: 180,
+            easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+            sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0' } } }),
+          }}>
             {activeTopic && (
               <TopicCard
                 topic={{ ...activeTopic, is_pinned: currentDragZone === 'pinned' }}
