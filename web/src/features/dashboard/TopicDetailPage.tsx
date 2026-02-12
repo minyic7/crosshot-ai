@@ -584,7 +584,7 @@ export function TopicDetailPage() {
         return (
           <div className="trend-sparkline media-pie" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
             <div className="media-pie-chart">
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={140}>
                 <PieChart>
                   <Pie
                     data={[
@@ -593,8 +593,8 @@ export function TopicDetailPage() {
                     ]}
                     cx="50%"
                     cy="50%"
-                    innerRadius={42}
-                    outerRadius={68}
+                    innerRadius={36}
+                    outerRadius={60}
                     dataKey="value"
                     stroke="none"
                     startAngle={90}

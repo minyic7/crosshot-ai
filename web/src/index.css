@@ -2208,14 +2208,15 @@ h3 {
 .media-pie {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px;
+  width: 320px;
 }
 
 .media-pie-chart {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 140px;
+  height: 140px;
   flex-shrink: 0;
 }
 
@@ -2248,7 +2249,8 @@ h3 {
 .media-pie-legend {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .media-pie-legend-row {
@@ -2256,6 +2258,7 @@ h3 {
   align-items: center;
   gap: 8px;
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .media-pie-dot {
