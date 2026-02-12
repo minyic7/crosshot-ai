@@ -74,6 +74,8 @@
   --error: var(--negative);
   --blue: #60A5FA;
   --lavender: #A78BFA;
+  --pink: #F472B6;
+  --cyan: #22D3EE;
 
   /* Outline button tokens */
   --btn-outline-border: #293548;
@@ -139,6 +141,8 @@
 
   --blue: #3B82F6;
   --lavender: #8B5CF6;
+  --pink: #DB2777;
+  --cyan: #0891B2;
 
   --btn-outline-border: #CBD5E1;
   --btn-outline-border-hover: #94A3B8;

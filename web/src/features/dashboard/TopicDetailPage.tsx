@@ -258,8 +258,8 @@ type TrendKey = 'posts' | 'likes' | 'views' | 'retweets' | 'replies'
 
 const TREND_META: Record<TrendKey, { color: string }> = {
   posts: { color: 'var(--accent)' },
-  likes: { color: 'var(--positive)' },
-  views: { color: 'var(--blue)' },
+  likes: { color: 'var(--pink)' },
+  views: { color: 'var(--cyan)' },
   retweets: { color: 'var(--warning)' },
   replies: { color: 'var(--lavender)' },
 }
