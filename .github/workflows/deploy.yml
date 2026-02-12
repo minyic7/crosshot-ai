@@ -3,88 +3,140 @@ name: Deploy to NAS
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - '.gitignore'
+      - '.claude/**'
+      - '.roo/**'
+      - 'DESIGN_SPEC.md'
+      - 'LICENSE'
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/crosshot-ai
   NAS_DEPLOY_PATH: /share/minyic-volumn/crosshot-ai
   DOCKER: /share/CACHEDEV1_DATA/.qpkg/container-station/usr/bin/.libs/docker
 
 jobs:
   # ──────────────────────────────────────
-  # CI: Build and push images to GHCR
+  # Detect which components changed
   # ──────────────────────────────────────
-  build-and-push:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      crawler: ${{ steps.filter.outputs.crawler }}
+      analyst: ${{ steps.filter.outputs.analyst }}
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+      infra: ${{ steps.filter.outputs.infra }}
+      any_image: ${{ steps.check.outputs.any_image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            crawler:
+              - 'apps/agent-crawler/**'
+              - 'apps/shared/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            analyst:
+              - 'apps/agent-analyst/**'
+              - 'apps/shared/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            api:
+              - 'apps/api/**'
+              - 'apps/shared/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            web:
+              - 'web/**'
+            infra:
+              - 'docker-compose.yml'
+      - id: check
+        run: |
+          if [[ "${{ steps.filter.outputs.crawler }}" == "true" || \
+                "${{ steps.filter.outputs.analyst }}" == "true" || \
+                "${{ steps.filter.outputs.api }}" == "true" || \
+                "${{ steps.filter.outputs.web }}" == "true" || \
+                "${{ steps.filter.outputs.infra }}" == "true" ]]; then
+            echo "any_image=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_image=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ──────────────────────────────────────
+  # Build changed images in parallel
+  # ──────────────────────────────────────
+  build:
+    needs: changes
+    if: needs.changes.outputs.any_image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
+    strategy:
+      matrix:
+        include:
+          - name: crawler
+            file: apps/agent-crawler/Dockerfile
+            context: .
+            changed: ${{ needs.changes.outputs.crawler }}
+          - name: analyst
+            file: apps/agent-analyst/Dockerfile
+            context: .
+            changed: ${{ needs.changes.outputs.analyst }}
+          - name: api
+            file: apps/api/Dockerfile
+            context: .
+            changed: ${{ needs.changes.outputs.api }}
+          - name: web
+            file: web/Dockerfile
+            context: ./web
+            changed: ${{ needs.changes.outputs.web }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Skip unchanged image
+        if: matrix.changed != 'true'
+        run: echo "Skipping ${{ matrix.name }} — no changes"
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      - uses: docker/login-action@v3
+        if: matrix.changed == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
+        if: matrix.changed == 'true'
 
-      - name: Build and push crawler image
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v6
+        if: matrix.changed == 'true'
         with:
-          context: .
-          file: apps/agent-crawler/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-crawler:latest
-          cache-from: type=gha,scope=crawler
-          cache-to: type=gha,mode=max,scope=crawler
-
-      - name: Build and push analyst image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/agent-analyst/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-analyst:latest
-          cache-from: type=gha,scope=analyst
-          cache-to: type=gha,mode=max,scope=analyst
-
-      - name: Build and push API image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-api:latest
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-
-      - name: Build and push web image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./web
-          file: web/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/crosshot-ai-web:latest
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:latest
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   # ──────────────────────────────────────
-  # CD: Deploy to NAS via Tailscale + SSH
+  # Deploy to NAS via Tailscale + SSH
   # ──────────────────────────────────────
   deploy:
+    needs: [changes, build]
+    if: needs.changes.outputs.any_image == 'true'
     runs-on: ubuntu-latest
-    needs: build-and-push
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Connect to Tailscale network to reach the NAS
       - name: Connect Tailscale
         uses: tailscale/github-action@v4
         with:
@@ -92,7 +144,6 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      # Setup SSH key for NAS access
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -100,64 +151,52 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.NAS_TAILSCALE_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      # Copy docker-compose.yml to NAS
       - name: Copy compose file to NAS
+        if: needs.changes.outputs.infra == 'true'
         run: |
           ssh ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }} "mkdir -p ${{ env.NAS_DEPLOY_PATH }}"
           scp docker-compose.yml ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }}:${{ env.NAS_DEPLOY_PATH }}/
 
-      # Deploy: login GHCR → pull images → restart containers
       - name: Deploy on NAS
-        env:
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          ssh ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }} << EOF
+          ssh ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_IP }} << 'EOF'
             DOCKER="${{ env.DOCKER }}"
-            COMPOSE="\$DOCKER compose"
+            COMPOSE="$DOCKER compose"
             cd ${{ env.NAS_DEPLOY_PATH }}
 
-            # Ensure data directories exist for bind mounts
-            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/redis
-            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/pgdata
-            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/media
+            # Ensure data directories exist
+            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/{redis,pgdata,media}
 
-            # Clean up old named volumes (one-time migration)
-            for vol in redis_data pg_data media_data; do
-              full="\$(\$DOCKER volume ls -q | grep -E "(^|_)${vol}$" || true)"
-              if [ -n "\$full" ]; then
-                echo "Removing old named volume: \$full"
-                \$DOCKER volume rm "\$full" 2>/dev/null || true
-              fi
-            done
-            # Prune any other dangling volumes
-            \$DOCKER volume prune -f 2>/dev/null || true
-
-            # Export DATA_DIR for docker-compose bind mounts
             export DATA_DIR="${{ env.NAS_DEPLOY_PATH }}/data"
 
             # Login to GHCR
-            echo "${GHCR_TOKEN}" | \$DOCKER login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            echo "${{ secrets.GHCR_TOKEN }}" | $DOCKER login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
             # Pull new images
-            \$COMPOSE pull
+            $COMPOSE pull
 
             # Restart containers (recreate only changed images)
-            \$COMPOSE up -d --remove-orphans
+            $COMPOSE up -d --remove-orphans
 
-            # Wait for startup (API creates new tables via create_tables())
-            sleep 15
+            # Wait for API to be ready (retry up to 30s)
+            echo "Waiting for API..."
+            for i in $(seq 1 6); do
+              if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+                echo "API is healthy"
+                break
+              fi
+              [ $i -eq 6 ] && echo "API health check timed out" && exit 1
+              sleep 5
+            done
 
-            # Run database migrations for existing tables
-            \$DOCKER exec \$(\$DOCKER ps -q -f name=postgres) psql -U \${DB_USER:-crosshot} -d crosshot -c "ALTER TABLE contents ADD COLUMN IF NOT EXISTS topic_id UUID REFERENCES topics(id); CREATE INDEX IF NOT EXISTS ix_contents_topic_id ON contents(topic_id);" || true
-
-            # Health check
-            curl -sf http://localhost:8000/health && echo "API deploy successful" || echo "API health check failed"
-            curl -sf http://localhost:3000/ && echo "Web deploy successful" || echo "Web health check failed"
+            # Verify web
+            curl -sf http://localhost:3000/ > /dev/null && echo "Web is healthy" || echo "Web health check failed"
           EOF
 
-      # Verify deployment from CI runner via Tailscale
-      - name: Verify deployment
+      - name: Verify deployment via Tailscale
         run: |
-          sleep 5
-          curl -sf http://${{ secrets.NAS_TAILSCALE_IP }}:8000/health || exit 1
-          echo "Deployment verified successfully"
+          for i in $(seq 1 4); do
+            curl -sf http://${{ secrets.NAS_TAILSCALE_IP }}:8000/health && echo "Deployment verified" && exit 0
+            sleep 5
+          done
+          echo "Verification failed" && exit 1
