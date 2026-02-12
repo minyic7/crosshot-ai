@@ -539,13 +539,23 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     setPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])
   }
 
+  const [submitted, setSubmitted] = useState(false)
+  const nameError = submitted && !name.trim() ? 'Topic name is required' : ''
+  const platformError = submitted && platforms.length === 0 ? 'Select at least one platform' : ''
+
+  const handleSubmitWithValidation = () => {
+    setSubmitted(true)
+    if (!name.trim() || platforms.length === 0) return
+    handleSubmit()
+  }
+
   return (
     <Modal open={open} onClose={onClose} title="New Topic" className="create-topic-panel">
       <div className="stack-sm">
-        <div className="assist-section">
-          <div className="assist-label"><Sparkles size={13} /> AI Assist</div>
+        <div className="assist-section" role="region" aria-label="AI Assist">
+          <div className="assist-label"><Sparkles size={13} aria-hidden="true" /> AI Assist</div>
           {(chatMessages.length > 0 || streamingReply) && (
-            <div className="assist-messages">
+            <div className="assist-messages" role="log" aria-live="polite">
               {chatMessages.map((m, i) => (
                 <div key={i} className={`assist-msg ${m.role}`}>
                   <span className="assist-msg-text">{m.content}</span>
@@ -558,7 +568,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
               )}
               {isAssisting && !streamingReply && (
                 <div className="assist-msg assistant">
-                  <Loader2 size={13} className="assist-spinner" />
+                  <Loader2 size={13} className="assist-spinner" aria-hidden="true" />
                   <span className="assist-msg-text">Thinking...</span>
                 </div>
               )}
@@ -571,45 +581,68 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
               placeholder="Describe what you want to monitor..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAsk()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handleAsk()
+              }}
               disabled={isAssisting}
+              aria-label="Describe what you want to monitor"
             />
-            <button className="assist-send" onClick={handleAsk} disabled={!chatInput.trim() || isAssisting}>
-              {isAssisting ? <Loader2 size={14} className="assist-spinner" /> : <Send size={14} />}
+            <button className="assist-send" onClick={handleAsk} disabled={!chatInput.trim() || isAssisting} aria-label="Send message">
+              {isAssisting ? <Loader2 size={14} className="assist-spinner" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
             </button>
           </div>
         </div>
         <div className="assist-divider" />
-        <div className="form-group">
+        <div className="form-group" role="radiogroup" aria-label="Topic icon">
           <label className="form-label">Icon</label>
           <div className="emoji-picker">
             {emojiOptions.map((e) => (
-              <button key={e} className={`emoji-option${e === icon ? ' selected' : ''}`} onClick={() => setIcon(e)}>{e}</button>
+              <button
+                key={e}
+                className={`emoji-option${e === icon ? ' selected' : ''}`}
+                onClick={() => setIcon(e)}
+                aria-label={`Icon ${e}`}
+                aria-pressed={e === icon}
+              >{e}</button>
             ))}
           </div>
         </div>
-        <Input label="Name" placeholder="e.g. 马斯克" value={name} onChange={(e) => setName(e.target.value)} />
-        <div className="form-group">
-          <label className="form-label">Description</label>
-          <textarea className="form-input form-textarea" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
+        <div>
+          <Input
+            label="Name"
+            placeholder="e.g. Elon Musk"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-invalid={nameError ? true : undefined}
+            aria-describedby={nameError ? 'name-error' : undefined}
+          />
+          {nameError && <p id="name-error" className="form-error" role="alert">{nameError}</p>}
         </div>
         <div className="form-group">
-          <label className="form-label">Platforms</label>
-          <div className="flex gap-2">
+          <label htmlFor="topic-description" className="form-label">Description</label>
+          <textarea id="topic-description" className="form-input form-textarea" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label" id="platforms-label">Platforms</label>
+          <div className="flex gap-2" role="group" aria-labelledby="platforms-label">
             {PLATFORM_OPTIONS.map((p) => (
               <button
                 key={p}
                 className={`topic-tag${platforms.includes(p) ? ' platform' : ''}`}
                 style={{ padding: '6px 14px', cursor: 'pointer' }}
                 onClick={() => togglePlatform(p)}
+                role="checkbox"
+                aria-checked={platforms.includes(p)}
+                aria-label={`Platform ${p.toUpperCase()}`}
               >{p.toUpperCase()}</button>
             ))}
           </div>
+          {platformError && <p className="form-error" role="alert">{platformError}</p>}
         </div>
         <Input label="Keywords (comma-separated)" placeholder="e.g. Elon Musk, SpaceX, Tesla" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
         <Input label="Refresh Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-        <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!name.trim() || platforms.length === 0 || isLoading} onClick={handleSubmit}>
-          <Plus size={16} />
+        <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={isLoading} onClick={handleSubmitWithValidation} aria-busy={isLoading}>
+          <Plus size={16} aria-hidden="true" />
           {isLoading ? 'Creating...' : 'Create Topic'}
         </button>
       </div>

@@ -3082,6 +3082,16 @@ h3 {
   line-height: 1.6;
 }
 
+.form-error {
+  font-size: 0.75rem;
+  color: var(--negative);
+  margin-top: 4px;
+}
+
+.form-input[aria-invalid="true"] {
+  border-color: var(--negative);
+}
+
 .btn-primary {
   background: transparent;
   color: var(--accent-light);

@@ -15,7 +15,10 @@ ENV/
 *.swo
 
 # Claude
-.claude/settings.local.json
+.claude/
+
+# Roo Code
+.roo/
 
 # Environment
 .env
