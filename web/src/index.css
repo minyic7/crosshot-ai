@@ -3039,7 +3039,7 @@ h3 {
 .assist-divider {
   height: 1px;
   background: var(--border-default);
-  margin: 4px 0;
+  margin: 12px 0;
 }
 
 .form-group {
@@ -3068,8 +3068,8 @@ h3 {
 }
 
 .form-input:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px var(--border-default);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .form-input::placeholder {
@@ -3114,20 +3114,86 @@ h3 {
   cursor: not-allowed;
 }
 
+/* Filled CTA button (create modal submit) */
+.btn-create {
+  width: 100%;
+  margin-top: 8px;
+  gap: 6px;
+  font-weight: 600;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-create:hover:not(:disabled) {
+  background: var(--accent-light);
+  border-color: var(--accent-light);
+  box-shadow: 0 0 20px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.btn-create:active:not(:disabled) {
+  background: var(--accent);
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.btn-create:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Platform toggle buttons */
+.platform-toggles {
+  display: flex;
+  gap: 8px;
+}
+
+.platform-toggle {
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--foreground-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: all 0.15s ease;
+}
+
+.platform-toggle:hover {
+  border-color: var(--border-hover);
+  color: var(--foreground);
+  background: var(--surface-muted);
+}
+
+.platform-toggle.active {
+  border-color: var(--accent);
+  color: var(--accent-light);
+  background: var(--accent-surface);
+}
+
+/* Required field marker */
+.form-required {
+  color: var(--negative);
+  font-weight: 400;
+}
+
 /* Emoji picker */
 .emoji-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .emoji-option {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.125rem;
+  font-size: 1rem;
   border: 1px solid var(--border-default);
   border-radius: 8px;
   background: transparent;
@@ -3141,9 +3207,9 @@ h3 {
 }
 
 .emoji-option.selected {
-  border-color: var(--teal);
-  background: var(--border-default);
-  box-shadow: 0 0 0 2px var(--border-default);
+  border-color: var(--accent);
+  background: var(--accent-surface);
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 /* Mobile search icon button (hidden on desktop) */

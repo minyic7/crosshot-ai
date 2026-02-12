@@ -601,7 +601,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
         </div>
         <div>
-          <Input label="Name" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label="Name *" placeholder="e.g. Elon Musk" value={name} onChange={(e) => setName(e.target.value)} />
           {nameError && <p className="form-error">{nameError}</p>}
         </div>
         <div className="form-group">
@@ -609,13 +609,12 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
           <textarea id="topic-description" className="form-input form-textarea" placeholder="Optional description..." value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">Platforms</label>
-          <div className="flex gap-2">
+          <label className="form-label">Platforms <span className="form-required">*</span></label>
+          <div className="platform-toggles">
             {PLATFORM_OPTIONS.map((p) => (
               <button
                 key={p}
-                className={`topic-tag${platforms.includes(p) ? ' platform' : ''}`}
-                style={{ padding: '6px 14px', cursor: 'pointer' }}
+                className={`platform-toggle${platforms.includes(p) ? ' active' : ''}`}
                 onClick={() => togglePlatform(p)}
               >{p.toUpperCase()}</button>
             ))}
@@ -624,7 +623,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
         <Input label="Keywords (comma-separated)" placeholder="e.g. Elon Musk, SpaceX, Tesla" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
         <Input label="Refresh Interval (hours)" type="number" min={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-        <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={isLoading} onClick={handleSubmitWithValidation}>
+        <button className="btn btn-create" disabled={isLoading} onClick={handleSubmitWithValidation}>
           <Plus size={16} />
           {isLoading ? 'Creating...' : 'Create Topic'}
         </button>
