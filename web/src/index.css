@@ -4791,11 +4791,11 @@ h3 {
     grid-column: 1;
   }
 
-  /* FAB-style create button on mobile */
+  /* FAB-style create button on mobile — fixed so it escapes modal overflow clipping */
   .btn-create {
-    position: absolute;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    right: 16px;
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    right: 20px;
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -4805,7 +4805,7 @@ h3 {
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
-    z-index: 10;
+    z-index: 110;
   }
 
   .btn-create-label {
