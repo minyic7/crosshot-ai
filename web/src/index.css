@@ -14,8 +14,8 @@
   --glass: #1B2640;
   --glass-strong: #1B2640;
   --glass-hover: #243050;
-  --glass-border: rgba(96, 165, 250, 0.25);
-  --glass-border-hover: rgba(96, 165, 250, 0.4);
+  --glass-border: rgba(96, 165, 250, 0.35);
+  --glass-border-hover: rgba(96, 165, 250, 0.5);
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
@@ -58,8 +58,8 @@
   --toggle-bg: rgba(255, 255, 255, 0.10);
 
   /* Utility */
-  --border-default: #293548;
-  --border-hover: #3B4A5E;
+  --border-default: rgba(96, 165, 250, 0.3);
+  --border-hover: rgba(96, 165, 250, 0.45);
   --surface-muted: rgba(255, 255, 255, 0.03);
   --surface-hover: rgba(255, 255, 255, 0.07);
   --surface-card: #1B2640;
@@ -78,8 +78,8 @@
   --cyan: #22D3EE;
 
   /* Outline button tokens */
-  --btn-outline-border: #293548;
-  --btn-outline-border-hover: #3B4A5E;
+  --btn-outline-border: rgba(96, 165, 250, 0.3);
+  --btn-outline-border-hover: rgba(96, 165, 250, 0.45);
   --btn-outline-bg-hover: rgba(255, 255, 255, 0.05);
   --btn-accent-border: var(--accent);
   --btn-accent-border-hover: var(--accent-light);
@@ -94,8 +94,8 @@
   --glass: rgba(255, 255, 255, 0.85);
   --glass-strong: rgba(255, 255, 255, 0.92);
   --glass-hover: rgba(255, 255, 255, 0.98);
-  --glass-border: rgba(59, 130, 246, 0.22);
-  --glass-border-hover: rgba(59, 130, 246, 0.38);
+  --glass-border: rgba(59, 130, 246, 0.3);
+  --glass-border-hover: rgba(59, 130, 246, 0.45);
   --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --frost: blur(16px) saturate(1.2);
   --frost-heavy: blur(20px) saturate(1.4);
@@ -133,8 +133,8 @@
 
   --toggle-bg: rgba(0, 0, 0, 0.12);
 
-  --border-default: #CBD5E1;
-  --border-hover: #94A3B8;
+  --border-default: rgba(59, 130, 246, 0.25);
+  --border-hover: rgba(59, 130, 246, 0.4);
   --surface-muted: rgba(0, 0, 0, 0.03);
   --surface-hover: rgba(0, 0, 0, 0.06);
   --surface-card: #FFFFFF;
@@ -144,8 +144,8 @@
   --pink: #DB2777;
   --cyan: #0891B2;
 
-  --btn-outline-border: #CBD5E1;
-  --btn-outline-border-hover: #94A3B8;
+  --btn-outline-border: rgba(59, 130, 246, 0.25);
+  --btn-outline-border-hover: rgba(59, 130, 246, 0.4);
   --btn-outline-bg-hover: rgba(0, 0, 0, 0.04);
   --btn-accent-border: var(--accent);
   --btn-accent-border-hover: var(--accent-light);
@@ -172,7 +172,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-size: 1rem;
   line-height: 1.6;
-  transition: background 0.4s ease, color 0.3s ease;
+  transition: background 0.25s ease, color 0.2s ease;
 }
 
 /* Typography */
@@ -222,7 +222,7 @@ h3 {
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   box-shadow: var(--shadow-card);
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.35s ease, background 0.35s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease, background 0.2s ease;
   position: relative;
   overflow: hidden;
 }
@@ -345,8 +345,8 @@ h3 {
   -webkit-backdrop-filter: blur(28px) saturate(1.8);
   border-bottom: 1px solid var(--glass-border);
   box-shadow: var(--shadow-nav);
-  animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  transition: background 0.4s ease, border-color 0.3s ease, box-shadow 0.35s ease;
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background 0.25s ease, border-color 0.2s ease, box-shadow 0.25s ease;
 }
 
 .topnav-inner {
@@ -1025,7 +1025,7 @@ h3 {
 
 /* Animation utility classes */
 .rise { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.pop { animation: pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.pop { animation: pop 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* Theme transition wrapper */
 .theme-transitioning,
@@ -1366,7 +1366,7 @@ h3 {
   border-radius: 14px;
   box-shadow: var(--shadow-card);
   cursor: pointer;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.35s ease, background 0.35s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease, background 0.2s ease;
   position: relative;
   overflow: hidden;
 }
