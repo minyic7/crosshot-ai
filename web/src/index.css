@@ -2155,6 +2155,20 @@ h3 {
   flex-shrink: 0;
 }
 
+/* Summary + Trend two-column layout */
+.topic-detail-main {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .topic-detail-main {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Trend chart tooltip */
 .trend-tooltip {
   background: var(--surface-card);

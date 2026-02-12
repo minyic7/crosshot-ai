@@ -522,21 +522,21 @@ export function TopicDetailPage() {
         </div>
       )}
 
-      {/* Summary + Chat (integrated) */}
-      {topic.last_summary && (
-        <SummaryChat
-          topicId={topic.id}
-          summary={topic.last_summary}
-          translated={translated}
-          translating={translating}
-          onTranslate={() => handleTranslate(topic.last_summary!)}
-          cycleId={topic.summary_data?.cycle_id}
-          insights={insights}
-        />
-      )}
-
-      {/* Engagement Trend */}
-      <EngagementTrend topicId={topic.id} />
+      {/* Summary + Trend side by side */}
+      <div className="topic-detail-main">
+        {topic.last_summary && (
+          <SummaryChat
+            topicId={topic.id}
+            summary={topic.last_summary}
+            translated={translated}
+            translating={translating}
+            onTranslate={() => handleTranslate(topic.last_summary!)}
+            cycleId={topic.summary_data?.cycle_id}
+            insights={insights}
+          />
+        )}
+        <EngagementTrend topicId={topic.id} />
+      </div>
 
       {/* Raw data */}
       {topic.summary_data && (
