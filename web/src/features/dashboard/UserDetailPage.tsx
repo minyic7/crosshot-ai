@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, ExternalLink, Pencil, X, Check } from 'lucide-react'
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -213,13 +213,7 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
   return (
     <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-          <defs>
-            <linearGradient id={`grad-user-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={meta.color} stopOpacity={0.25} />
-              <stop offset="100%" stopColor={meta.color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
+        <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
           <XAxis
             dataKey="day"
             tick={{ fill: 'var(--ink-3)', fontSize: 10 }}
@@ -227,8 +221,8 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
             tickLine={false}
           />
           <Tooltip content={<TrendTooltip />} />
-          <Area type="monotone" dataKey={metricKey} stroke={meta.color} strokeWidth={2} fill={`url(#grad-user-${metricKey})`} />
-        </AreaChart>
+          <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} />
+        </BarChart>
       </ResponsiveContainer>
     </div>
   )
