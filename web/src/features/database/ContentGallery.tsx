@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, Repeat2, Eye, Film, Image as ImageIcon, Play } from 'lucide-react'
+import { Heart, MessageCircle, Repeat2, Eye, Film, Image as ImageIcon, Play, ChevronDown } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useListContentsQuery } from '@/store/api'
+import { useListContentsQuery, useListUsersQuery } from '@/store/api'
 
 const PAGE_SIZE = 20
 const COLUMN_WIDTH = 280
@@ -63,6 +63,7 @@ function timeAgo(iso: string): string {
 export function ContentGallery() {
   const navigate = useNavigate()
   const [platform, setPlatform] = useState('')
+  const [userId, setUserId] = useState('')
   const [offset, setOffset] = useState(0)
   const [allContents, setAllContents] = useState<Array<{ id: string; platform: string; crawled_at: string; data: Record<string, unknown> }>>([])
   const [hasMore, setHasMore] = useState(true)
@@ -70,17 +71,19 @@ export function ContentGallery() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const { data: usersData } = useListUsersQuery()
+
   const { data, isLoading, isFetching } = useListContentsQuery(
-    { platform: platform || undefined, limit: PAGE_SIZE, offset } as { platform?: string; limit: number; offset: number },
+    { platform: platform || undefined, user_id: userId || undefined, limit: PAGE_SIZE, offset },
     { refetchOnMountOrArgChange: true },
   )
 
-  // Reset on platform change
+  // Reset on filter change
   useEffect(() => {
     setAllContents([])
     setOffset(0)
     setHasMore(true)
-  }, [platform])
+  }, [platform, userId])
 
   // Append new data
   useEffect(() => {
@@ -147,31 +150,59 @@ export function ContentGallery() {
 
   return (
     <div className="stack">
-      {/* Platform filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--foreground-subtle)', textTransform: 'uppercase' }}>
-          Platform
-        </span>
-        <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
-          {platforms.map(p => (
-            <button
-              key={p}
-              onClick={() => setPlatform(p)}
-              className="px-3 py-1 rounded-md text-xs font-medium transition-all"
-              style={{
-                background: platform === p ? 'var(--surface-card)' : 'transparent',
-                color: platform === p ? 'var(--foreground)' : 'var(--foreground-muted)',
-                boxShadow: platform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {p ? p.toUpperCase() : 'All'}
-            </button>
-          ))}
+      {/* Filters */}
+      <div className="flex items-center gap-4 flex-wrap">
+        {/* Platform filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--foreground-subtle)', textTransform: 'uppercase' }}>
+            Platform
+          </span>
+          <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
+            {platforms.map(p => (
+              <button
+                key={p}
+                onClick={() => setPlatform(p)}
+                className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                style={{
+                  background: platform === p ? 'var(--surface-card)' : 'transparent',
+                  color: platform === p ? 'var(--foreground)' : 'var(--foreground-muted)',
+                  boxShadow: platform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {p ? p.toUpperCase() : 'All'}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* User filter */}
+        {usersData && usersData.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--foreground-subtle)', textTransform: 'uppercase' }}>
+              User
+            </span>
+            <div className="relative">
+              <select
+                value={userId}
+                onChange={e => setUserId(e.target.value)}
+                className="content-filter-select"
+              >
+                <option value="">All Users</option>
+                {usersData.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{u.username ? ` (@${u.username})` : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="content-filter-select-icon" />
+            </div>
+          </div>
+        )}
+
         {data && (
-          <span className="text-xs ml-2" style={{ color: 'var(--foreground-subtle)' }}>
+          <span className="text-xs" style={{ color: 'var(--foreground-subtle)' }}>
             {data.total} items
           </span>
         )}
