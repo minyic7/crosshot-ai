@@ -71,7 +71,7 @@ export function ContentGallery() {
   const loadingRef = useRef(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const { data, isLoading, isFetching } = useListContentsQuery(
     { platform: platform || undefined, search: searchQuery || undefined, limit: PAGE_SIZE, offset },
