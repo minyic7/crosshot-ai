@@ -5717,3 +5717,194 @@ h3 {
     padding: 24px;
   }
 }
+
+
+/* ─── Content Gallery Cards ─── */
+
+.content-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: var(--frost);
+  -webkit-backdrop-filter: var(--frost);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease, background 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.content-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 8%, var(--glass-border-hover) 50%, transparent 92%);
+  opacity: 0.5;
+  z-index: 1;
+}
+
+.content-card:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--glass-border-hover);
+  background: var(--glass-hover);
+}
+
+.content-card-shimmer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 15%,
+    var(--shimmer-soft) 32%,
+    var(--shimmer-bright) 50%,
+    var(--shimmer-soft) 68%,
+    transparent 85%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.content-card:hover .content-card-shimmer {
+  animation: cardShimmer 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.12s forwards;
+}
+
+.content-card-img {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.content-card:hover .content-card-img {
+  transform: scale(1.04);
+}
+
+.content-card-badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  backdrop-filter: blur(6px);
+}
+
+.content-card-body {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 12px;
+}
+
+.content-card-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.content-card-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--glass-border-hover));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.content-card-author-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--foreground);
+  max-width: 50%;
+}
+
+.content-card-author-handle {
+  font-size: 0.75rem;
+  color: var(--foreground-subtle);
+}
+
+.content-card-text {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+}
+
+.content-card-show-more {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+.content-card-show-more:hover {
+  text-decoration: underline;
+}
+
+.content-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.content-card-tag {
+  font-size: 0.6875rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--accent-surface);
+  color: var(--blue);
+}
+
+.content-card-tag-more {
+  font-size: 0.6875rem;
+  color: var(--foreground-subtle);
+  padding: 2px 0;
+}
+
+.content-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.content-card-metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.content-card-metric {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6875rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.content-card-time {
+  font-size: 0.6875rem;
+  color: var(--ink-4);
+}

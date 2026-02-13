@@ -7,7 +7,7 @@ import { useListContentsQuery } from '@/store/api'
 const PAGE_SIZE = 20
 const COLUMN_WIDTH = 280
 const GAP = 16
-const TEXT_CARD_HEIGHT = 180
+const TEXT_CARD_HEIGHT = 200
 
 interface TweetData {
   tweet_id?: string
@@ -137,8 +137,7 @@ export function ContentGallery() {
   for (const content of allContents) {
     const tweet = content.data as unknown as TweetData
     const hasMedia = (tweet?.media?.length ?? 0) > 0
-    // Media cards: assume 16:9 + ~100 body; text cards: fixed
-    const estimatedHeight = hasMedia ? Math.round(COLUMN_WIDTH * 9 / 16) + 100 : TEXT_CARD_HEIGHT
+    const estimatedHeight = hasMedia ? Math.round(COLUMN_WIDTH * 9 / 16) + 120 : TEXT_CARD_HEIGHT
     const shortestCol = columnHeights.indexOf(Math.min(...columnHeights))
     columnItems[shortestCol].push(content)
     columnHeights[shortestCol] += estimatedHeight + GAP
@@ -195,10 +194,11 @@ export function ContentGallery() {
           <div className="flex" style={{ gap: GAP }}>
             {columnItems.map((col, colIdx) => (
               <div key={colIdx} className="flex flex-col" style={{ flex: 1, gap: GAP, minWidth: 0 }}>
-                {col.map(content => (
+                {col.map((content, i) => (
                   <MasonryCard
                     key={content.id}
                     content={content}
+                    index={colIdx * col.length + i}
                     onClick={() => navigate(`/content/${content.id}`)}
                   />
                 ))}
@@ -223,14 +223,16 @@ export function ContentGallery() {
 }
 
 // ──────────────────────────────────────────────
-// Masonry Card
+// Masonry Card — glass style matching dashboard
 // ──────────────────────────────────────────────
 
 function MasonryCard({
   content,
+  index,
   onClick,
 }: {
   content: { id: string; platform: string; crawled_at: string; data: Record<string, unknown> }
+  index: number
   onClick: () => void
 }) {
   const tweet = content.data as unknown as TweetData
@@ -253,24 +255,15 @@ function MasonryCard({
   return (
     <div
       onClick={onClick}
-      className="group rounded-xl overflow-hidden transition-all duration-300 cursor-pointer"
+      className="content-card rise"
       style={{
-        background: 'var(--surface-card)',
-        border: '1px solid var(--border-default)',
-        boxShadow: 'var(--shadow-card)',
+        animationDelay: `${Math.min(index * 40, 400)}ms`,
         ...(!hasMedia && !expanded ? { height: TEXT_CARD_HEIGHT } : {}),
       }}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = 'translateY(-1px)'
-        e.currentTarget.style.boxShadow = 'var(--shadow-card-hover)'
-        e.currentTarget.style.borderColor = 'var(--border-hover)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-        e.currentTarget.style.borderColor = 'var(--border-default)'
-      }}
     >
+      {/* Shimmer overlay */}
+      <div className="content-card-shimmer" />
+
       {/* Media */}
       {hasMedia && !imgError && (
         <div className="relative overflow-hidden" style={{ background: 'var(--surface-muted)' }}>
@@ -280,10 +273,12 @@ function MasonryCard({
           <img
             src={mediaUrl(firstMedia!.local_path, firstMedia!.url)}
             alt=""
+            className="content-card-img"
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
             style={{
               width: '100%',
+              display: 'block',
               ...(imgLoaded
                 ? {}
                 : { position: 'absolute' as const, top: 0, left: 0, opacity: 0 }),
@@ -291,28 +286,14 @@ function MasonryCard({
           />
           {/* Video overlay badge */}
           {isVideo && (
-            <div
-              className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold"
-              style={{
-                background: 'rgba(0,0,0,0.65)',
-                color: 'white',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
+            <div className="content-card-badge" style={{ bottom: 8, left: 8 }}>
               <Play size={10} fill="white" />
               Video
             </div>
           )}
           {/* Media count badge */}
           {media.length > 1 && (
-            <div
-              className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold"
-              style={{
-                background: 'rgba(0,0,0,0.55)',
-                color: 'white',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
+            <div className="content-card-badge" style={{ top: 8, right: 8 }}>
               {media.filter(m => m.type === 'video').length > 0 ? <Film size={10} /> : <ImageIcon size={10} />}
               {media.length}
             </div>
@@ -321,16 +302,19 @@ function MasonryCard({
       )}
 
       {/* Content body */}
-      <div className="px-3 py-2.5 flex flex-col" style={{
+      <div className="content-card-body" style={{
         ...(!hasMedia && !expanded ? { height: TEXT_CARD_HEIGHT - 2, overflow: 'hidden' } : {}),
       }}>
         {/* Author row */}
         {tweet?.author && (
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-xs font-semibold truncate" style={{ color: 'var(--foreground)', maxWidth: '60%' }}>
+          <div className="content-card-author">
+            <div className="content-card-avatar">
+              {tweet.author.display_name?.charAt(0).toUpperCase()}
+            </div>
+            <span className="content-card-author-name truncate">
               {tweet.author.display_name}
             </span>
-            <span className="text-xs truncate" style={{ color: 'var(--foreground-subtle)' }}>
+            <span className="content-card-author-handle truncate">
               @{tweet.author.username}
             </span>
             {tweet.author.verified && (
@@ -343,9 +327,8 @@ function MasonryCard({
         {tweet?.text && (
           <p
             ref={textRef}
-            className="text-xs leading-relaxed mb-2"
+            className="content-card-text"
             style={{
-              color: 'var(--foreground-muted)',
               ...(!expanded ? {
                 display: '-webkit-box',
                 WebkitLineClamp: hasMedia ? 3 : 5,
@@ -364,16 +347,7 @@ function MasonryCard({
         {!hasMedia && textOverflows && !expanded && (
           <button
             onClick={e => { e.stopPropagation(); setExpanded(true) }}
-            className="text-xs font-medium mt-auto pt-1"
-            style={{
-              color: 'var(--blue)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-              padding: 0,
-              flexShrink: 0,
-            }}
+            className="content-card-show-more"
           >
             Show more
           </button>
@@ -381,41 +355,39 @@ function MasonryCard({
 
         {/* Hashtags */}
         {tweet?.hashtags && tweet.hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2" style={{ flexShrink: 0 }}>
+          <div className="content-card-tags">
             {tweet.hashtags.slice(0, 3).map(tag => (
-              <span key={tag} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-surface)', color: 'var(--blue)', fontSize: '0.6875rem' }}>
-                #{tag}
-              </span>
+              <span key={tag} className="content-card-tag">#{tag}</span>
             ))}
             {tweet.hashtags.length > 3 && (
-              <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>+{tweet.hashtags.length - 3}</span>
+              <span className="content-card-tag-more">+{tweet.hashtags.length - 3}</span>
             )}
           </div>
         )}
 
         {/* Metrics + time footer */}
-        <div className="flex items-center justify-between pt-1.5" style={{ borderTop: '1px solid var(--border-default)', flexShrink: 0 }}>
-          <div className="flex items-center gap-2.5">
+        <div className="content-card-footer">
+          <div className="content-card-metrics">
             {metrics && (
               <>
-                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
-                  <Heart size={10} /> {formatNumber(metrics.like_count ?? 0)}
+                <span className="content-card-metric">
+                  <Heart size={11} /> {formatNumber(metrics.like_count ?? 0)}
                 </span>
-                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
-                  <Repeat2 size={10} /> {formatNumber(metrics.retweet_count ?? 0)}
+                <span className="content-card-metric">
+                  <Repeat2 size={11} /> {formatNumber(metrics.retweet_count ?? 0)}
                 </span>
-                <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
-                  <MessageCircle size={10} /> {formatNumber(metrics.reply_count ?? 0)}
+                <span className="content-card-metric">
+                  <MessageCircle size={11} /> {formatNumber(metrics.reply_count ?? 0)}
                 </span>
                 {metrics.views_count ? (
-                  <span className="flex items-center gap-0.5 text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
-                    <Eye size={10} /> {formatNumber(metrics.views_count)}
+                  <span className="content-card-metric">
+                    <Eye size={11} /> {formatNumber(metrics.views_count)}
                   </span>
                 ) : null}
               </>
             )}
           </div>
-          <span className="text-xs" style={{ color: 'var(--foreground-subtle)', fontSize: '0.6875rem' }}>
+          <span className="content-card-time">
             {tweet?.created_at ? timeAgo(tweet.created_at) : timeAgo(content.crawled_at)}
           </span>
         </div>
