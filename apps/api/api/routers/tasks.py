@@ -85,6 +85,7 @@ async def get_task(task_id: str) -> dict:
 async def list_contents(
     platform: str | None = None,
     topic_id: str | None = None,
+    user_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
@@ -100,6 +101,9 @@ async def list_contents(
         if topic_id:
             stmt = stmt.where(ContentRow.topic_id == topic_id)
             count_stmt = count_stmt.where(ContentRow.topic_id == topic_id)
+        if user_id:
+            stmt = stmt.where(ContentRow.user_id == user_id)
+            count_stmt = count_stmt.where(ContentRow.user_id == user_id)
 
         total = (await session.execute(count_stmt)).scalar() or 0
         rows = (await session.execute(stmt.offset(offset).limit(limit))).scalars().all()

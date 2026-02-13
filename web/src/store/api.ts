@@ -51,7 +51,7 @@ export const apiSlice = createApi({
     }),
 
     // Contents
-    listContents: builder.query<{ contents: Content[]; total: number }, { platform?: string; limit?: number; offset?: number } | void>({
+    listContents: builder.query<{ contents: Content[]; total: number }, { platform?: string; user_id?: string; limit?: number; offset?: number } | void>({
       query: (params) => ({ url: '/contents', params: params ?? undefined }),
       providesTags: ['Content'],
     }),
