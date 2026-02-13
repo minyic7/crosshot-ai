@@ -717,11 +717,16 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
     setManualOpen(false)
   }, [resetChat])
 
-  const addManual = (type: 'topic' | 'user') => {
+  const addManual = (type: 'topic' | 'user' | 'link') => {
     const _id = uid()
-    const p: Proposal = type === 'topic'
-      ? { _id, type: 'create_topic', name: '', icon: '📊', description: '', platforms: ['x'], keywords: [], schedule_interval_hours: 6 }
-      : { _id, type: 'create_user', name: '', platform: 'x', profile_url: '', username: '', schedule_interval_hours: 6 }
+    let p: Proposal
+    if (type === 'topic') {
+      p = { _id, type: 'create_topic', name: '', icon: '📊', description: '', platforms: ['x'], keywords: [], schedule_interval_hours: 6 }
+    } else if (type === 'user') {
+      p = { _id, type: 'create_user', name: '', platform: 'x', profile_url: '', username: '', schedule_interval_hours: 6 }
+    } else {
+      p = { _id, type: 'subscribe', user_ref: '', topic_ref: '' }
+    }
     setProposals((prev) => [...prev, p])
     setEditingId(_id)
     setManualOpen(false)
@@ -901,6 +906,9 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                   </button>
                   <button className="proposal-manual-btn" onClick={() => addManual('user')}>
                     <User size={12} /> + User
+                  </button>
+                  <button className="proposal-manual-btn" onClick={() => addManual('link')}>
+                    <Link2 size={12} /> + Link
                   </button>
                 </div>
               ) : (
