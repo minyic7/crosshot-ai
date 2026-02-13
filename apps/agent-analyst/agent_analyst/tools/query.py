@@ -27,16 +27,20 @@ def _build_content_filter(
     topic_id: str | None,
     user_ids: list[str] | None,
 ) -> tuple[str, dict]:
-    """Build a SQL WHERE fragment + params for content ownership filtering."""
+    """Build a SQL WHERE fragment + params for content ownership filtering.
+
+    Column references are table-qualified (c.*) so callers must alias
+    the contents table as ``c``.
+    """
     ids = list(user_ids or [])
     if topic_id and ids:
-        return "(topic_id = :topic_id OR user_id = ANY(:user_ids))", {
+        return "(c.topic_id = :topic_id OR c.user_id = ANY(:user_ids))", {
             "topic_id": topic_id, "user_ids": ids,
         }
     elif topic_id:
-        return "topic_id = :topic_id", {"topic_id": topic_id}
+        return "c.topic_id = :topic_id", {"topic_id": topic_id}
     elif ids:
-        return "user_id = ANY(:user_ids)", {"user_ids": ids}
+        return "c.user_id = ANY(:user_ids)", {"user_ids": ids}
     else:
         return "FALSE", {}
 
@@ -90,9 +94,9 @@ async def query_entity_overview(
                     COALESCE(SUM((metrics->>'retweet_count')::int), 0) as total_retweets,
                     COALESCE(SUM((metrics->>'reply_count')::int), 0) as total_replies,
                     COALESCE(SUM((metrics->>'views_count')::int), 0) as total_views
-                FROM contents
-                WHERE {where} AND crawled_at > :since
-                GROUP BY platform
+                FROM contents c
+                WHERE {where} AND c.crawled_at > :since
+                GROUP BY c.platform
             """),
             params,
         )
@@ -110,10 +114,10 @@ async def query_entity_overview(
         media_result = await session.execute(
             text(f"""
                 SELECT COUNT(*) as with_media
-                FROM contents
-                WHERE {where} AND crawled_at > :since
-                  AND data->'media' IS NOT NULL
-                  AND jsonb_array_length(data->'media') > 0
+                FROM contents c
+                WHERE {where} AND c.crawled_at > :since
+                  AND c.data->'media' IS NOT NULL
+                  AND jsonb_array_length(c.data->'media') > 0
             """),
             params,
         )
@@ -123,14 +127,14 @@ async def query_entity_overview(
         # Top authors
         authors_result = await session.execute(
             text(f"""
-                SELECT author_username as username,
+                SELECT c.author_username as username,
                        COUNT(*) as posts,
-                       SUM(COALESCE((metrics->>'like_count')::int, 0) +
-                           COALESCE((metrics->>'retweet_count')::int, 0)) as engagement
-                FROM contents
-                WHERE {where} AND crawled_at > :since
-                      AND author_username IS NOT NULL
-                GROUP BY author_username
+                       SUM(COALESCE((c.metrics->>'like_count')::int, 0) +
+                           COALESCE((c.metrics->>'retweet_count')::int, 0)) as engagement
+                FROM contents c
+                WHERE {where} AND c.crawled_at > :since
+                      AND c.author_username IS NOT NULL
+                GROUP BY c.author_username
                 ORDER BY engagement DESC
                 LIMIT 5
             """),
@@ -153,10 +157,10 @@ async def query_entity_overview(
         now = datetime.now(timezone.utc)
         coverage_result = await session.execute(
             text(f"""
-                SELECT platform, COUNT(*) as count, MAX(crawled_at) as newest_at
-                FROM contents
+                SELECT c.platform, COUNT(*) as count, MAX(c.crawled_at) as newest_at
+                FROM contents c
                 WHERE {where}
-                GROUP BY platform
+                GROUP BY c.platform
             """),
             {k: v for k, v in base_params.items()},
         )
@@ -175,8 +179,8 @@ async def query_entity_overview(
         # Unprocessed count
         unprocessed_result = await session.execute(
             text(f"""
-                SELECT COUNT(*) FROM contents
-                WHERE {where} AND processing_status IS NULL
+                SELECT COUNT(*) FROM contents c
+                WHERE {where} AND c.processing_status IS NULL
             """),
             {k: v for k, v in base_params.items()},
         )
@@ -251,7 +255,7 @@ async def query_unprocessed_contents(
                        c.metrics, c.data->'media' as media_json,
                        c.hashtags
                 FROM contents c
-                WHERE ({where.replace('topic_id', 'c.topic_id').replace('user_id', 'c.user_id')})
+                WHERE ({where})
                   AND c.processing_status IS NULL
                 ORDER BY (
                     COALESCE((c.metrics->>'like_count')::int, 0) +
@@ -316,7 +320,7 @@ async def query_integration_ready(
                        c.data->'media' as media_json,
                        c.hashtags, c.crawled_at
                 FROM contents c
-                WHERE ({where.replace('topic_id', 'c.topic_id').replace('user_id', 'c.user_id')})
+                WHERE ({where})
                   AND c.processing_status IN ('briefed', 'detail_ready')
                 ORDER BY c.crawled_at DESC
                 LIMIT :lim
@@ -438,9 +442,9 @@ async def mark_detail_ready(
         # (the crawler has completed its fan-in, so all detail fetches are done)
         result = await session.execute(
             text(f"""
-                UPDATE contents
+                UPDATE contents AS c
                 SET processing_status = 'detail_ready'
-                WHERE ({where}) AND processing_status = 'detail_pending'
+                WHERE ({where}) AND c.processing_status = 'detail_pending'
             """),
             base_params,
         )
