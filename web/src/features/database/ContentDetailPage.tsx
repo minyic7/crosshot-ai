@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useGetContentQuery } from '@/store/api'
+import { useGetContentQuery, useGetContentRepliesQuery } from '@/store/api'
 
 interface TweetData {
   tweet_id: string
@@ -326,6 +326,7 @@ export function ContentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: content, isLoading, isError } = useGetContentQuery(id ?? '', { skip: !id })
+  const { data: repliesData } = useGetContentRepliesQuery(id ?? '', { skip: !id })
 
   if (isLoading) {
     return (
@@ -402,6 +403,34 @@ export function ContentDetailPage() {
             </pre>
           </CardContent>
         </Card>
+      )}
+
+      {/* Replies */}
+      {repliesData && repliesData.replies.length > 0 && (
+        <div>
+          <h2
+            className="text-base font-semibold mb-3 flex items-center gap-2"
+            style={{ color: 'var(--foreground-default)' }}
+          >
+            <MessageCircle size={16} />
+            Replies ({repliesData.total})
+          </h2>
+          <div className="stack" style={{ gap: 8 }}>
+            {repliesData.replies.map((reply) => {
+              const replyTweet = reply.data as unknown as TweetData
+              if (!replyTweet?.tweet_id) return null
+              return (
+                <div
+                  key={reply.id}
+                  onClick={() => navigate(`/database/content/${reply.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <TweetCard tweet={replyTweet} nested />
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )

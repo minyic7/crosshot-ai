@@ -59,6 +59,10 @@ export const apiSlice = createApi({
       query: (id) => `/content/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Content', id }],
     }),
+    getContentReplies: builder.query<{ replies: Content[]; total: number }, string>({
+      query: (id) => `/content/${id}/replies`,
+      providesTags: (_result, _error, id) => [{ type: 'Content', id: `${id}-replies` }],
+    }),
 
     // Cookies
     listCookies: builder.query<CookiesPool[], { platform?: string } | void>({
@@ -199,6 +203,7 @@ export const {
   useListQueuesQuery,
   useListContentsQuery,
   useGetContentQuery,
+  useGetContentRepliesQuery,
   useListCookiesQuery,
   useCreateCookiesMutation,
   useUpdateCookiesMutation,

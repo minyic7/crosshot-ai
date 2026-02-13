@@ -153,3 +153,53 @@ async def get_content(content_id: str) -> dict:
         "metrics": row.metrics or {},
         "data": row.data or {},
     }
+
+
+def _content_dict(row: ContentRow) -> dict:
+    """Convert a ContentRow to the standard API dict."""
+    return {
+        "id": str(row.id),
+        "task_id": str(row.task_id),
+        "topic_id": str(row.topic_id) if row.topic_id else None,
+        "platform": row.platform,
+        "platform_content_id": row.platform_content_id,
+        "source_url": row.source_url,
+        "crawled_at": row.crawled_at.isoformat() if row.crawled_at else None,
+        "author_username": row.author_username,
+        "author_display_name": row.author_display_name,
+        "text": row.text,
+        "lang": row.lang,
+        "hashtags": row.hashtags or [],
+        "media_downloaded": row.media_downloaded,
+        "metrics": row.metrics or {},
+        "data": row.data or {},
+    }
+
+
+@router.get("/content/{content_id}/replies")
+async def get_content_replies(content_id: str) -> dict:
+    """Get replies/comments for a content item."""
+    factory = get_session_factory()
+    async with factory() as session:
+        parent = await session.get(ContentRow, content_id)
+        if parent is None:
+            return {"replies": [], "total": 0}
+
+        parent_tweet_id = parent.platform_content_id
+        if not parent_tweet_id:
+            return {"replies": [], "total": 0}
+
+        stmt = (
+            select(ContentRow)
+            .where(
+                ContentRow.platform == parent.platform,
+                ContentRow.data["reply_to"]["tweet_id"].as_string() == parent_tweet_id,
+            )
+            .order_by(ContentRow.crawled_at)
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+
+    return {
+        "replies": [_content_dict(r) for r in rows],
+        "total": len(rows),
+    }
