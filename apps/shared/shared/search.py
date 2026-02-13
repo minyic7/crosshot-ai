@@ -68,8 +68,8 @@ def get_client() -> AsyncOpenSearch:
 async def ensure_index() -> None:
     """Create the contents index if it doesn't exist (idempotent)."""
     client = get_client()
-    if not await client.indices.exists(INDEX_NAME):
-        await client.indices.create(INDEX_NAME, body=INDEX_BODY)
+    if not await client.indices.exists(index=INDEX_NAME):
+        await client.indices.create(index=INDEX_NAME, body=INDEX_BODY)
         logger.info("Created OpenSearch index '%s'", INDEX_NAME)
     else:
         logger.debug("OpenSearch index '%s' already exists", INDEX_NAME)
