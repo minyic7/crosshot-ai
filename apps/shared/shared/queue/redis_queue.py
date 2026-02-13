@@ -6,6 +6,7 @@ Full task state stored as JSON: task:{task_id}
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Any
 
@@ -55,6 +56,9 @@ class TaskQueue:
         Sets assigned_to if agent_name is provided.
         Returns None if all queues are empty.
         """
+        # Move any delayed tasks whose wait time has expired back to queues
+        await self._promote_delayed()
+
         best_id: str | None = None
         best_score: float = -1
         best_key: str = ""
@@ -132,6 +136,40 @@ class TaskQueue:
                 task.max_retries,
                 error,
             )
+
+    async def requeue_delayed(self, task: Task, delay_seconds: int) -> None:
+        """Park a task and re-queue it after *delay_seconds*.
+
+        Unlike ``mark_failed`` this does NOT increment ``retry_count``.
+        Used for transient resource unavailability (e.g. no cookies).
+        """
+        task.status = TaskStatus.PENDING
+        task.assigned_to = None
+        task.error = None
+        await self._store_task(task)
+        release_at = time.time() + delay_seconds
+        await self._redis.zadd("task:delayed", {task.id: release_at})
+        logger.info(
+            "Task %s delayed for %ds (label=%s)",
+            task.id,
+            delay_seconds,
+            task.label,
+        )
+
+    async def _promote_delayed(self) -> None:
+        """Move delayed tasks whose release time has passed back to their queues."""
+        now = time.time()
+        due_ids: list[str] = await self._redis.zrangebyscore(
+            "task:delayed", 0, now,
+        )
+        if not due_ids:
+            return
+        for task_id in due_ids:
+            task = await self._load_task(task_id)
+            if task:
+                await self.push(task)
+                logger.info("Promoted delayed task %s back to queue", task_id)
+        await self._redis.zremrangebyscore("task:delayed", 0, now)
 
     async def get_queue_length(self, label: str) -> int:
         """Get the number of pending tasks for a label."""

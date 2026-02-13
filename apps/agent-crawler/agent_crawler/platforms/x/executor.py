@@ -20,7 +20,7 @@ import redis.asyncio as aioredis
 from openai import AsyncOpenAI
 
 from shared.config import get_settings
-from shared.models.task import Task
+from shared.models.task import RetryLater, Task
 from shared.services.cookies_service import CookiesService
 
 from ..base import BasePlatformExecutor
@@ -66,10 +66,10 @@ class XExecutor(BasePlatformExecutor):
         if not action:
             raise ValueError("Task payload missing 'action' field")
 
-        # Acquire cookie
+        # Acquire cookie — wait gracefully if pool is empty
         cookie = await self._cookies_service.acquire("x")
         if cookie is None:
-            raise NoCookiesAvailable("No active cookies for platform 'x'")
+            raise RetryLater(60, "No active cookies for platform 'x'")
 
         try:
             async with XBrowserSession(cookies=cookie, proxy=self._proxy) as session:

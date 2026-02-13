@@ -53,3 +53,17 @@ class Task(BaseModel):
     max_retries: int = 3
     error: str | None = None
     result: dict[str, Any] | None = None
+
+
+class RetryLater(Exception):
+    """Raise to re-queue a task with a delay instead of counting it as a failure.
+
+    Used when a transient resource is unavailable (e.g. no cookies in the pool).
+    The task will be parked and re-queued after ``delay_seconds`` without
+    incrementing ``retry_count``.
+    """
+
+    def __init__(self, delay_seconds: int = 60, reason: str = ""):
+        self.delay_seconds = delay_seconds
+        self.reason = reason
+        super().__init__(reason or f"Retry after {delay_seconds}s")

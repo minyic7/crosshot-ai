@@ -25,7 +25,7 @@ from openai import AsyncOpenAI
 
 from shared.config.settings import get_settings
 from shared.models.agent import AgentHeartbeat
-from shared.models.task import Task, TaskStatus
+from shared.models.task import RetryLater, Task, TaskStatus
 from shared.queue.redis_queue import TaskQueue
 from shared.tools.base import Tool
 
@@ -264,6 +264,14 @@ class BaseAgent:
                             await self._redis.sadd(key, *sub_task_ids)
                             await self._redis.expire(key, 86400)
 
+                except RetryLater as e:
+                    logger.warning(
+                        "Task %s deferred for %ds: %s",
+                        task.id,
+                        e.delay_seconds,
+                        e.reason,
+                    )
+                    await self._queue.requeue_delayed(task, e.delay_seconds)
                 except Exception as e:
                     logger.error("Task %s failed: %s", task.id, e, exc_info=True)
                     await self._queue.mark_failed(task, str(e))
