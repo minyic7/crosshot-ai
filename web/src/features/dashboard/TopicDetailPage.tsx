@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, Pencil, X, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -357,6 +357,8 @@ export function TopicDetailPage() {
   const [expandedMetric, setExpandedMetric] = useState<TrendKey | null>(null)
   const [anchorLeft, setAnchorLeft] = useState(0)
   const [showMediaPie, setShowMediaPie] = useState(false)
+  const [editingUsers, setEditingUsers] = useState(false)
+  const [pendingDetach, setPendingDetach] = useState<Set<string>>(new Set())
   const statsRef = useRef<HTMLDivElement>(null)
 
   const handleTranslate = useCallback(async (text: string) => {
@@ -676,26 +678,72 @@ export function TopicDetailPage() {
 
       {/* Subscribed Users */}
       {(topic.users ?? []).length > 0 && (
-        <div className="topic-card-tags" style={{ padding: 0 }}>
+        <div className="topic-card-tags" style={{ padding: 0, position: 'relative' }}>
           <span style={{ fontFamily: "'Space Mono', monospace", fontSize: '0.6875rem', color: 'var(--ink-3)', marginRight: 8 }}>Users:</span>
           {topic.users!.map((u) => (
             <span
               key={u.id}
-              className="topic-tag"
-              style={{ cursor: 'pointer' }}
-              onClick={() => navigate(`/user/${u.id}`)}
+              className={`topic-tag${pendingDetach.has(u.id) ? ' detach-pending' : ''}`}
+              style={{ cursor: editingUsers ? undefined : 'pointer' }}
+              onClick={() => { if (!editingUsers) navigate(`/user/${u.id}`) }}
             >
               👤 {u.username ? `@${u.username}` : u.name}
-              <button
-                className="topic-card-refresh"
-                style={{ marginLeft: 4, padding: 0, minWidth: 0 }}
-                onClick={(e) => { e.stopPropagation(); detachUser({ userId: u.id, topicId: topic.id }) }}
-                title="Detach user"
-              >
-                &times;
-              </button>
+              {editingUsers && (
+                <button
+                  className="topic-card-refresh"
+                  style={{ marginLeft: 4, padding: 0, minWidth: 0 }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPendingDetach((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(u.id)) next.delete(u.id)
+                      else next.add(u.id)
+                      return next
+                    })
+                  }}
+                  title={pendingDetach.has(u.id) ? 'Undo remove' : 'Remove'}
+                >
+                  {pendingDetach.has(u.id) ? <span style={{ fontSize: 10 }}>↩</span> : <X size={10} />}
+                </button>
+              )}
             </span>
           ))}
+          {/* Edit / Confirm / Cancel */}
+          {!editingUsers ? (
+            <button
+              className="topic-card-refresh"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setEditingUsers(true)}
+              title="Edit users"
+            >
+              <Pencil size={11} />
+            </button>
+          ) : (
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+              <button
+                className="topic-card-refresh"
+                title="Cancel"
+                onClick={() => { setEditingUsers(false); setPendingDetach(new Set()) }}
+              >
+                <X size={12} />
+              </button>
+              <button
+                className="topic-card-refresh"
+                style={{ color: pendingDetach.size > 0 ? 'var(--negative)' : 'var(--ink-3)' }}
+                title={`Confirm (remove ${pendingDetach.size})`}
+                disabled={pendingDetach.size === 0}
+                onClick={async () => {
+                  for (const uid of pendingDetach) {
+                    await detachUser({ userId: uid, topicId: topic.id })
+                  }
+                  setPendingDetach(new Set())
+                  setEditingUsers(false)
+                }}
+              >
+                <Check size={12} />
+              </button>
+            </span>
+          )}
         </div>
       )}
 

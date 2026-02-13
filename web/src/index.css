@@ -1988,6 +1988,11 @@ h3 {
   flex-shrink: 0;
 }
 
+.topic-tag.detach-pending {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
 .topic-tag-more {
   padding: 2px 7px;
   border-radius: 8px;
