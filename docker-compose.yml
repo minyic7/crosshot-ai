@@ -28,6 +28,22 @@ services:
       timeout: 3s
       retries: 3
 
+  opensearch:
+    image: opensearchproject/opensearch:3.5.0
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - ${DATA_DIR:-./data}/opensearch:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 1g
+
   # ──────────────────────────────────────
   # Agents
   # ──────────────────────────────────────
@@ -41,6 +57,7 @@ services:
       AGENT_NAME: crawler-xhs
       REDIS_URL: redis://redis:6379/0
       DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
+      OPENSEARCH_URL: http://opensearch:9200
       MEDIA_BASE_PATH: /data/media
     volumes:
       - ${DATA_DIR:-./data}/media:/data/media
@@ -63,6 +80,7 @@ services:
       AGENT_NAME: crawler-x
       REDIS_URL: redis://redis:6379/0
       DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
+      OPENSEARCH_URL: http://opensearch:9200
       MEDIA_BASE_PATH: /data/media
     volumes:
       - ${DATA_DIR:-./data}/media:/data/media
@@ -116,6 +134,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       MEDIA_BASE_PATH: /data/media
       DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
+      OPENSEARCH_URL: http://opensearch:9200
       GROK_API_KEY: ${GROK_API_KEY}
     volumes:
       - ${DATA_DIR:-./data}/media:/data/media:ro
@@ -123,6 +142,8 @@ services:
       redis:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      opensearch:
         condition: service_healthy
     mem_limit: 300m
     logging:

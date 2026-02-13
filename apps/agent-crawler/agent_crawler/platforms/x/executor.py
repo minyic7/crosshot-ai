@@ -464,6 +464,8 @@ class XExecutor(BasePlatformExecutor):
                     )
 
                 await session.commit()
+
+            await self._index_to_opensearch(task, tweets, content_ids)
         except Exception as e:
             logger.warning("PG save failed (non-fatal): %s", e)
 
@@ -535,6 +537,8 @@ class XExecutor(BasePlatformExecutor):
 
                 await session.commit()
 
+            await self._index_to_opensearch(task, tweets, content_ids)
+
             # Correct new_count: query how many of our IDs actually exist
             # (the ones that conflicted got a different existing ID)
             async with factory() as session:
@@ -552,6 +556,42 @@ class XExecutor(BasePlatformExecutor):
             logger.warning("PG upsert save failed (non-fatal): %s", e)
 
         return new_count
+
+    async def _index_to_opensearch(
+        self,
+        task: Task,
+        tweets: list[dict[str, Any]],
+        content_ids: list[str],
+    ) -> None:
+        """Index content to OpenSearch (best-effort, non-fatal)."""
+        try:
+            from shared.search import index_contents
+
+            topic_id = task.payload.get("topic_id")
+            user_id = task.payload.get("user_id")
+            docs = []
+            for i, tweet in enumerate(tweets):
+                author = tweet.get("author", {})
+                metrics = tweet.get("metrics", {})
+                docs.append({
+                    "id": content_ids[i],
+                    "topic_id": topic_id,
+                    "user_id": user_id,
+                    "platform": "x",
+                    "text": tweet.get("text"),
+                    "author_username": author.get("username"),
+                    "author_display_name": author.get("display_name"),
+                    "hashtags": tweet.get("hashtags", []),
+                    "lang": tweet.get("lang"),
+                    "crawled_at": tweet.get("created_at"),
+                    "like_count": metrics.get("like_count", 0),
+                    "retweet_count": metrics.get("retweet_count", 0),
+                    "reply_count": metrics.get("reply_count", 0),
+                    "views_count": metrics.get("views_count", 0),
+                })
+            await index_contents(docs)
+        except Exception as e:
+            logger.warning("OpenSearch index failed (non-fatal): %s", e)
 
     async def _get_known_tweet_ids(
         self,

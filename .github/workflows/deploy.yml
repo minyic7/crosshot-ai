@@ -165,7 +165,7 @@ jobs:
             cd ${{ env.NAS_DEPLOY_PATH }}
 
             # Ensure data directories exist
-            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/{redis,pgdata,media}
+            mkdir -p ${{ env.NAS_DEPLOY_PATH }}/data/{redis,pgdata,media,opensearch}
 
             export DATA_DIR="${{ env.NAS_DEPLOY_PATH }}/data"
 

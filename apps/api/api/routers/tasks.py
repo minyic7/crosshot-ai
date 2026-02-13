@@ -1,5 +1,6 @@
 """Task query and creation endpoints."""
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter
@@ -10,6 +11,8 @@ from api.deps import get_queue
 from shared.db.engine import get_session_factory
 from shared.db.models import ContentRow
 from shared.models.task import Task, TaskPriority
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tasks"])
 
@@ -90,8 +93,37 @@ async def list_contents(
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
-    """List crawled content items from PostgreSQL."""
+    """List crawled content items. Uses OpenSearch for text search, PG for browsing."""
     factory = get_session_factory()
+
+    # OpenSearch path: text search with relevance ranking
+    if search:
+        try:
+            from shared.search import search_contents
+
+            content_ids, total = await search_contents(
+                search,
+                platform=platform,
+                topic_id=topic_id,
+                user_id=user_id,
+                limit=limit,
+                offset=offset,
+            )
+            if not content_ids:
+                return {"contents": [], "total": total}
+
+            async with factory() as session:
+                stmt = select(ContentRow).where(ContentRow.id.in_(content_ids))
+                rows = (await session.execute(stmt)).scalars().all()
+
+            # Preserve OpenSearch relevance order
+            row_map = {str(r.id): r for r in rows}
+            ordered = [row_map[cid] for cid in content_ids if cid in row_map]
+            return {"contents": [_content_dict(r) for r in ordered], "total": total}
+        except Exception:
+            logger.debug("OpenSearch unavailable, falling back to ILIKE", exc_info=True)
+
+    # PG path: browsing or ILIKE fallback
     async with factory() as session:
         stmt = select(ContentRow).order_by(ContentRow.crawled_at.desc())
         count_stmt = select(func.count()).select_from(ContentRow)
@@ -118,28 +150,7 @@ async def list_contents(
         total = (await session.execute(count_stmt)).scalar() or 0
         rows = (await session.execute(stmt.offset(offset).limit(limit))).scalars().all()
 
-    contents = [
-        {
-            "id": str(row.id),
-            "task_id": str(row.task_id),
-            "topic_id": str(row.topic_id) if row.topic_id else None,
-            "platform": row.platform,
-            "platform_content_id": row.platform_content_id,
-            "source_url": row.source_url,
-            "crawled_at": row.crawled_at.isoformat() if row.crawled_at else None,
-            "author_username": row.author_username,
-            "author_display_name": row.author_display_name,
-            "text": row.text,
-            "lang": row.lang,
-            "hashtags": row.hashtags or [],
-            "media_downloaded": row.media_downloaded,
-            "metrics": row.metrics or {},
-            "data": row.data or {},
-        }
-        for row in rows
-    ]
-
-    return {"contents": contents, "total": total}
+    return {"contents": [_content_dict(r) for r in rows], "total": total}
 
 
 @router.get("/content/{content_id}")

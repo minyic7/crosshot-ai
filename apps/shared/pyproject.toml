@@ -16,4 +16,5 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.46",
     "asyncpg>=0.31.0",
     "alembic>=1.18.3",
+    "opensearch-py>=3.1.0",
 ]

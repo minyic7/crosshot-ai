@@ -1,6 +1,7 @@
 """Shared dependencies for API endpoints."""
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -8,6 +9,8 @@ import redis.asyncio as aioredis
 
 from shared.config.settings import get_settings
 from shared.queue.redis_queue import TaskQueue
+
+logger = logging.getLogger(__name__)
 
 _redis: aioredis.Redis | None = None
 _queue: TaskQueue | None = None
@@ -25,6 +28,14 @@ async def init_deps() -> None:
     from shared.db.engine import create_tables
 
     await create_tables()
+
+    # Ensure OpenSearch index exists
+    try:
+        from shared.search import ensure_index
+
+        await ensure_index()
+    except Exception:
+        logger.warning("OpenSearch index setup failed (search will use PG fallback)")
 
     # Start background topic scheduler
     from api.scheduler import scheduler_loop
@@ -45,6 +56,13 @@ async def close_deps() -> None:
     from shared.db.engine import close_engine
 
     await close_engine()
+
+    try:
+        from shared.search import close_client
+
+        await close_client()
+    except Exception:
+        pass
 
 
 def get_redis() -> aioredis.Redis:
