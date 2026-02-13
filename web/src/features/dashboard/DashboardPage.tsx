@@ -495,7 +495,7 @@ function ProposalCard({
   onRemove: () => void
   proposals: Proposal[]
   allTopics: { id: string; name: string; icon?: string }[] | undefined
-  allUsers: { id: string; name: string; username?: string }[] | undefined
+  allUsers: { id: string; name: string; username?: string | null }[] | undefined
 }) {
   const isSubmitting = p._status === 'creating'
   const isDone = p._status === 'done'
