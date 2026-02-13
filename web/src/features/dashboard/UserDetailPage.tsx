@@ -215,7 +215,7 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
   return (
     <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
       <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+        <BarChart data={chartData} margin={{ top: 20, right: 8, left: 8, bottom: 0 }}>
           <XAxis
             dataKey="day"
             tick={{ fill: 'var(--ink-3)', fontSize: 10 }}
