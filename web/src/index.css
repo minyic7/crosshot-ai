@@ -5908,3 +5908,173 @@ h3 {
   font-size: 0.6875rem;
   color: var(--ink-4);
 }
+
+
+/* ─── Database User Cards ─── */
+
+.db-user-card {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 14px;
+  background: var(--glass);
+  backdrop-filter: var(--frost);
+  -webkit-backdrop-filter: var(--frost);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease, background 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.db-user-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 8%, var(--glass-border-hover) 50%, transparent 92%);
+  opacity: 0.5;
+}
+
+.db-user-card:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--glass-border-hover);
+  background: var(--glass-hover);
+}
+
+.db-user-card-shimmer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 15%,
+    var(--shimmer-soft) 32%,
+    var(--shimmer-bright) 50%,
+    var(--shimmer-soft) 68%,
+    transparent 85%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.db-user-card:hover .db-user-card-shimmer {
+  animation: cardShimmer 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.12s forwards;
+}
+
+.db-user-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.db-user-card-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--glass-border-hover));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.db-user-card-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.db-user-card-handle {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+.db-user-card-body {
+  flex: 1;
+  margin-bottom: 12px;
+  min-height: 0;
+}
+
+.db-user-card-summary {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.db-user-card-empty {
+  font-size: 0.8125rem;
+  color: var(--ink-4);
+  font-style: italic;
+}
+
+.db-user-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.db-user-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.db-user-card-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.db-user-card-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--ink-3);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.db-user-card-link:hover {
+  background: var(--surface-hover);
+  color: var(--teal);
+}
+
+.db-user-card-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.db-user-card-topic {
+  font-size: 0.6875rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--accent-surface);
+  color: var(--blue);
+}
+
+.db-user-card-topic-more {
+  font-size: 0.6875rem;
+  color: var(--ink-4);
+  padding: 2px 0;
+}

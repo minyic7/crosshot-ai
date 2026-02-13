@@ -1,16 +1,16 @@
 import { useState } from 'react'
-import { Database, LayoutGrid, List } from 'lucide-react'
-import { TasksTable } from './TasksTable'
+import { Database, LayoutGrid, Users } from 'lucide-react'
 import { ContentGallery } from './ContentGallery'
+import { UsersGallery } from './UsersGallery'
 
-type Tab = 'contents' | 'tasks'
+type Tab = 'contents' | 'users'
 
 export function DatabasePage() {
   const [activeTab, setActiveTab] = useState<Tab>('contents')
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'contents', label: 'Contents', icon: <LayoutGrid size={15} /> },
-    { key: 'tasks', label: 'Tasks', icon: <List size={15} /> },
+    { key: 'users', label: 'Users', icon: <Users size={15} /> },
   ]
 
   return (
@@ -42,7 +42,7 @@ export function DatabasePage() {
         </div>
       </div>
 
-      {activeTab === 'contents' ? <ContentGallery /> : <TasksTable />}
+      {activeTab === 'contents' ? <ContentGallery /> : <UsersGallery />}
     </div>
   )
 }
