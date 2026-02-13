@@ -62,7 +62,6 @@ function timeAgo(iso: string): string {
 
 export function ContentGallery() {
   const navigate = useNavigate()
-  const [platform, setPlatform] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [offset, setOffset] = useState(0)
@@ -74,7 +73,7 @@ export function ContentGallery() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const { data, isLoading, isFetching } = useListContentsQuery(
-    { platform: platform || undefined, search: searchQuery || undefined, limit: PAGE_SIZE, offset },
+    { search: searchQuery || undefined, limit: PAGE_SIZE, offset },
     { refetchOnMountOrArgChange: true },
   )
 
@@ -90,7 +89,7 @@ export function ContentGallery() {
     setAllContents([])
     setOffset(0)
     setHasMore(true)
-  }, [platform, searchQuery])
+  }, [searchQuery])
 
   // Append new data
   useEffect(() => {
@@ -153,20 +152,17 @@ export function ContentGallery() {
     columnHeights[shortestCol] += estimatedHeight + GAP
   }
 
-  const platforms = ['', 'x', 'xhs']
-
   return (
     <div className="stack">
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Search bar */}
         <div className="content-search">
           <Search size={14} className="content-search-icon" />
           <input
             type="text"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
-            placeholder="Search content, author..."
+            placeholder="Search content, author, platform..."
             className="content-search-input"
           />
           {searchInput && (
@@ -177,26 +173,6 @@ export function ContentGallery() {
               <X size={12} />
             </button>
           )}
-        </div>
-
-        {/* Platform pills */}
-        <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
-          {platforms.map(p => (
-            <button
-              key={p}
-              onClick={() => setPlatform(p)}
-              className="px-3 py-1 rounded-md text-xs font-medium transition-all"
-              style={{
-                background: platform === p ? 'var(--surface-card)' : 'transparent',
-                color: platform === p ? 'var(--foreground)' : 'var(--foreground-muted)',
-                boxShadow: platform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {p ? p.toUpperCase() : 'All'}
-            </button>
-          ))}
         </div>
 
         {data && (
