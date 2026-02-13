@@ -221,21 +221,22 @@ def parse_tweet_replies(
 
         for entry in entries:
             content = entry.get("content", {})
-            entry_type = content.get("entryType", "")
+            entry_type = content.get("entryType", "") or content.get("__typename", "")
 
-            if entry_type == "TimelineTimelineItem":
+            if entry_type in ("TimelineTimelineItem", "TimelineItem"):
                 tweet_data = _entry_to_tweet_result(entry)
                 if tweet_data:
                     parsed = parse_tweet_result(tweet_data)
                     if parsed and parsed["tweet_id"] != main_tweet_id:
                         replies.append(parsed)
 
-            elif entry_type == "TimelineTimelineModule":
+            elif entry_type in ("TimelineTimelineModule", "TimelineModule"):
                 # Conversation thread — extract all tweets in the module
                 items = content.get("items", [])
                 for module_item in items:
                     item = module_item.get("item", {}).get("itemContent", {})
-                    if item.get("itemType") == "TimelineTweet":
+                    item_type = item.get("itemType", "") or item.get("__typename", "")
+                    if item_type in ("TimelineTweet", "Tweet"):
                         tweet_data = item.get("tweet_results", {}).get("result")
                         if tweet_data:
                             parsed = parse_tweet_result(tweet_data)
