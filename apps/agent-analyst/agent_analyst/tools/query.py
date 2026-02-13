@@ -377,7 +377,7 @@ async def mark_contents_processed(
                 await session.execute(
                     text("""
                         UPDATE contents
-                        SET processing_status = :status, key_points = :kp::jsonb
+                        SET processing_status = :status, key_points = CAST(:kp AS jsonb)
                         WHERE id = :cid
                     """),
                     {"cid": content_id, "status": status, "kp": kp_json},
