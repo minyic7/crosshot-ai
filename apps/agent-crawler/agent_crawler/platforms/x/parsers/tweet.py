@@ -253,15 +253,57 @@ def parse_user_tweets(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse a UserTweets / UserTweetsAndReplies response."""
     tweets = []
     try:
-        timeline = (
+        # Navigate to timeline, trying known path variants
+        user_result = (
             data.get("data", {})
             .get("user", {})
             .get("result", {})
-            .get("timeline_v2", {})
-            .get("timeline", {})
         )
+        if not user_result:
+            logger.warning(
+                "UserTweets: no data.user.result — top keys: %s",
+                list(data.get("data", {}).keys())[:10],
+            )
+            return tweets
+
+        # X sometimes wraps in __typename-based containers
+        typename = user_result.get("__typename", "")
+        if typename == "UserUnavailable":
+            logger.warning("UserTweets: user unavailable (suspended / not found)")
+            return tweets
+
+        timeline = (
+            user_result.get("timeline_v2", {}).get("timeline", {})
+            or user_result.get("timeline", {}).get("timeline", {})
+        )
+        if not timeline:
+            logger.warning(
+                "UserTweets: no timeline — user_result keys: %s",
+                list(user_result.keys())[:10],
+            )
+            return tweets
+
         instructions = timeline.get("instructions", [])
+        if not instructions:
+            logger.warning("UserTweets: empty instructions list")
+            return tweets
+
+        instr_types = [i.get("type", "?") for i in instructions]
+        logger.debug("UserTweets instruction types: %s", instr_types)
+
         entries = _extract_entries(instructions)
+        logger.debug("UserTweets: %d entries extracted", len(entries))
+
+        if not entries and instructions:
+            # Log first instruction for debugging
+            sample = instructions[0]
+            logger.warning(
+                "UserTweets: 0 entries from %d instructions — "
+                "first instruction type=%s keys=%s",
+                len(instructions),
+                sample.get("type"),
+                list(sample.keys())[:10],
+            )
 
         for entry in entries:
             tweet_data = _entry_to_tweet_result(entry)
@@ -284,32 +326,48 @@ def _extract_entries(instructions: list[dict]) -> list[dict]:
     """Extract timeline entries from GraphQL instructions."""
     entries = []
     for instruction in instructions:
-        if instruction.get("type") == "TimelineAddEntries":
+        itype = instruction.get("type", "")
+        if itype == "TimelineAddEntries":
             entries.extend(instruction.get("entries", []))
-        elif instruction.get("type") == "TimelineReplaceEntry":
+        elif itype == "TimelineReplaceEntry":
             entry = instruction.get("entry")
             if entry:
                 entries.append(entry)
+        elif itype == "TimelinePinEntry":
+            entry = instruction.get("entry")
+            if entry:
+                entries.append(entry)
+        elif itype == "TimelineClearCache":
+            pass  # nothing to extract
+        else:
+            logger.debug("Unknown instruction type: %s", itype)
     return entries
 
 
 def _entry_to_tweet_result(entry: dict) -> dict[str, Any] | None:
     """Navigate from a timeline entry to the tweet result dict."""
     content = entry.get("content", {})
-    entry_type = content.get("entryType", "")
+    entry_type = content.get("entryType", "") or content.get("__typename", "")
 
-    if entry_type == "TimelineTimelineItem":
+    if entry_type in ("TimelineTimelineItem", "TimelineItem"):
         item = content.get("itemContent", {})
-        if item.get("itemType") == "TimelineTweet":
+        item_type = item.get("itemType", "") or item.get("__typename", "")
+        if item_type in ("TimelineTweet", "Tweet"):
             return item.get("tweet_results", {}).get("result")
+        else:
+            logger.debug("Skipped item type: %s", item_type)
 
-    elif entry_type == "TimelineTimelineModule":
+    elif entry_type in ("TimelineTimelineModule", "TimelineModule"):
         # Thread / conversation module — take the first tweet
         items = content.get("items", [])
         for module_item in items:
             item = module_item.get("item", {}).get("itemContent", {})
-            if item.get("itemType") == "TimelineTweet":
+            item_type = item.get("itemType", "") or item.get("__typename", "")
+            if item_type in ("TimelineTweet", "Tweet"):
                 return item.get("tweet_results", {}).get("result")
+
+    elif entry_type and entry_type not in ("TimelineTimelineCursor",):
+        logger.debug("Unknown entry type: %s (keys=%s)", entry_type, list(content.keys())[:8])
 
     return None
 
