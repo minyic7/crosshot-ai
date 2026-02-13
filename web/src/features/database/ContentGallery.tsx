@@ -64,6 +64,7 @@ export function ContentGallery() {
   const navigate = useNavigate()
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [platform, setPlatform] = useState('')
   const [offset, setOffset] = useState(0)
   const [allContents, setAllContents] = useState<Array<{ id: string; platform: string; crawled_at: string; data: Record<string, unknown> }>>([])
   const [hasMore, setHasMore] = useState(true)
@@ -73,7 +74,7 @@ export function ContentGallery() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const { data, isLoading, isFetching } = useListContentsQuery(
-    { search: searchQuery || undefined, limit: PAGE_SIZE, offset },
+    { search: searchQuery || undefined, platform: platform || undefined, limit: PAGE_SIZE, offset },
     { refetchOnMountOrArgChange: true },
   )
 
@@ -89,7 +90,7 @@ export function ContentGallery() {
     setAllContents([])
     setOffset(0)
     setHasMore(true)
-  }, [searchQuery])
+  }, [searchQuery, platform])
 
   // Append new data
   useEffect(() => {
@@ -162,7 +163,7 @@ export function ContentGallery() {
             type="text"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
-            placeholder="Search content, author, platform..."
+            placeholder="Search content, author..."
             className="content-search-input"
           />
           {searchInput && (
@@ -173,6 +174,18 @@ export function ContentGallery() {
               <X size={12} />
             </button>
           )}
+        </div>
+
+        <div className="content-platform-filter">
+          {['', 'x', 'xhs'].map(p => (
+            <button
+              key={p}
+              onClick={() => setPlatform(p)}
+              className={`content-platform-btn${platform === p ? ' active' : ''}`}
+            >
+              {p === '' ? 'All' : p.toUpperCase()}
+            </button>
+          ))}
         </div>
 
         {data && (

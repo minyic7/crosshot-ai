@@ -5777,6 +5777,40 @@ h3 {
   background: var(--surface-muted);
 }
 
+/* ─── Content Platform Filter ─── */
+
+.content-platform-filter {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.content-platform-btn {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink-4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.02em;
+}
+
+.content-platform-btn:hover {
+  color: var(--ink-2);
+  background: var(--surface-muted);
+}
+
+.content-platform-btn.active {
+  color: var(--ink-1);
+  background: var(--surface-glass);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 /* ─── Content Gallery Cards ─── */
 
 .content-card {
