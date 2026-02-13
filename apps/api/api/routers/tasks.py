@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from api.deps import get_queue
 from shared.db.engine import get_session_factory
@@ -86,6 +86,7 @@ async def list_contents(
     platform: str | None = None,
     topic_id: str | None = None,
     user_id: str | None = None,
+    search: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
@@ -104,6 +105,15 @@ async def list_contents(
         if user_id:
             stmt = stmt.where(ContentRow.user_id == user_id)
             count_stmt = count_stmt.where(ContentRow.user_id == user_id)
+        if search:
+            pattern = f"%{search}%"
+            search_filter = or_(
+                ContentRow.text.ilike(pattern),
+                ContentRow.author_username.ilike(pattern),
+                ContentRow.author_display_name.ilike(pattern),
+            )
+            stmt = stmt.where(search_filter)
+            count_stmt = count_stmt.where(search_filter)
 
         total = (await session.execute(count_stmt)).scalar() or 0
         rows = (await session.execute(stmt.offset(offset).limit(limit))).scalars().all()

@@ -5719,37 +5719,62 @@ h3 {
 }
 
 
-/* ─── Content Gallery Filters ─── */
+/* ─── Content Gallery Search ─── */
 
-.content-filter-select {
-  appearance: none;
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 4px 26px 4px 10px;
-  border-radius: 6px;
+.content-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 320px;
+}
+
+.content-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-4);
+  pointer-events: none;
+}
+
+.content-search-input {
+  width: 100%;
+  font-size: 0.8125rem;
+  padding: 6px 32px 6px 32px;
+  border-radius: 8px;
   border: 1px solid var(--frost);
   background: var(--glass);
   color: var(--foreground);
-  cursor: pointer;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.content-filter-select:hover {
-  border-color: var(--border-hover);
+.content-search-input::placeholder {
+  color: var(--ink-4);
 }
 
-.content-filter-select:focus {
+.content-search-input:focus {
   border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(var(--blue-rgb, 59, 130, 246), 0.1);
 }
 
-.content-filter-select-icon {
+.content-search-clear {
   position: absolute;
   right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink-4);
-  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-hover);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.content-search-clear:hover {
+  background: var(--surface-muted);
 }
 
 /* ─── Content Gallery Cards ─── */
@@ -5935,6 +5960,16 @@ h3 {
   font-size: 0.6875rem;
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
+}
+
+.content-card-platform {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent-surface);
+  color: var(--blue);
 }
 
 .content-card-time {

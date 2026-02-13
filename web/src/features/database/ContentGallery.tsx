@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, Repeat2, Eye, Film, Image as ImageIcon, Play, ChevronDown } from 'lucide-react'
+import { Heart, MessageCircle, Repeat2, Eye, Film, Image as ImageIcon, Play, Search, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useListContentsQuery, useListUsersQuery } from '@/store/api'
+import { useListContentsQuery } from '@/store/api'
 
 const PAGE_SIZE = 20
 const COLUMN_WIDTH = 280
@@ -63,27 +63,34 @@ function timeAgo(iso: string): string {
 export function ContentGallery() {
   const navigate = useNavigate()
   const [platform, setPlatform] = useState('')
-  const [userId, setUserId] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [offset, setOffset] = useState(0)
   const [allContents, setAllContents] = useState<Array<{ id: string; platform: string; crawled_at: string; data: Record<string, unknown> }>>([])
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  const { data: usersData } = useListUsersQuery()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
   const { data, isLoading, isFetching } = useListContentsQuery(
-    { platform: platform || undefined, user_id: userId || undefined, limit: PAGE_SIZE, offset },
+    { platform: platform || undefined, search: searchQuery || undefined, limit: PAGE_SIZE, offset },
     { refetchOnMountOrArgChange: true },
   )
+
+  // Debounce search input
+  useEffect(() => {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setSearchQuery(searchInput), 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [searchInput])
 
   // Reset on filter change
   useEffect(() => {
     setAllContents([])
     setOffset(0)
     setHasMore(true)
-  }, [platform, userId])
+  }, [platform, searchQuery])
 
   // Append new data
   useEffect(() => {
@@ -151,55 +158,46 @@ export function ContentGallery() {
   return (
     <div className="stack">
       {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        {/* Platform filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--foreground-subtle)', textTransform: 'uppercase' }}>
-            Platform
-          </span>
-          <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
-            {platforms.map(p => (
-              <button
-                key={p}
-                onClick={() => setPlatform(p)}
-                className="px-3 py-1 rounded-md text-xs font-medium transition-all"
-                style={{
-                  background: platform === p ? 'var(--surface-card)' : 'transparent',
-                  color: platform === p ? 'var(--foreground)' : 'var(--foreground-muted)',
-                  boxShadow: platform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {p ? p.toUpperCase() : 'All'}
-              </button>
-            ))}
-          </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Search bar */}
+        <div className="content-search">
+          <Search size={14} className="content-search-icon" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Search content, author..."
+            className="content-search-input"
+          />
+          {searchInput && (
+            <button
+              onClick={() => { setSearchInput(''); setSearchQuery('') }}
+              className="content-search-clear"
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
 
-        {/* User filter */}
-        {usersData && usersData.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--foreground-subtle)', textTransform: 'uppercase' }}>
-              User
-            </span>
-            <div className="relative">
-              <select
-                value={userId}
-                onChange={e => setUserId(e.target.value)}
-                className="content-filter-select"
-              >
-                <option value="">All Users</option>
-                {usersData.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}{u.username ? ` (@${u.username})` : ''}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="content-filter-select-icon" />
-            </div>
-          </div>
-        )}
+        {/* Platform pills */}
+        <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
+          {platforms.map(p => (
+            <button
+              key={p}
+              onClick={() => setPlatform(p)}
+              className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+              style={{
+                background: platform === p ? 'var(--surface-card)' : 'transparent',
+                color: platform === p ? 'var(--foreground)' : 'var(--foreground-muted)',
+                boxShadow: platform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {p ? p.toUpperCase() : 'All'}
+            </button>
+          ))}
+        </div>
 
         {data && (
           <span className="text-xs" style={{ color: 'var(--foreground-subtle)' }}>
@@ -418,9 +416,12 @@ function MasonryCard({
               </>
             )}
           </div>
-          <span className="content-card-time">
-            {tweet?.created_at ? timeAgo(tweet.created_at) : timeAgo(content.crawled_at)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="content-card-platform">{content.platform.toUpperCase()}</span>
+            <span className="content-card-time">
+              {tweet?.created_at ? timeAgo(tweet.created_at) : timeAgo(content.crawled_at)}
+            </span>
+          </div>
         </div>
       </div>
     </div>
