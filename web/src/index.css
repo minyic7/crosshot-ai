@@ -3402,6 +3402,24 @@ h3 {
   font-size: 0.6875rem;
 }
 
+.proposal-select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-strong);
+  border-radius: 8px;
+  background: var(--glass);
+  color: var(--ink-1);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.proposal-select:focus {
+  border-color: var(--accent);
+}
+
 .proposal-manual {
   padding: 6px 2px 0;
 }

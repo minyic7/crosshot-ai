@@ -483,6 +483,9 @@ function ProposalCard({
   onDone,
   onChange,
   onRemove,
+  proposals,
+  allTopics,
+  allUsers,
 }: {
   proposal: Proposal
   editing: boolean
@@ -490,6 +493,9 @@ function ProposalCard({
   onDone: () => void
   onChange: (updated: Proposal) => void
   onRemove: () => void
+  proposals: Proposal[]
+  allTopics: { id: string; name: string; icon?: string }[] | undefined
+  allUsers: { id: string; name: string; username?: string }[] | undefined
 }) {
   const isSubmitting = p._status === 'creating'
   const isDone = p._status === 'done'
@@ -621,8 +627,31 @@ function ProposalCard({
     )
   }
 
-  // subscribe
+  // subscribe — dropdown selectors
   const sp = p as SubscribeProposal
+
+  // Build user options: existing DB users + create_user proposals in current list
+  const userOptions: { value: string; label: string }[] = []
+  for (const pr of proposals) {
+    if (pr.type === 'create_user' && pr.name.trim()) {
+      userOptions.push({ value: pr.name.trim(), label: `${pr.name.trim()} (new)` })
+    }
+  }
+  for (const u of allUsers ?? []) {
+    userOptions.push({ value: u.username || u.name, label: u.username ? `@${u.username}` : u.name })
+  }
+
+  // Build topic options: existing DB topics + create_topic proposals in current list
+  const topicOptions: { value: string; label: string }[] = []
+  for (const pr of proposals) {
+    if (pr.type === 'create_topic' && pr.name.trim()) {
+      topicOptions.push({ value: pr.name.trim(), label: `${pr.icon || '📊'} ${pr.name.trim()} (new)` })
+    }
+  }
+  for (const t of allTopics ?? []) {
+    topicOptions.push({ value: t.name, label: `${t.icon || '📊'} ${t.name}` })
+  }
+
   return (
     <div className="proposal-card editing">
       <div className="proposal-card-edit-header">
@@ -631,13 +660,31 @@ function ProposalCard({
         <button className="proposal-card-btn" onClick={onDone} title="Done"><Check size={14} /></button>
       </div>
       <div className="proposal-card-edit-fields">
-        <div>
-          <Input label="User (name/username)" value={sp.user_ref}
-            onChange={(e) => onChange({ ...sp, user_ref: e.target.value })} />
+        <div className="form-group">
+          <label className="form-label">User</label>
+          <select
+            className="proposal-select"
+            value={sp.user_ref}
+            onChange={(e) => onChange({ ...sp, user_ref: e.target.value })}
+          >
+            <option value="">Select user...</option>
+            {userOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
-        <div>
-          <Input label="Topic name" value={sp.topic_ref}
-            onChange={(e) => onChange({ ...sp, topic_ref: e.target.value })} />
+        <div className="form-group">
+          <label className="form-label">Topic</label>
+          <select
+            className="proposal-select"
+            value={sp.topic_ref}
+            onChange={(e) => onChange({ ...sp, topic_ref: e.target.value })}
+          >
+            <option value="">Select topic...</option>
+            {topicOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
       </div>
     </div>
@@ -892,6 +939,9 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
                 onDone={() => setEditingId(null)}
                 onChange={(updated) => setProposals((prev) => prev.map((x) => x._id === p._id ? updated : x))}
                 onRemove={() => { setProposals((prev) => prev.filter((x) => x._id !== p._id)); if (editingId === p._id) setEditingId(null) }}
+                proposals={proposals}
+                allTopics={allTopics}
+                allUsers={allUsers}
               />
             ))}
           </div>
