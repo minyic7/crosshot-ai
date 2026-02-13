@@ -50,6 +50,12 @@ import type { Topic, TopicAlert, TopicPipeline, User as UserType, TopicStatus } 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
 const PLATFORM_OPTIONS = ['x', 'xhs']
 
+/** uid() requires HTTPS; fallback for HTTP contexts */
+const uid = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? uid()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+
 // ─── Custom Sensor (ignores buttons) ────────────────────────
 
 class SmartPointerSensor extends PointerSensor {
@@ -660,7 +666,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   const handleActions = useCallback((actions: Record<string, unknown>[]) => {
     const newProposals: Proposal[] = []
     for (const a of actions) {
-      const _id = crypto.randomUUID()
+      const _id = uid()
       if (a.type === 'create_topic') {
         newProposals.push({
           _id, type: 'create_topic',
@@ -712,7 +718,7 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
   }, [resetChat])
 
   const addManual = (type: 'topic' | 'user') => {
-    const _id = crypto.randomUUID()
+    const _id = uid()
     const p: Proposal = type === 'topic'
       ? { _id, type: 'create_topic', name: '', icon: '📊', description: '', platforms: ['x'], keywords: [], schedule_interval_hours: 6 }
       : { _id, type: 'create_user', name: '', platform: 'x', profile_url: '', username: '', schedule_interval_hours: 6 }
