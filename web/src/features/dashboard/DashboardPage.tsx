@@ -1005,7 +1005,7 @@ export function DashboardPage() {
   // Poll faster when any entity has an active pipeline
   const [pollingInterval, setPollingInterval] = useState(30_000)
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval })
-  const { data: standaloneUsers, isLoading: usersLoading } = useListUsersQuery({ standalone: true }, { pollingInterval })
+  const { data: standaloneUsers, isLoading: usersLoading } = useListUsersQuery(undefined, { pollingInterval })
 
   useEffect(() => {
     const hasActivePipeline = topics?.some((t) => t.pipeline && t.pipeline.phase !== 'done')
