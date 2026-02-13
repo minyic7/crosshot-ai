@@ -415,7 +415,7 @@ export function TopicDetailPage() {
 
   const insights = normalizeInsights(topic.summary_data)
   const metrics = (topic.summary_data?.metrics ?? {}) as Record<string, unknown>
-  const hasTrend = trend && trend.length >= 2
+  const hasTrend = trend && trend.length >= 1
 
   const toggleMetric = (key: TrendKey, e: React.MouseEvent) => {
     setShowMediaPie(false)

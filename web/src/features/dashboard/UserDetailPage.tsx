@@ -402,7 +402,7 @@ export function UserDetailPage() {
 
   const insights = normalizeInsights(user.summary_data)
   const metrics = (user.summary_data?.metrics ?? {}) as Record<string, unknown>
-  const hasTrend = trend && trend.length >= 2
+  const hasTrend = trend && trend.length >= 1
 
   const toggleMetric = (key: TrendKey, e: React.MouseEvent) => {
     setShowMediaPie(false)
