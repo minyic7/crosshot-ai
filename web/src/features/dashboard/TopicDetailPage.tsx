@@ -52,6 +52,8 @@ function fmtNum(n: unknown): string {
   if (n == null) return '-'
   const v = Number(n)
   if (isNaN(v)) return '-'
+  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (v >= 100_000) return `${(v / 1000).toFixed(0)}k`
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
   return String(v)
@@ -205,19 +207,19 @@ function getLatestDelta(trend: TrendPoint[] | undefined, key: keyof TrendPoint):
   return trend[trend.length - 1][key]
 }
 
-function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
+function TrendTooltip({ active, payload, label, metricLabel }: { active?: boolean; payload?: { value: number }[]; label?: string; metricLabel?: string }) {
   if (!active || !payload?.length) return null
   return (
     <div className="trend-tooltip">
       <div className="trend-tooltip-date">{label}</div>
       <div className="trend-tooltip-row">
-        <span className="trend-tooltip-value">{fmtNum(payload[0].value)}</span>
+        <span className="trend-tooltip-value">{fmtNum(payload[0].value)} {metricLabel ?? ''}</span>
       </div>
     </div>
   )
 }
 
-/** Compact sparkline chart that expands below the clicked stat */
+/** Compact bar chart that expands below the clicked stat */
 function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint & { day: string })[]; metricKey: TrendKey; anchorLeft: number }) {
   const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
@@ -232,8 +234,8 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip content={<TrendTooltip />} />
-          <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} />
+          <Tooltip content={<TrendTooltip metricLabel={metricKey} />} />
+          <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} label={{ position: 'top', fill: 'var(--ink-2)', fontSize: 11, formatter: fmtNum }} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -522,7 +524,7 @@ export function TopicDetailPage() {
           onClick={(e) => hasTrend && toggleMetric('posts', e)}
         >
           <BarChart3 size={13} />
-          <span className="topic-detail-stat-num">{fmtNum(topic.total_contents)}</span>
+          <span className="topic-detail-stat-num">{fmtNum(postsTotal ?? topic.total_contents)}</span>
           <span className="topic-detail-stat-label">posts</span>
           {postsDelta != null && postsDelta > 0 && <span className="topic-detail-stat-delta">+{fmtNum(postsDelta)}</span>}
         </div>
