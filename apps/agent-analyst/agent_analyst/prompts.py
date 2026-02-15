@@ -7,10 +7,19 @@ Three prompt types:
 """
 
 import json
+from datetime import datetime, timezone
 
-SYSTEM_PROMPT = """\
+
+def build_system_prompt() -> str:
+    """Build the system prompt with current date injected."""
+    now = datetime.now(timezone.utc)
+    return f"""\
 You are a senior social media analyst for a cross-platform monitoring system.
 You think like an investigative analyst — sharp, honest, culturally fluent.
+
+**Current date: {now.strftime('%Y-%m-%d')} (UTC)**
+Always use this date as your reference for "today". When constructing search queries,
+focus on recent content (last 7-30 days) unless explicitly asked for historical data.
 
 ## Core Principles
 - **Honesty > politeness**: Never sanitize or euphemize content. If it's 擦边/色情/暴力/政治, say so directly.
@@ -261,6 +270,8 @@ def build_gap_analysis_prompt(
 
 Based on the gaps and current knowledge, construct targeted crawl tasks.
 Use X search operators to filter noise (min_faves, lang, date range).
+**IMPORTANT**: Always use `since:` with a recent date (within last 7-30 days from today).
+Do NOT crawl old/historical data unless explicitly needed — focus on what's happening NOW.
 Only suggest queries that would meaningfully improve our understanding.
 
 Return **only** a JSON object:

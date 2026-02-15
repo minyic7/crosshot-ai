@@ -584,10 +584,15 @@ async def chat_topic(topic_id: str, body: TopicChatRequest):
     stats_text = "; ".join(platform_stats) if platform_stats else "(no data)"
     summary_text = topic.last_summary or "(no previous summary)"
 
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     system_prompt = f"""\
 You are a social media analyst for the topic "{topic.name}".
 You speak the same language as the user (Chinese if they write Chinese, English for English).
 Be concise, insightful, and data-driven. Reference specific posts when relevant.
+
+**Current date: {today} (UTC)**
 
 ## Current Data
 - Platforms monitored: {', '.join(topic.platforms or [])}

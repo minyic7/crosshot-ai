@@ -21,9 +21,9 @@ from shared.agent.base import Result
 from shared.models.task import Task
 
 from agent_analyst.prompts import (
-    SYSTEM_PROMPT,
     build_gap_analysis_prompt,
     build_integration_prompt,
+    build_system_prompt,
     build_triage_prompt,
 )
 from agent_analyst.tools.pipeline import set_pipeline_stage
@@ -384,7 +384,7 @@ def make_pipeline(
             response = await llm_client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": build_system_prompt()},
                     {"role": "user", "content": user_prompt},
                 ],
                 response_format={"type": "json_object"},

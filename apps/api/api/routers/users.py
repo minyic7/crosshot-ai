@@ -445,10 +445,15 @@ async def chat_user(user_id: str, body: UserChatRequest):
     posts_text = "\n".join(top_posts[:15]) if top_posts else "(no posts yet)"
     summary_text = user.last_summary or "(no previous summary)"
 
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     system_prompt = f"""\
 You are a social media analyst for the user "{user.name}" (@{user.username or '?'}).
 You speak the same language as the user (Chinese if they write Chinese, English for English).
 Be concise, insightful, and data-driven. Reference specific posts when relevant.
+
+**Current date: {today} (UTC)**
 
 ## Current Data
 - Platform: {user.platform}
