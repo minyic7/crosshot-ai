@@ -339,6 +339,10 @@ class XExecutor(BasePlatformExecutor):
 
         saved_ids, new_count = await self._save_contents_dedup(task, tweets)
 
+        # Update user.last_crawl_at + total_contents after timeline save
+        if user_id:
+            await self._update_user_crawl_stats(user_id)
+
         # Update timeline exhaustion status on the user row
         if exhausted and user_id:
             await self._mark_timeline_exhausted(user_id)
@@ -646,6 +650,30 @@ class XExecutor(BasePlatformExecutor):
         except Exception as e:
             logger.warning("Failed to load known tweet IDs: %s", e)
             return set()
+
+    async def _update_user_crawl_stats(self, user_id: str) -> None:
+        """Update user.last_crawl_at and total_contents after timeline crawl."""
+        try:
+            from shared.db.engine import get_session_factory
+            from shared.db.models import ContentRow, UserRow
+            from sqlalchemy import func, select
+
+            factory = get_session_factory()
+            async with factory() as session:
+                user = await session.get(UserRow, user_id)
+                if user:
+                    count = await session.scalar(
+                        select(func.count()).where(ContentRow.user_id == user_id)
+                    )
+                    user.last_crawl_at = datetime.now(timezone.utc)
+                    user.total_contents = count or 0
+                    await session.commit()
+                    logger.info(
+                        "Updated user %s crawl stats: total_contents=%d",
+                        user_id, count or 0,
+                    )
+        except Exception as e:
+            logger.warning("Failed to update user crawl stats: %s", e)
 
     async def _mark_timeline_exhausted(self, user_id: str) -> None:
         """Update user's summary_data to record timeline exhaustion."""

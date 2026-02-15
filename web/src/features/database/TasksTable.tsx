@@ -4,11 +4,13 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useListTasksQuery } from '@/store/api'
+import { useTimezone } from '@/hooks/useTimezone'
 import type { TaskStatus } from '@/types/models'
 
 export function TasksTable() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('')
   const navigate = useNavigate()
+  const { fmt } = useTimezone()
   const { data, isLoading } = useListTasksQuery(
     statusFilter ? { status: statusFilter } : undefined,
     { pollingInterval: 5000 },
@@ -77,7 +79,7 @@ export function TasksTable() {
                     </Badge>
                   </span>
                   <span style={{ flex: 1 }} className="text-sm">
-                    {new Date(task.created_at).toLocaleString()}
+                    {fmt(task.created_at)}
                   </span>
                 </div>
               ))

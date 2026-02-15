@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useGetTaskQuery } from '@/store/api'
+import { useTimezone } from '@/hooks/useTimezone'
 import type { TaskStatus } from '@/types/models'
 
 const statusVariant = (s: TaskStatus) =>
@@ -16,6 +17,7 @@ const statusVariant = (s: TaskStatus) =>
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { fmt } = useTimezone()
   const { data: task, isLoading, isError } = useGetTaskQuery(id ?? '', { skip: !id })
 
   if (isLoading) {
@@ -63,9 +65,9 @@ export function TaskDetailPage() {
             <div><span style={{ color: 'var(--foreground-muted)' }}>Priority:</span> {task.priority === 2 ? 'High' : task.priority === 1 ? 'Medium' : 'Low'}</div>
             <div><span style={{ color: 'var(--foreground-muted)' }}>Agent:</span> {task.assigned_to ?? '-'}</div>
             <div><span style={{ color: 'var(--foreground-muted)' }}>Retries:</span> {task.retry_count}/{task.max_retries}</div>
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Created:</span> {new Date(task.created_at).toLocaleString()}</div>
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Started:</span> {task.started_at ? new Date(task.started_at).toLocaleString() : '-'}</div>
-            <div><span style={{ color: 'var(--foreground-muted)' }}>Completed:</span> {task.completed_at ? new Date(task.completed_at).toLocaleString() : '-'}</div>
+            <div><span style={{ color: 'var(--foreground-muted)' }}>Created:</span> {fmt(task.created_at)}</div>
+            <div><span style={{ color: 'var(--foreground-muted)' }}>Started:</span> {fmt(task.started_at)}</div>
+            <div><span style={{ color: 'var(--foreground-muted)' }}>Completed:</span> {fmt(task.completed_at)}</div>
             {task.parent_job_id && (
               <div><span style={{ color: 'var(--foreground-muted)' }}>Job:</span> <code className="text-xs">{task.parent_job_id}</code></div>
             )}

@@ -11,6 +11,7 @@ Knowledge persists in entity.summary_data["knowledge"] and grows incrementally.
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -347,6 +348,10 @@ def make_pipeline(
             is_preliminary=False,
         )
 
+        # Also propagate stats to attached users (they share content via user_id FK)
+        if topic_id and attached_user_ids:
+            await _update_attached_user_stats(session_factory, attached_user_ids)
+
         await set_pipeline_stage(redis_client, entity_id, "done", entity_type=entity_type)
         logger.info("Summarize complete for %s %s", entity_type, entity_id)
         return Result(data={"status": "done"})
@@ -603,3 +608,31 @@ def _build_user_timeline_tasks(
             ))
 
     return tasks
+
+
+async def _update_attached_user_stats(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_ids: list[str],
+) -> None:
+    """Update last_crawl_at and total_contents for attached users after topic summarize."""
+    from sqlalchemy import func, select
+
+    from shared.db.models import ContentRow, UserRow
+
+    try:
+        async with session_factory() as session:
+            for uid in user_ids:
+                user = await session.get(UserRow, uid)
+                if not user:
+                    continue
+                count = await session.scalar(
+                    select(func.count()).where(ContentRow.user_id == uid)
+                )
+                if count and count > 0:
+                    user.total_contents = count
+                    if not user.last_crawl_at:
+                        user.last_crawl_at = datetime.now(timezone.utc)
+            await session.commit()
+        logger.info("Updated stats for %d attached users", len(user_ids))
+    except Exception as e:
+        logger.warning("Failed to update attached user stats: %s", e)

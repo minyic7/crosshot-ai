@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useListTasksQuery } from '@/store/api'
+import { useTimezone } from '@/hooks/useTimezone'
 
 const STATUS_ICON = {
   pending: <Clock size={14} style={{ color: 'var(--foreground-subtle)' }} />,
@@ -12,16 +13,6 @@ const STATUS_ICON = {
   completed: <CheckCircle2 size={14} style={{ color: 'var(--success)' }} />,
   failed: <XCircle size={14} style={{ color: 'var(--error)' }} />,
 } as const
-
-function formatTimeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
 
 function actionSummary(payload: Record<string, unknown>): string {
   const action = payload.action as string
@@ -33,6 +24,7 @@ function actionSummary(payload: Record<string, unknown>): string {
 
 export function TasksPage() {
   const navigate = useNavigate()
+  const { fmtRelative } = useTimezone()
   const { data, isLoading } = useListTasksQuery(
     { limit: 30 },
     { pollingInterval: 5000 },
@@ -82,7 +74,7 @@ export function TasksPage() {
                     </Badge>
                   )}
                   <span className="text-xs" style={{ color: 'var(--foreground-subtle)', minWidth: 50, textAlign: 'right' }}>
-                    {formatTimeAgo(task.created_at)}
+                    {fmtRelative(task.created_at)}
                   </span>
                 </div>
               ))
