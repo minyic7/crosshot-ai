@@ -1,12 +1,19 @@
-"""Dashboard stats endpoint.
+"""Dashboard stats and admin endpoints.
 
 Aggregates data from Redis for the frontend dashboard page.
+Provides admin operations like resetting all data.
 """
 
+import logging
+
 from fastapi import APIRouter
+from sqlalchemy import text
 
 from api.deps import get_queue, get_redis
+from shared.db.engine import get_session_factory
 from shared.models.agent import AgentHeartbeat
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
 
@@ -50,3 +57,36 @@ async def get_stats() -> dict:
         "recent_failed": failed,
         "queues": queues,
     }
+
+
+@router.post("/dashboard/reset")
+async def reset_all_data() -> dict:
+    """Clear all data from PG, OpenSearch, and Redis."""
+    r = get_redis()
+    factory = get_session_factory()
+
+    # 1. Truncate all PG tables
+    async with factory() as session:
+        await session.execute(
+            text("TRUNCATE users, topics, contents, content_media, tasks CASCADE")
+        )
+        await session.commit()
+    logger.info("PG: all tables truncated")
+
+    # 2. Delete and recreate OpenSearch index
+    try:
+        from shared.search import ensure_index, get_client, INDEX_NAME
+
+        client = get_client()
+        if await client.indices.exists(index=INDEX_NAME):
+            await client.indices.delete(index=INDEX_NAME)
+        await ensure_index()
+        logger.info("OpenSearch: index recreated")
+    except Exception as e:
+        logger.warning("OpenSearch reset failed (non-fatal): %s", e)
+
+    # 3. Flush Redis
+    await r.flushall()
+    logger.info("Redis: flushed")
+
+    return {"status": "cleared"}

@@ -188,6 +188,12 @@ export const apiSlice = createApi({
     getUserTrend: builder.query<{ day: string; posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }[], string>({
       query: (id) => `/users/${id}/trend`,
     }),
+
+    // Admin
+    resetAllData: builder.mutation<{ status: string }, void>({
+      query: () => ({ url: '/dashboard/reset', method: 'POST' }),
+      invalidatesTags: ['Task', 'Job', 'Agent', 'Content', 'Cookies', 'Topic', 'User'],
+    }),
   }),
 })
 
@@ -229,4 +235,5 @@ export const {
   useReanalyzeUserMutation,
   useGetUserPipelineQuery,
   useGetUserTrendQuery,
+  useResetAllDataMutation,
 } = apiSlice

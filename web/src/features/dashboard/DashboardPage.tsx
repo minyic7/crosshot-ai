@@ -24,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pin, RefreshCw, GripVertical,
-  AlertTriangle,
+  AlertTriangle, Trash2,
   Sparkles, Send, Loader2, User,
   Pencil, X, Check, Link2,
 } from 'lucide-react'
@@ -44,6 +44,7 @@ import {
   useUpdateUserMutation,
   useReorderUsersMutation,
   useAttachUserMutation,
+  useResetAllDataMutation,
 } from '@/store/api'
 import type { Topic, TopicAlert, TopicPipeline, User as UserType, TopicStatus } from '@/types/models'
 
@@ -1018,6 +1019,8 @@ export function DashboardPage() {
   const [reanalyzeTopic] = useReanalyzeTopicMutation()
   const [reorderTopics] = useReorderTopicsMutation()
   const [reorderUsers] = useReorderUsersMutation()
+  const [resetAllData, { isLoading: isResetting }] = useResetAllDataMutation()
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const handleRefresh = useCallback((id: string) => { reanalyzeTopic(id) }, [reanalyzeTopic])
   const handleTopicClick = useCallback((id: string) => {
@@ -1217,10 +1220,19 @@ export function DashboardPage() {
             Tracking {allTopics.length} topics · {totalPosts} posts collected
           </p>
         </div>
-        <button className="btn-accent" onClick={() => setShowCreate(true)}>
-          <Plus size={15} />
-          New
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-ghost-danger"
+            onClick={() => setShowResetConfirm(true)}
+            title="Clear all data"
+          >
+            <Trash2 size={15} />
+          </button>
+          <button className="btn-accent" onClick={() => setShowCreate(true)}>
+            <Plus size={15} />
+            New
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -1328,6 +1340,36 @@ export function DashboardPage() {
       </button>
 
       <CreateTopicModal open={showCreate} onClose={() => setShowCreate(false)} />
+
+      {/* Reset confirmation modal */}
+      <Modal open={showResetConfirm} onClose={() => setShowResetConfirm(false)} title="Clear All Data">
+        <div className="stack" style={{ gap: 16 }}>
+          <p className="text-sm" style={{ color: 'var(--ink-3)' }}>
+            This will permanently delete all topics, users, contents, and tasks.
+            This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              className="btn-ghost"
+              onClick={() => setShowResetConfirm(false)}
+              disabled={isResetting}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-danger"
+              disabled={isResetting}
+              onClick={async () => {
+                await resetAllData()
+                setShowResetConfirm(false)
+              }}
+            >
+              {isResetting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {isResetting ? 'Clearing...' : 'Clear Everything'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
