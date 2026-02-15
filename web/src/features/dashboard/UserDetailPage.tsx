@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, ExternalLink, Pencil, X, Check } from 'lucide-react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -14,6 +14,7 @@ import {
   useDeleteUserMutation,
   useDetachUserMutation,
   useGetUserPipelineQuery,
+  useGetUserChatHistoryQuery,
 } from '@/store/api'
 import type { TopicInsight, PipelineTask } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
@@ -74,6 +75,12 @@ function SummaryChat({
   cycleId?: string
   insights: TopicInsight[]
 }) {
+  const { data: chatHistory } = useGetUserChatHistoryQuery(userId)
+  const restoredMessages = useMemo(
+    () => chatHistory?.messages?.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })) ?? [],
+    [chatHistory],
+  )
+
   const buildBody = useCallback(
     (msgs: { role: string; content: string }[]) => ({
       messages: [{ role: 'assistant', content: summary }, ...msgs]
@@ -86,6 +93,7 @@ function SummaryChat({
     endpoint: `/api/users/${userId}/chat`,
     buildBody,
     mode: 'direct',
+    initialMessages: restoredMessages,
   })
 
   const hasChat = messages.length > 0

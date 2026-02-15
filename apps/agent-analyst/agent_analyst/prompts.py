@@ -135,6 +135,7 @@ def build_integration_prompt(
     overview: dict,
     knowledge_doc: str,
     new_content: list[dict],
+    chat_insights: str = "",
 ) -> str:
     """Build the knowledge integration prompt for the reasoning model.
 
@@ -200,6 +201,8 @@ Write a comprehensive summary in Chinese (中文), structured as:
 ## Previous Summary
 {overview.get("previous_cycle", {}).get("summary", "(none)")}
 
+{f"## User Focus Areas (from recent conversation)\\n{chat_insights}" if chat_insights else ""}
+
 ## Instructions
 
 1. **Read each new piece of content carefully.** Understand the actual meaning, not just surface keywords.
@@ -235,6 +238,7 @@ def build_gap_analysis_prompt(
     overview: dict,
     gaps: dict,
     knowledge_doc: str,
+    chat_insights: str = "",
 ) -> str:
     """Build the gap analysis prompt — decides what crawl tasks to dispatch.
 
@@ -265,6 +269,8 @@ def build_gap_analysis_prompt(
 ## Detected Gaps
 {gaps_section}
 {knowledge_context}
+
+{f"## User Focus Areas (from recent conversation)\\n{chat_insights}\\nPrioritize queries that address these user interests." if chat_insights else ""}
 
 ## Instructions
 

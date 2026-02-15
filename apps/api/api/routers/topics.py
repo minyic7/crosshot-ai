@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from api.deps import get_queue, get_redis
 from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
-from shared.db.models import TopicRow, UserRow, topic_users
+from shared.db.models import ChatMessageRow, TopicRow, UserRow, topic_users
 from shared.models.task import Task, TaskPriority
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import selectinload
@@ -556,6 +556,29 @@ class TopicChatRequest(BaseModel):
     messages: list[AssistMessage]
 
 
+@router.get("/topics/{topic_id}/chat/history")
+async def get_topic_chat_history(topic_id: str):
+    """Load persisted chat messages for the current period."""
+    factory = get_session_factory()
+    async with factory() as session:
+        result = await session.execute(
+            select(ChatMessageRow)
+            .where(
+                ChatMessageRow.entity_type == "topic",
+                ChatMessageRow.entity_id == topic_id,
+                ChatMessageRow.is_archived == False,  # noqa: E712
+            )
+            .order_by(ChatMessageRow.created_at)
+        )
+        rows = result.scalars().all()
+    return {
+        "messages": [
+            {"role": r.role, "content": r.content, "created_at": r.created_at.isoformat()}
+            for r in rows
+        ]
+    }
+
+
 @router.post("/topics/{topic_id}/chat")
 async def chat_topic(topic_id: str, body: TopicChatRequest):
     """Conversational analysis — ask questions about topic data. Streams SSE."""
@@ -650,7 +673,18 @@ Be concise, insightful, and data-driven. Reference specific posts when relevant.
     for m in body.messages:
         messages_list.append({"role": m.role, "content": m.content})
 
+    # Persist the new user message (last in the list)
+    user_msgs = [m for m in body.messages if m.role == "user"]
+    if user_msgs:
+        async with factory() as session:
+            session.add(ChatMessageRow(
+                entity_type="topic", entity_id=topic_id,
+                role="user", content=user_msgs[-1].content,
+            ))
+            await session.commit()
+
     async def generate():
+        accumulated = ""
         try:
             stream = await client.chat.completions.create(
                 model=settings.grok_model,
@@ -662,8 +696,17 @@ Be concise, insightful, and data-driven. Reference specific posts when relevant.
             async for chunk in stream:
                 delta = chunk.choices[0].delta.content or ""
                 if delta:
+                    accumulated += delta
                     yield _sse({"t": delta})
             yield _sse({"done": True})
+            # Persist the assistant response
+            if accumulated:
+                async with factory() as s:
+                    s.add(ChatMessageRow(
+                        entity_type="topic", entity_id=topic_id,
+                        role="assistant", content=accumulated,
+                    ))
+                    await s.commit()
         except Exception as e:
             logger.exception("Topic chat stream error")
             yield _sse({"error": str(e)})

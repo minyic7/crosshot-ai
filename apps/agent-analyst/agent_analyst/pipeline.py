@@ -103,6 +103,13 @@ def make_pipeline(
             if uid and uid not in attached_user_ids:
                 attached_user_ids.append(uid)
 
+        # Step 1b: Archive chat messages and extract insights for this cycle
+        chat_insights = await _rotate_chat_period(
+            session_factory, fast_model, llm_client, entity_type, entity_id
+        )
+        if chat_insights:
+            logger.info("Chat insights extracted for %s %s: %s", entity_type, entity_id, chat_insights[:100])
+
         # Step 2: Query entity overview (metrics, data status)
         overview = await query_entity_overview(
             session_factory,
@@ -150,7 +157,7 @@ def make_pipeline(
 
         # Step 5: Knowledge integration (if there's content to integrate)
         if integration_ready:
-            analysis = await _llm_integrate(entity, overview, knowledge_doc, integration_ready)
+            analysis = await _llm_integrate(entity, overview, knowledge_doc, integration_ready, chat_insights)
             knowledge_doc = analysis.get("knowledge", knowledge_doc)
 
             # Save updated knowledge + summary
@@ -208,7 +215,7 @@ def make_pipeline(
         if not skip_gap_analysis:
             has_gaps = (gaps["missing_platforms"] or gaps["stale"] or gaps["low_volume"] or gaps["force_crawl"])
             if has_gaps:
-                gap_analysis = await _llm_gap_analysis(entity, overview, gaps, knowledge_doc)
+                gap_analysis = await _llm_gap_analysis(entity, overview, gaps, knowledge_doc, chat_insights)
                 crawl_tasks = gap_analysis.get("crawl_tasks", [])
                 if crawl_tasks:
                     search_tasks = _build_crawler_tasks(entity, crawl_tasks, task.parent_job_id)
@@ -388,14 +395,14 @@ def make_pipeline(
             logger.warning("Triage LLM call failed (%s), defaulting to brief", e)
             return [{"d": "brief", "kp": None} for _ in posts]
 
-    async def _llm_integrate(entity: dict, overview: dict, knowledge_doc: str, content: list[dict]) -> dict:
+    async def _llm_integrate(entity: dict, overview: dict, knowledge_doc: str, content: list[dict], chat_insights: str = "") -> dict:
         """Knowledge integration using reasoning model."""
-        prompt = build_integration_prompt(entity, overview, knowledge_doc, content)
+        prompt = build_integration_prompt(entity, overview, knowledge_doc, content, chat_insights)
         return await _call_reasoning_llm(prompt)
 
-    async def _llm_gap_analysis(entity: dict, overview: dict, gaps: dict, knowledge_doc: str) -> dict:
+    async def _llm_gap_analysis(entity: dict, overview: dict, gaps: dict, knowledge_doc: str, chat_insights: str = "") -> dict:
         """Gap analysis using reasoning model."""
-        prompt = build_gap_analysis_prompt(entity, overview, gaps, knowledge_doc)
+        prompt = build_gap_analysis_prompt(entity, overview, gaps, knowledge_doc, chat_insights)
         return await _call_reasoning_llm(prompt)
 
     async def _call_reasoning_llm(user_prompt: str) -> dict:
@@ -636,3 +643,77 @@ async def _update_attached_user_stats(
         logger.info("Updated stats for %d attached users", len(user_ids))
     except Exception as e:
         logger.warning("Failed to update attached user stats: %s", e)
+
+
+async def _rotate_chat_period(
+    session_factory: async_sessionmaker[AsyncSession],
+    fast_model: str,
+    llm_client: AsyncOpenAI,
+    entity_type: str,
+    entity_id: str,
+) -> str:
+    """Archive current chat messages and extract insights for the new analysis cycle.
+
+    Returns a short summary of user interests/questions from the conversation.
+    Empty string if no chat messages exist.
+    """
+    from sqlalchemy import select, update
+
+    from shared.db.models import ChatMessageRow
+
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                select(ChatMessageRow)
+                .where(
+                    ChatMessageRow.entity_type == entity_type,
+                    ChatMessageRow.entity_id == entity_id,
+                    ChatMessageRow.is_archived == False,  # noqa: E712
+                )
+                .order_by(ChatMessageRow.created_at)
+            )
+            rows = result.scalars().all()
+
+            if not rows:
+                return ""
+
+            # Build conversation text for summarization
+            convo_text = "\n".join(
+                f"{'User' if r.role == 'user' else 'Assistant'}: {r.content[:500]}"
+                for r in rows
+            )
+
+            # Archive all current messages
+            await session.execute(
+                update(ChatMessageRow)
+                .where(
+                    ChatMessageRow.entity_type == entity_type,
+                    ChatMessageRow.entity_id == entity_id,
+                    ChatMessageRow.is_archived == False,  # noqa: E712
+                )
+                .values(is_archived=True)
+            )
+            await session.commit()
+            logger.info("Archived %d chat messages for %s %s", len(rows), entity_type, entity_id)
+
+        # Summarize conversation into insights using fast model
+        response = await llm_client.chat.completions.create(
+            model=fast_model,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Summarize this conversation between a user and an AI analyst into 2-3 bullet points. "
+                    "Focus on: what topics/aspects the user cares about, specific questions asked, "
+                    "any suggested focus areas. Be concise. Write in the same language as the conversation.\n\n"
+                    f"{convo_text[:3000]}"
+                ),
+            }],
+            temperature=0,
+            max_tokens=300,
+        )
+        insights = response.choices[0].message.content or ""
+        return insights.strip()
+
+    except Exception as e:
+        logger.warning("Chat period rotation failed (non-fatal): %s", e)
+        return ""

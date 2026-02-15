@@ -68,7 +68,7 @@ async def reset_all_data() -> dict:
     # 1. Truncate all PG tables
     async with factory() as session:
         await session.execute(
-            text("TRUNCATE users, topics, contents, content_media, tasks CASCADE")
+            text("TRUNCATE users, topics, contents, content_media, tasks, chat_messages CASCADE")
         )
         await session.commit()
     logger.info("PG: all tables truncated")

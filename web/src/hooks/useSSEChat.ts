@@ -44,6 +44,8 @@ interface UseSSEChatOptions {
   mode: 'assist' | 'direct'
   /** Called when actions are received (assist mode only) */
   onActions?: (actions: Record<string, unknown>[]) => void
+  /** Persisted messages to restore from server (loaded async) */
+  initialMessages?: ChatMsg[]
 }
 
 interface UseSSEChatReturn {
@@ -64,12 +66,22 @@ export function useSSEChat({
   buildBody,
   mode,
   onActions,
+  initialMessages,
 }: UseSSEChatOptions): UseSSEChatReturn {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const initializedRef = useRef(false)
+
+  // Restore persisted messages once (when they arrive from the API)
+  useEffect(() => {
+    if (initialMessages?.length && !initializedRef.current) {
+      initializedRef.current = true
+      setMessages(initialMessages)
+    }
+  }, [initialMessages])
 
   // Auto-scroll when messages or streaming text change
   useEffect(() => {

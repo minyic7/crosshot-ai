@@ -120,6 +120,9 @@ export const apiSlice = createApi({
     getTopicPipeline: builder.query<PipelineDetail, string>({
       query: (id) => `/topics/${id}/pipeline`,
     }),
+    getTopicChatHistory: builder.query<{ messages: { role: string; content: string; created_at: string }[] }, string>({
+      query: (id) => `/topics/${id}/chat/history`,
+    }),
     reorderTopics: builder.mutation<{ status: string }, { pinned: string[]; unpinned: string[] }>({
       query: ({ pinned, unpinned }) => ({
         url: '/topics/reorder',
@@ -188,6 +191,9 @@ export const apiSlice = createApi({
     getUserTrend: builder.query<{ day: string; posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }[], string>({
       query: (id) => `/users/${id}/trend`,
     }),
+    getUserChatHistory: builder.query<{ messages: { role: string; content: string; created_at: string }[] }, string>({
+      query: (id) => `/users/${id}/chat/history`,
+    }),
 
     // Admin
     resetAllData: builder.mutation<{ status: string }, void>({
@@ -224,6 +230,7 @@ export const {
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
   useGetTopicPipelineQuery,
+  useGetTopicChatHistoryQuery,
   useListUsersQuery,
   useGetUserQuery,
   useCreateUserMutation,
@@ -235,5 +242,6 @@ export const {
   useReanalyzeUserMutation,
   useGetUserPipelineQuery,
   useGetUserTrendQuery,
+  useGetUserChatHistoryQuery,
   useResetAllDataMutation,
 } = apiSlice

@@ -258,3 +258,23 @@ class UserRow(Base):
         Index("ix_users_platform", "platform"),
         Index("ix_users_username", "username"),
     )
+
+
+class ChatMessageRow(Base):
+    """Persisted chat messages for topic and user conversations."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(16), nullable=False)  # 'topic' | 'user'
+    entity_id: Mapped[str] = mapped_column(Uuid, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)  # 'user' | 'assistant'
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index("ix_chat_messages_entity", "entity_type", "entity_id", "is_archived"),
+    )
