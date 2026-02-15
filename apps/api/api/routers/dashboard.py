@@ -85,8 +85,14 @@ async def reset_all_data() -> dict:
     except Exception as e:
         logger.warning("OpenSearch reset failed (non-fatal): %s", e)
 
-    # 3. Flush Redis
-    await r.flushall()
-    logger.info("Redis: flushed")
+    # 3. Clear Redis (preserve cookies)
+    deleted = 0
+    async for key in r.scan_iter("*"):
+        key_str = key if isinstance(key, str) else key.decode()
+        if key_str.startswith("cookies:"):
+            continue
+        await r.delete(key)
+        deleted += 1
+    logger.info("Redis: deleted %d keys (cookies preserved)", deleted)
 
     return {"status": "cleared"}
