@@ -398,7 +398,7 @@ async def reorder_topics(body: TopicReorder) -> dict:
 # ── AI Assist ──────────────────────────────────────────
 
 
-_ASSIST_SYSTEM = """\
+_ASSIST_SYSTEM_BASE = """\
 You are a sharp, concise assistant for CrossHot AI (social media monitoring).
 You speak the same language as the user (Chinese if they write Chinese, English if English, mix if they mix).
 
@@ -409,6 +409,8 @@ You speak the same language as the user (Chinese if they write Chinese, English 
 - Proactively suggest monitoring angles the user might not have thought of.
 - When the user refines, only return NEW or CHANGED actions (don't repeat unchanged ones).
 - Briefly explain your choices when helpful.
+- **NEVER propose creating a topic or user that already exists** (see existing data below).
+- If the user asks to monitor something already covered, suggest refining the existing topic instead.
 
 ## Action types
 - **create_topic**: Monitor a keyword/theme across platforms
@@ -449,6 +451,37 @@ If no actions needed (e.g. asking a question), use "actions": []
 """
 
 
+async def _build_assist_system() -> str:
+    """Build the assist system prompt with existing topics/users injected."""
+    factory = get_session_factory()
+    async with factory() as session:
+        topics = (await session.execute(
+            select(TopicRow).options(selectinload(TopicRow.users))
+        )).scalars().all()
+        users = (await session.execute(select(UserRow))).scalars().all()
+
+    existing = "\n## Existing Data (DO NOT duplicate these)\n"
+    if topics:
+        existing += "Topics:\n"
+        for t in topics:
+            attached = ", ".join(f"@{u.username}" for u in t.users if u.username)
+            existing += f"- {t.icon or ''} {t.name} ({t.status}) platforms={t.platforms} keywords={t.keywords}"
+            if attached:
+                existing += f" users=[{attached}]"
+            existing += "\n"
+    else:
+        existing += "Topics: (none)\n"
+
+    if users:
+        existing += "Users:\n"
+        for u in users:
+            existing += f"- @{u.username} ({u.platform}, {u.status})\n"
+    else:
+        existing += "Users: (none)\n"
+
+    return _ASSIST_SYSTEM_BASE + existing
+
+
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -465,7 +498,8 @@ async def assist_topic(body: TopicAssistRequest):
         base_url=settings.grok_base_url,
     )
 
-    messages: list[dict] = [{"role": "system", "content": _ASSIST_SYSTEM}]
+    system_prompt = await _build_assist_system()
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
     for m in body.messages:
         messages.append({"role": m.role, "content": m.content})
 

@@ -438,30 +438,35 @@ class XExecutor(BasePlatformExecutor):
                     ).on_conflict_do_nothing(index_elements=["id"])
                 )
 
-                # Insert content rows (deduplicate by platform+content_id)
+                # Upsert content rows (deduplicate by platform+content_id, update metrics on conflict)
                 for i, tweet in enumerate(tweets):
                     author = tweet.get("author", {})
-                    await session.execute(
-                        pg_insert(ContentRow).values(
-                            id=content_ids[i],
-                            task_id=task.id,
-                            topic_id=topic_id,
-                            user_id=user_id,
-                            platform="x",
-                            platform_content_id=tweet.get("tweet_id"),
-                            source_url=tweet.get("source_url", ""),
-                            author_uid=author.get("user_id"),
-                            author_username=author.get("username"),
-                            author_display_name=author.get("display_name"),
-                            text=tweet.get("text"),
-                            lang=tweet.get("lang"),
-                            hashtags=tweet.get("hashtags", []),
-                            metrics=tweet.get("metrics", {}),
-                            data=tweet,
-                        ).on_conflict_do_nothing(
-                            index_elements=["platform", "platform_content_id"]
-                        )
+                    stmt = pg_insert(ContentRow).values(
+                        id=content_ids[i],
+                        task_id=task.id,
+                        topic_id=topic_id,
+                        user_id=user_id,
+                        platform="x",
+                        platform_content_id=tweet.get("tweet_id"),
+                        source_url=tweet.get("source_url", ""),
+                        author_uid=author.get("user_id"),
+                        author_username=author.get("username"),
+                        author_display_name=author.get("display_name"),
+                        text=tweet.get("text"),
+                        lang=tweet.get("lang"),
+                        hashtags=tweet.get("hashtags", []),
+                        metrics=tweet.get("metrics", {}),
+                        data=tweet,
                     )
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["platform", "platform_content_id"],
+                        set_={
+                            "metrics": stmt.excluded.metrics,
+                            "text": stmt.excluded.text,
+                            "data": stmt.excluded.data,
+                        },
+                    )
+                    await session.execute(stmt)
 
                 await session.commit()
 

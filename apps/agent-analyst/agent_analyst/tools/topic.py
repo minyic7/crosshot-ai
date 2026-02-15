@@ -50,6 +50,7 @@ async def get_entity_config(
                     "username": u.username,
                     "profile_url": u.profile_url,
                     "config": u.config,
+                    "last_crawl_at": u.last_crawl_at.isoformat() if u.last_crawl_at else None,
                 }
                 for u in topic.users
             ]
