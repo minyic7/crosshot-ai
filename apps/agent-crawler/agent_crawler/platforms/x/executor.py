@@ -557,6 +557,18 @@ class XExecutor(BasePlatformExecutor):
 
         return new_count
 
+    @staticmethod
+    def _parse_twitter_date(date_str: str | None) -> str | None:
+        """Convert Twitter date format to ISO 8601 for OpenSearch."""
+        if not date_str:
+            return None
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %z %Y")
+            return dt.isoformat()
+        except (ValueError, TypeError):
+            return date_str
+
     async def _index_to_opensearch(
         self,
         task: Task,
@@ -583,7 +595,7 @@ class XExecutor(BasePlatformExecutor):
                     "author_display_name": author.get("display_name"),
                     "hashtags": tweet.get("hashtags", []),
                     "lang": tweet.get("lang"),
-                    "crawled_at": tweet.get("created_at"),
+                    "crawled_at": self._parse_twitter_date(tweet.get("created_at")),
                     "like_count": metrics.get("like_count", 0),
                     "retweet_count": metrics.get("retweet_count", 0),
                     "reply_count": metrics.get("reply_count", 0),
