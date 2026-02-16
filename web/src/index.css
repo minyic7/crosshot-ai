@@ -5502,11 +5502,16 @@ h3 {
 .task-queue-divider {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 6px 20px;
   background: rgba(96, 165, 250, 0.04);
   border-top: 1px solid rgba(96, 165, 250, 0.12);
   border-bottom: 1px solid rgba(96, 165, 250, 0.12);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.task-queue-divider:hover {
+  background: rgba(96, 165, 250, 0.08);
 }
 .task-queue-divider span {
   font-size: 0.6875rem;
@@ -5514,6 +5519,14 @@ h3 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ink-3);
+}
+.task-queue-divider-count {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.625rem !important;
+  font-weight: 400 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  color: var(--ink-4) !important;
 }
 
 .task-queue-history .task-line-row {
@@ -5670,6 +5683,218 @@ h3 {
   margin-top: 4px;
   max-height: 200px;
   overflow-y: auto;
+}
+
+/* ── Submit Task Modal ───────────────────────────── */
+
+.submit-modal.detail-modal {
+  background: var(--glass);
+  backdrop-filter: var(--frost-heavy);
+  -webkit-backdrop-filter: var(--frost-heavy);
+  border: 1px solid var(--glass-border);
+  max-width: 520px;
+  padding: 24px;
+}
+
+.submit-modal-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(96, 165, 250, 0.06);
+  border-radius: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.12);
+}
+
+.submit-modal-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.submit-modal-tab:hover {
+  color: var(--ink-2);
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.submit-modal-tab.active {
+  background: var(--glass-hover);
+  color: var(--accent-light);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.submit-modal-form {
+  margin-top: 20px;
+}
+
+.submit-modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.submit-modal-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.04);
+  font-size: 0.875rem;
+  color: var(--ink);
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.submit-modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.submit-modal-input::placeholder {
+  color: var(--ink-3);
+}
+
+.submit-modal-input-sm {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: rgba(96, 165, 250, 0.04);
+  font-size: 0.8125rem;
+  color: var(--ink);
+  outline: none;
+  font-family: inherit;
+  text-align: center;
+}
+
+.submit-modal-input-sm:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.submit-modal-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.submit-modal-filter-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.submit-modal-separator {
+  color: var(--ink-4);
+  margin: 0 2px;
+}
+
+.submit-modal-pill {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.submit-modal-pill:hover {
+  border-color: var(--glass-border);
+  color: var(--ink-2);
+}
+
+.submit-modal-pill.active {
+  background: var(--accent-surface);
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+.submit-modal-options {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.submit-modal-option-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+.submit-modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.submit-modal-checkbox input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.submit-modal-at {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.submit-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.submit-modal-success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--positive);
+}
+
+.submit-modal-error {
+  font-size: 0.8125rem;
+  color: var(--negative);
+}
+
+.submit-modal .detail-close {
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  color: var(--ink-3);
+}
+
+.submit-modal .detail-close:hover {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--ink);
 }
 
 .btn-sm {

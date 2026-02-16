@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useListAgentsQuery, useListQueuesQuery, useListTasksQuery } from '@/store/api'
@@ -9,6 +9,7 @@ import { SubmitTaskModal } from './SubmitTaskModal'
 
 export function AgentsPage() {
   const [submitOpen, setSubmitOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const { data: agents, isLoading: agentsLoading } = useListAgentsQuery(undefined, {
     pollingInterval: 5000,
@@ -91,14 +92,29 @@ export function AgentsPage() {
               )}
               {historyTasks.length > 0 && (
                 <>
-                  <div className="task-queue-divider">
+                  <div
+                    className="task-queue-divider"
+                    onClick={() => setHistoryOpen(!historyOpen)}
+                  >
+                    <ChevronDown
+                      size={14}
+                      style={{
+                        color: 'var(--ink-3)',
+                        transition: 'transform 0.2s ease',
+                        transform: historyOpen ? 'rotate(0)' : 'rotate(-90deg)',
+                        flexShrink: 0,
+                      }}
+                    />
                     <span>History</span>
+                    <span className="task-queue-divider-count">{historyTasks.length}</span>
                   </div>
-                  <div className="task-queue-group task-queue-history">
-                    {historyTasks.map((task) => (
-                      <TaskLine key={task.id} task={task} />
-                    ))}
-                  </div>
+                  {historyOpen && (
+                    <div className="task-queue-group task-queue-history">
+                      {historyTasks.map((task) => (
+                        <TaskLine key={task.id} task={task} />
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </>

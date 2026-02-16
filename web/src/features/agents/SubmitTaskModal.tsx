@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Send, Search, MessageSquare, User, Check } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/Button'
 import { useCreateTaskMutation } from '@/store/api'
 
 type XAction = 'search' | 'tweet' | 'timeline'
@@ -91,24 +90,15 @@ export function SubmitTaskModal({ open, onClose }: SubmitTaskModalProps) {
   ]
 
   return (
-    <Modal open={open} onClose={onClose} title="Submit Task">
+    <Modal open={open} onClose={onClose} title="Submit Task" className="submit-modal">
       {/* Action selector tabs */}
-      <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--surface-hover)' }}>
+      <div className="submit-modal-tabs">
         {actions.map(a => (
           <button
             key={a.key}
             type="button"
             onClick={() => { setAction(a.key); setError(''); setResult(null) }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
-            style={{
-              background: action === a.key ? 'var(--surface-card)' : 'transparent',
-              color: action === a.key ? 'var(--foreground)' : 'var(--foreground-muted)',
-              boxShadow: action === a.key ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
-              flex: 1,
-              justifyContent: 'center',
-              border: 'none',
-              cursor: 'pointer',
-            }}
+            className={`submit-modal-tab${action === a.key ? ' active' : ''}`}
           >
             {a.icon}
             {a.label}
@@ -116,64 +106,52 @@ export function SubmitTaskModal({ open, onClose }: SubmitTaskModalProps) {
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} style={{ marginTop: '1.25rem' }}>
+      <form onSubmit={handleSubmit} className="submit-modal-form">
         {/* Search Form */}
         {action === 'search' && (
-          <div className="stack-sm">
+          <div className="submit-modal-fields">
             <input
-              className="form-input"
+              className="submit-modal-input"
               placeholder='Keywords, e.g. "AI robotics" from:elonmusk lang:en'
               value={query}
               onChange={e => setQuery(e.target.value)}
               autoFocus
-              style={{ fontSize: '0.9375rem' }}
             />
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-medium" style={{ color: 'var(--foreground-subtle)' }}>Content:</span>
+            <div className="submit-modal-filter-row">
+              <span className="submit-modal-filter-label">Content:</span>
               {HAS_FILTERS.map(f => (
                 <button
                   key={f.key}
                   type="button"
                   onClick={() => toggleHasFilter(f.key)}
-                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150"
-                  style={{
-                    background: hasFilters.includes(f.key) ? 'var(--teal)' : 'var(--surface-hover)',
-                    color: hasFilters.includes(f.key) ? 'white' : 'var(--foreground-muted)',
-                    border: 'none', cursor: 'pointer',
-                  }}
+                  className={`submit-modal-pill${hasFilters.includes(f.key) ? ' active' : ''}`}
                 >
                   {hasFilters.includes(f.key) && <Check size={10} className="inline mr-1" style={{ verticalAlign: '-1px' }} />}
                   {f.label}
                 </button>
               ))}
-              <span className="mx-1" style={{ color: 'var(--foreground-subtle)' }}>|</span>
-              <span className="text-xs font-medium" style={{ color: 'var(--foreground-subtle)' }}>Tab:</span>
+              <span className="submit-modal-separator">|</span>
+              <span className="submit-modal-filter-label">Tab:</span>
               {SEARCH_TABS.map(t => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setSearchTab(t)}
-                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150"
-                  style={{
-                    background: searchTab === t ? 'var(--teal)' : 'var(--surface-hover)',
-                    color: searchTab === t ? 'white' : 'var(--foreground-muted)',
-                    border: 'none', cursor: 'pointer',
-                  }}
+                  className={`submit-modal-pill${searchTab === t ? ' active' : ''}`}
                 >
                   {t}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-5 flex-wrap">
-              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--foreground-muted)' }}>
+            <div className="submit-modal-options">
+              <label className="submit-modal-option-label">
                 Max
-                <input type="number" className="form-input text-sm" style={{ width: 64, padding: '0.25rem 0.5rem' }}
+                <input type="number" className="submit-modal-input-sm"
                   min={1} max={500} value={maxTweets} onChange={e => setMaxTweets(parseInt(e.target.value) || 20)} />
                 tweets
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: 'var(--foreground-muted)' }}>
-                <input type="checkbox" checked={includeRetweets} onChange={e => setIncludeRetweets(e.target.checked)}
-                  className="rounded" style={{ accentColor: 'var(--teal)' }} />
+              <label className="submit-modal-checkbox">
+                <input type="checkbox" checked={includeRetweets} onChange={e => setIncludeRetweets(e.target.checked)} />
                 Include retweets
               </label>
             </div>
@@ -182,16 +160,16 @@ export function SubmitTaskModal({ open, onClose }: SubmitTaskModalProps) {
 
         {/* Tweet Form */}
         {action === 'tweet' && (
-          <div className="stack-sm">
+          <div className="submit-modal-fields">
             <input
-              className="form-input"
+              className="submit-modal-input"
               placeholder="https://x.com/user/status/123456... or tweet ID"
               value={tweetUrl} onChange={e => setTweetUrl(e.target.value)}
-              autoFocus style={{ fontSize: '0.9375rem' }}
+              autoFocus
             />
-            <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--foreground-muted)' }}>
+            <label className="submit-modal-option-label">
               Max
-              <input type="number" className="form-input text-sm" style={{ width: 64, padding: '0.25rem 0.5rem' }}
+              <input type="number" className="submit-modal-input-sm"
                 min={0} max={200} value={maxReplies} onChange={e => setMaxReplies(parseInt(e.target.value) || 20)} />
               replies
             </label>
@@ -200,23 +178,21 @@ export function SubmitTaskModal({ open, onClose }: SubmitTaskModalProps) {
 
         {/* Timeline Form */}
         {action === 'timeline' && (
-          <div className="stack-sm">
+          <div className="submit-modal-fields">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium"
-                style={{ color: 'var(--foreground-subtle)' }}>@</span>
-              <input className="form-input" style={{ paddingLeft: '1.75rem', fontSize: '0.9375rem' }}
+              <span className="submit-modal-at">@</span>
+              <input className="submit-modal-input" style={{ paddingLeft: '1.75rem' }}
                 placeholder="username" value={username} onChange={e => setUsername(e.target.value)} autoFocus />
             </div>
-            <div className="flex items-center gap-5 flex-wrap">
-              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--foreground-muted)' }}>
+            <div className="submit-modal-options">
+              <label className="submit-modal-option-label">
                 Max
-                <input type="number" className="form-input text-sm" style={{ width: 64, padding: '0.25rem 0.5rem' }}
+                <input type="number" className="submit-modal-input-sm"
                   min={1} max={500} value={tlMaxTweets} onChange={e => setTlMaxTweets(parseInt(e.target.value) || 50)} />
                 tweets
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: 'var(--foreground-muted)' }}>
-                <input type="checkbox" checked={includeReplies} onChange={e => setIncludeReplies(e.target.checked)}
-                  className="rounded" style={{ accentColor: 'var(--teal)' }} />
+              <label className="submit-modal-checkbox">
+                <input type="checkbox" checked={includeReplies} onChange={e => setIncludeReplies(e.target.checked)} />
                 Include replies
               </label>
             </div>
@@ -224,19 +200,19 @@ export function SubmitTaskModal({ open, onClose }: SubmitTaskModalProps) {
         )}
 
         {/* Submit */}
-        <div className="flex items-center gap-3" style={{ marginTop: '1rem' }}>
-          <Button type="submit" disabled={isLoading}>
+        <div className="submit-modal-footer">
+          <button type="submit" className="btn btn-accent btn-sm" disabled={isLoading}>
             <Send size={14} />
             {isLoading ? 'Submitting...' : 'Submit'}
-          </Button>
+          </button>
           {result && (
-            <span className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--success)' }}>
+            <span className="submit-modal-success">
               <Check size={14} />
               Task {result.task_id.slice(0, 8)}... created
             </span>
           )}
           {error && (
-            <span className="text-sm" style={{ color: 'var(--error)' }}>{error}</span>
+            <span className="submit-modal-error">{error}</span>
           )}
         </div>
       </form>
