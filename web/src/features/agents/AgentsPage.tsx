@@ -33,7 +33,7 @@ export function AgentsPage() {
       {agentsLoading ? (
         <div className="agents-grid-v2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="w-full" style={{ height: 120, borderRadius: 14 }} />
+            <Skeleton key={i} className="w-full h-[120px] rounded-[14px]" />
           ))}
         </div>
       ) : agents && agents.length > 0 ? (
@@ -76,7 +76,7 @@ export function AgentsPage() {
         <div className="task-queue-list">
           {tasksLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="w-full" style={{ height: 40 }} />
+              <Skeleton key={i} className="w-full h-10" />
             ))
           ) : tasks.length > 0 ? (
             tasks.map((task) => (
