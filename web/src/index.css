@@ -5499,6 +5499,34 @@ h3 {
   overflow-y: auto;
 }
 
+.task-queue-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 20px;
+  background: rgba(96, 165, 250, 0.04);
+  border-top: 1px solid rgba(96, 165, 250, 0.12);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.12);
+}
+.task-queue-divider span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.task-queue-history .task-line-row {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+.task-queue-history .task-line:hover .task-line-row {
+  opacity: 0.85;
+}
+.task-queue-history .task-line-open .task-line-row {
+  opacity: 0.85;
+}
+
 /* ── Task Line ────────────────────────────────── */
 
 .task-line {

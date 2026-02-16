@@ -22,6 +22,8 @@ export function AgentsPage() {
   )
 
   const tasks = tasksData?.tasks ?? []
+  const activeTasks = tasks.filter(t => t.status === 'pending' || t.status === 'running')
+  const historyTasks = tasks.filter(t => t.status === 'completed' || t.status === 'failed')
   const totalPending = queues?.reduce((sum, q) => sum + q.pending, 0) ?? 0
 
   return (
@@ -79,9 +81,27 @@ export function AgentsPage() {
               <Skeleton key={i} className="w-full h-10" />
             ))
           ) : tasks.length > 0 ? (
-            tasks.map((task) => (
-              <TaskLine key={task.id} task={task} />
-            ))
+            <>
+              {activeTasks.length > 0 && (
+                <div className="task-queue-group">
+                  {activeTasks.map((task) => (
+                    <TaskLine key={task.id} task={task} />
+                  ))}
+                </div>
+              )}
+              {historyTasks.length > 0 && (
+                <>
+                  <div className="task-queue-divider">
+                    <span>History</span>
+                  </div>
+                  <div className="task-queue-group task-queue-history">
+                    {historyTasks.map((task) => (
+                      <TaskLine key={task.id} task={task} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
           ) : (
             <p className="py-6 text-center text-sm" style={{ color: 'var(--ink-3)' }}>
               No tasks yet
