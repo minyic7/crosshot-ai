@@ -1,114 +1,96 @@
-import { Bot, Layers } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { useState } from 'react'
+import { Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useListAgentsQuery, useListQueuesQuery, useListTasksQuery } from '@/store/api'
 import { AgentCard } from './AgentCard'
+import { TaskLine } from './TaskLine'
+import { SubmitTaskModal } from './SubmitTaskModal'
 
 export function AgentsPage() {
+  const [submitOpen, setSubmitOpen] = useState(false)
+
   const { data: agents, isLoading: agentsLoading } = useListAgentsQuery(undefined, {
     pollingInterval: 5000,
   })
-  const { data: queues, isLoading: queuesLoading } = useListQueuesQuery(undefined, {
+  const { data: queues } = useListQueuesQuery(undefined, {
     pollingInterval: 5000,
   })
-  const { data: tasksData, isLoading: tasksLoading } = useListTasksQuery({ limit: 20 }, {
-    pollingInterval: 5000,
-  })
+  const { data: tasksData, isLoading: tasksLoading } = useListTasksQuery(
+    { limit: 30 },
+    { pollingInterval: 5000 },
+  )
 
-  const recentTasks = tasksData?.tasks ?? []
+  const tasks = tasksData?.tasks ?? []
+  const totalPending = queues?.reduce((sum, q) => sum + q.pending, 0) ?? 0
 
   return (
     <div className="stack">
-      <div className="flex items-center gap-2">
-        <Bot size={20} />
-        <h1 className="text-xl font-semibold">Agents</h1>
-      </div>
-
-      {/* Task Queues */}
-      <Card>
-        <CardContent>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Layers size={18} />
-              Task Queues
-            </CardTitle>
-          </CardHeader>
-          <div className="stack-sm" style={{ marginTop: '1rem' }}>
-            {queuesLoading ? (
-              <Skeleton className="w-full h-10" />
-            ) : queues && queues.length > 0 ? (
-              queues.map((q) => (
-                <div key={q.label} className="flex items-center justify-between py-2">
-                  <Badge variant="muted">{q.label}</Badge>
-                  <span className="font-medium">{q.pending} pending</span>
-                </div>
-              ))
-            ) : (
-              <p style={{ color: 'var(--foreground-subtle)' }}>No queues active</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Header */}
+      <h1 className="text-xl font-semibold">Agents</h1>
 
       {/* Agent Cards */}
       {agentsLoading ? (
-        <div className="stats-grid">
+        <div className="agents-grid-v2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="w-full h-48" />
+            <Skeleton key={i} className="w-full" style={{ height: 120, borderRadius: 14 }} />
           ))}
         </div>
       ) : agents && agents.length > 0 ? (
-        <div className="stats-grid">
+        <div className="agents-grid-v2">
           {agents.map((agent) => (
             <AgentCard key={agent.name} agent={agent} />
           ))}
         </div>
       ) : (
-        <p style={{ color: 'var(--foreground-subtle)' }}>No agents connected</p>
+        <div className="empty-state">
+          <p style={{ color: 'var(--ink-3)' }}>No agents connected</p>
+        </div>
       )}
 
-      {/* Recent Completed Tasks */}
-      <Card>
-        <CardContent>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <div className="stack-sm" style={{ marginTop: '1rem' }}>
-            {tasksLoading ? (
-              <Skeleton className="w-full h-10" />
-            ) : recentTasks.length > 0 ? (
-              recentTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="muted">{task.label}</Badge>
-                    <span className="text-sm font-mono" style={{ color: 'var(--foreground-muted)' }}>
-                      {task.id.slice(0, 8)}
-                    </span>
-                    {task.assigned_to && (
-                      <span className="text-sm" style={{ color: 'var(--foreground-subtle)' }}>
-                        → {task.assigned_to}
-                      </span>
-                    )}
-                  </div>
-                  <Badge
-                    variant={
-                      task.status === 'completed' ? 'success' :
-                      task.status === 'failed' ? 'error' :
-                      task.status === 'running' ? 'warning' :
-                      'muted'
-                    }
-                  >
-                    {task.status}
-                  </Badge>
-                </div>
-              ))
-            ) : (
-              <p style={{ color: 'var(--foreground-subtle)' }}>No recent activity</p>
+      {/* Task Queue */}
+      <div className="task-queue-section">
+        <div className="task-queue-header">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold">Task Queue</h2>
+            {totalPending > 0 && (
+              <Badge variant="warning" style={{ fontSize: '0.625rem', padding: '1px 8px' }}>
+                {totalPending} pending
+              </Badge>
             )}
+            {queues && queues.filter(q => q.pending > 0).map(q => (
+              <span key={q.label} className="text-xs" style={{ color: 'var(--ink-3)' }}>
+                {q.label}: {q.pending}
+              </span>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+          <button
+            className="btn btn-accent btn-sm"
+            onClick={() => setSubmitOpen(true)}
+          >
+            <Plus size={14} />
+            Submit
+          </button>
+        </div>
+
+        <div className="task-queue-list">
+          {tasksLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="w-full" style={{ height: 40 }} />
+            ))
+          ) : tasks.length > 0 ? (
+            tasks.map((task) => (
+              <TaskLine key={task.id} task={task} />
+            ))
+          ) : (
+            <p className="py-6 text-center text-sm" style={{ color: 'var(--ink-3)' }}>
+              No tasks yet
+            </p>
+          )}
+        </div>
+      </div>
+
+      <SubmitTaskModal open={submitOpen} onClose={() => setSubmitOpen(false)} />
     </div>
   )
 }

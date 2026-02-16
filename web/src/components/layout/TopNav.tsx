@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Database, Bot, ListTodo, Cookie, Sun, Moon, Globe } from 'lucide-react'
+import { LayoutDashboard, Database, Bot, Cookie, Sun, Moon, Globe } from 'lucide-react'
 import { useGetHealthQuery } from '@/store/api'
 import { useTimezone } from '@/hooks/useTimezone'
 
@@ -7,7 +7,6 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/database', label: 'Database', icon: Database },
   { to: '/agents', label: 'Agents', icon: Bot },
-  { to: '/tasks', label: 'Tasks', icon: ListTodo },
   { to: '/cookies', label: 'Cookies', icon: Cookie },
 ]
 
