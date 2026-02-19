@@ -1,28 +1,33 @@
 import { useRef, useCallback, type TouchEvent } from 'react'
 
 /**
- * Returns touch + click handlers that distinguish a tap from a scroll.
- * On mobile, onClick is suppressed if the finger moved > threshold during touch.
- * On desktop, onClick fires normally.
+ * Distinguishes a tap from a scroll on touch devices.
+ * Uses touchEnd (not touchMove) to measure displacement — more reliable
+ * on iOS Safari where touchMove events are suppressed during native scroll.
+ * Desktop clicks pass through normally.
  */
-export function useTap(handler: () => void, threshold = 8) {
-  const moved = useRef(false)
-  const startY = useRef(0)
+export function useTap(handler: () => void, threshold = 10) {
+  const touch = useRef({ y: 0, scrolled: false, active: false })
 
   const onTouchStart = useCallback((e: TouchEvent) => {
-    startY.current = e.touches[0].clientY
-    moved.current = false
+    touch.current = { y: e.touches[0].clientY, scrolled: false, active: true }
   }, [])
 
-  const onTouchMove = useCallback((e: TouchEvent) => {
-    if (Math.abs(e.touches[0].clientY - startY.current) > threshold) {
-      moved.current = true
-    }
+  const onTouchEnd = useCallback((e: TouchEvent) => {
+    const dy = Math.abs(e.changedTouches[0].clientY - touch.current.y)
+    if (dy > threshold) touch.current.scrolled = true
   }, [threshold])
 
   const onClick = useCallback(() => {
-    if (!moved.current) handler()
+    if (touch.current.active) {
+      // Touch interaction — only fire if finger didn't scroll
+      if (!touch.current.scrolled) handler()
+      touch.current.active = false
+    } else {
+      // Desktop mouse click — always fire
+      handler()
+    }
   }, [handler])
 
-  return { onTouchStart, onTouchMove, onClick }
+  return { onTouchStart, onTouchEnd, onClick }
 }
