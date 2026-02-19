@@ -2173,7 +2173,7 @@ h3 {
   position: relative;
   will-change: transform;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y;
   max-width: 480px;
 }
 
