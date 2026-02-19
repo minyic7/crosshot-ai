@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Cookie, Plus, Trash2, Power, ChevronDown, ChevronUp, Clock, AlertTriangle, Timer } from 'lucide-react'
+import { Plus, Trash2, Power, ChevronDown, ChevronUp, Clock, AlertTriangle, Timer } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -36,8 +36,6 @@ export function CookiesPage() {
     <div className="stack">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Cookie size={20} />
-          <h1 className="text-xl font-semibold">Cookies Pool</h1>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <Plus size={14} />

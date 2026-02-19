@@ -29,9 +29,6 @@ export function AgentsPage() {
 
   return (
     <div className="stack">
-      {/* Header */}
-      <h1 className="text-xl font-semibold">Agents</h1>
-
       {/* Agent Cards */}
       {agentsLoading ? (
         <div className="agents-grid-v2">
