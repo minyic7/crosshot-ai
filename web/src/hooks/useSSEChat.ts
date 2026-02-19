@@ -74,6 +74,7 @@ export function useSSEChat({
   const [streamingText, setStreamingText] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const initializedRef = useRef(false)
+  const hasInteractedRef = useRef(false)
 
   // Restore persisted messages once (when they arrive from the API)
   useEffect(() => {
@@ -83,15 +84,18 @@ export function useSSEChat({
     }
   }, [initialMessages])
 
-  // Auto-scroll when messages or streaming text change
+  // Auto-scroll when messages or streaming text change, but only after user sends a message
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (hasInteractedRef.current) {
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages, streamingText])
 
   const send = useCallback(async () => {
     const text = input.trim()
     if (!text || streaming) return
 
+    hasInteractedRef.current = true
     const userMsg: ChatMsg = { role: 'user', content: text }
     const newMessages = [...messages, userMsg]
 
