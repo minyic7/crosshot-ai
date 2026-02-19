@@ -1379,6 +1379,7 @@ h3 {
   -webkit-backdrop-filter: var(--frost);
   border: 1px solid var(--glass-border);
   border-radius: 14px;
+  touch-action: pan-y;
   box-shadow: var(--shadow-card);
   cursor: pointer;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease, background 0.2s ease;
@@ -5348,6 +5349,7 @@ h3 {
   -webkit-backdrop-filter: var(--frost);
   border: 1px solid var(--glass-border);
   border-radius: 14px;
+  touch-action: pan-y;
   box-shadow: var(--shadow-card);
   cursor: pointer;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
@@ -5566,6 +5568,7 @@ h3 {
   padding: 10px 20px;
   cursor: pointer;
   min-height: 40px;
+  touch-action: pan-y;
 }
 
 .task-line-icon {

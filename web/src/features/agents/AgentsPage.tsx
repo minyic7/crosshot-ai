@@ -1,8 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { Plus, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useTap } from '@/hooks/useTap'
 import { useListAgentsQuery, useListQueuesQuery, useListTasksQuery } from '@/store/api'
 import { AgentCard } from './AgentCard'
 import { TaskLine } from './TaskLine'
@@ -27,7 +26,6 @@ export function AgentsPage() {
   const activeTasks = tasks.filter(t => t.status === 'pending' || t.status === 'running')
   const historyTasks = tasks.filter(t => t.status === 'completed' || t.status === 'failed')
   const totalPending = queues?.reduce((sum, q) => sum + q.pending, 0) ?? 0
-  const historyTap = useTap(useCallback(() => setHistoryOpen(o => !o), []))
 
   return (
     <div className="stack">
@@ -96,7 +94,7 @@ export function AgentsPage() {
                 <>
                   <div
                     className="task-queue-divider"
-                    {...historyTap}
+                    onClick={() => setHistoryOpen(!historyOpen)}
                   >
                     <ChevronDown
                       size={14}
