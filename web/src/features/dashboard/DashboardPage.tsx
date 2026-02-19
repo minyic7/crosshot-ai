@@ -1215,7 +1215,6 @@ export function DashboardPage() {
       {/* Header */}
       <div className="dashboard-header rise">
         <div>
-          <h1>Dashboard</h1>
           <p className="dashboard-subtitle">
             Tracking {allTopics.length} topics · {totalPosts} posts collected
           </p>
