@@ -4,7 +4,8 @@ import {
   DndContext,
   DragOverlay,
   defaultDropAnimationSideEffects,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCenter,
@@ -59,11 +60,11 @@ const uid = (): string =>
 
 // ─── Custom Sensor (ignores buttons) ────────────────────────
 
-class SmartPointerSensor extends PointerSensor {
+class SmartMouseSensor extends MouseSensor {
   static activators = [
     {
-      eventName: 'onPointerDown' as const,
-      handler: ({ nativeEvent: e }: { nativeEvent: PointerEvent }) => {
+      eventName: 'onMouseDown' as const,
+      handler: ({ nativeEvent: e }: { nativeEvent: MouseEvent }) => {
         return e.button === 0 && !(e.target as HTMLElement).closest('button, [data-no-dnd]')
       },
     },
@@ -1103,7 +1104,8 @@ export function DashboardPage() {
 
   // DnD sensors
   const sensors = useSensors(
-    useSensor(SmartPointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(SmartMouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
   )
 
   const findContainer = useCallback((id: string): 'pinned' | 'unpinned' | null => {
