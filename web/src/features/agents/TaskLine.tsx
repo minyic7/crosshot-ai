@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Clock, Loader2, CheckCircle2, XCircle, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { useTimezone } from '@/hooks/useTimezone'
+import { useTap } from '@/hooks/useTap'
 import type { Task, TaskStatus } from '@/types/models'
 
 const STATUS_ICON: Record<TaskStatus, React.ReactNode> = {
@@ -43,11 +44,12 @@ export function TaskLine({ task }: TaskLineProps) {
   const [expanded, setExpanded] = useState(false)
   const { fmt, fmtRelative } = useTimezone()
   const result = task.result as Record<string, unknown> | null
+  const tap = useTap(useCallback(() => setExpanded(e => !e), []))
 
   return (
     <div className={`task-line${expanded ? ' task-line-open' : ''}`}>
       {/* Collapsed row */}
-      <div className="task-line-row" onClick={() => setExpanded(!expanded)}>
+      <div className="task-line-row" {...tap}>
         <span className="task-line-icon">
           {STATUS_ICON[task.status] ?? STATUS_ICON.pending}
         </span>

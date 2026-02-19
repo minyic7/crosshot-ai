@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
+import { useTap } from '@/hooks/useTap'
 import type { AgentHeartbeat } from '@/types/models'
 
 interface AgentCardProps {
@@ -11,11 +12,12 @@ interface AgentCardProps {
 export function AgentCard({ agent }: AgentCardProps) {
   const [expanded, setExpanded] = useState(false)
   const uptime = formatUptime(agent.started_at)
+  const tap = useTap(useCallback(() => setExpanded(e => !e), []))
 
   return (
     <div
       className={`agent-card-v2${expanded ? ' agent-card-v2-open' : ''}${agent.status === 'busy' ? ' agent-card-v2-busy' : ''}`}
-      onClick={() => setExpanded(!expanded)}
+      {...tap}
     >
       {/* Shimmer overlay */}
       <div className="agent-card-v2-shimmer" />
