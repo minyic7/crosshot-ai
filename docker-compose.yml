@@ -173,22 +173,3 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ──────────────────────────────────────
-  # Cloudflare Tunnel (public access)
-  # ──────────────────────────────────────
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      web:
-        condition: service_started
-    mem_limit: 128m
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
