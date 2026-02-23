@@ -61,6 +61,7 @@ class BaseAgent:
         system_prompt: str = "",
         ai_enabled: bool = False,
         fan_in_enabled: bool = False,
+        llm_config: dict | None = None,
     ) -> None:
         self.name = name
         self.labels = labels
@@ -68,6 +69,7 @@ class BaseAgent:
         self.system_prompt = system_prompt
         self.ai_enabled = ai_enabled
         self.fan_in_enabled = fan_in_enabled
+        self.llm_config = llm_config or {}
 
         self._shutdown_event = asyncio.Event()
         self._settings = get_settings()
@@ -108,6 +110,7 @@ class BaseAgent:
             system_prompt=agent_config.get("system_prompt", ""),
             ai_enabled=agent_config.get("ai_enabled", False),
             fan_in_enabled=agent_config.get("fan_in", False),
+            llm_config=agent_config.get("llm", {}),
         )
 
     # ──────────────────────────────────────────────
@@ -348,7 +351,7 @@ class BaseAgent:
             logger.debug("ReAct step %d/%d for task %s", step + 1, max_steps, task.id)
 
             response = await llm.chat.completions.create(
-                model=self._settings.grok_model,
+                model=self.model,
                 messages=messages,
                 tools=tools_schema,
             )
@@ -409,12 +412,21 @@ class BaseAgent:
     # Helpers
     # ──────────────────────────────────────────────
 
+    @property
+    def model(self) -> str:
+        """LLM model name — per-agent override or global default."""
+        return self.llm_config.get("model") or self._settings.grok_model
+
     def _get_llm(self) -> AsyncOpenAI:
         """Get or create the LLM client."""
         if self._llm is None:
+            import os
+
+            api_key_env = self.llm_config.get("api_key_env", "")
+            api_key = os.environ.get(api_key_env) if api_key_env else None
             self._llm = AsyncOpenAI(
-                api_key=self._settings.grok_api_key,
-                base_url=self._settings.grok_base_url,
+                api_key=api_key or self._settings.grok_api_key,
+                base_url=self.llm_config.get("base_url") or self._settings.grok_base_url,
             )
         return self._llm
 

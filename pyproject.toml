@@ -3,5 +3,6 @@ members = [
     "apps/shared",
     "apps/agent-crawler",
     "apps/agent-analyst",
+    "apps/agent-searcher",
     "apps/api",
 ]

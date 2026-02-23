@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-searcher"
+version = "0.1.0"
+description = "Searcher agent — intelligent web research via ReAct loop"
+requires-python = ">=3.13"
+dependencies = [
+    "shared",
+    "httpx>=0.28.0",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }

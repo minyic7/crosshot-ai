@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 members = [
     "agent-analyst",
     "agent-crawler",
+    "agent-searcher",
     "api",
     "shared",
 ]
@@ -39,6 +40,21 @@ dependencies = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.11.0" },
     { name = "playwright", specifier = ">=1.58.0" },
+    { name = "shared", editable = "apps/shared" },
+]
+
+[[package]]
+name = "agent-searcher"
+version = "0.1.0"
+source = { editable = "apps/agent-searcher" }
+dependencies = [
+    { name = "httpx" },
+    { name = "shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "shared", editable = "apps/shared" },
 ]
 
