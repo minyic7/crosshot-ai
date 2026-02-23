@@ -55,7 +55,7 @@ const PLATFORM_OPTIONS = ['x', 'xhs']
 /** uid() requires HTTPS; fallback for HTTP contexts */
 const uid = (): string =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? uid()
+    ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 
 // ─── Custom Sensor (ignores buttons) ────────────────────────
