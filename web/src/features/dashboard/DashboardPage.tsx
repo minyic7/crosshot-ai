@@ -1335,10 +1335,12 @@ export function DashboardPage() {
         </DndContext>
       )}
 
-      {/* FAB: mobile-only "New Topic" button */}
-      <button className="fab" onClick={() => setShowCreate(true)} aria-label="New Topic">
-        <Plus size={24} />
-      </button>
+      {/* FAB: mobile-only "New Topic" button — hidden when modal is open */}
+      {!showCreate && (
+        <button className="fab" onClick={() => setShowCreate(true)} aria-label="New Topic">
+          <Plus size={24} />
+        </button>
+      )}
 
       <CreateTopicModal open={showCreate} onClose={() => setShowCreate(false)} />
 
