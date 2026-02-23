@@ -714,9 +714,15 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
 
   const handleActions = useCallback((actions: Record<string, unknown>[]) => {
     const newProposals: Proposal[] = []
+    const updates: { originalName: string; fields: Record<string, unknown>; type: 'create_topic' | 'create_user' }[] = []
+
     for (const a of actions) {
       const _id = uid()
-      if (a.type === 'create_topic') {
+      if (a.type === 'update_topic') {
+        updates.push({ originalName: (a.original_name as string) || '', fields: a, type: 'create_topic' })
+      } else if (a.type === 'update_user') {
+        updates.push({ originalName: (a.original_name as string) || '', fields: a, type: 'create_user' })
+      } else if (a.type === 'create_topic') {
         newProposals.push({
           _id, type: 'create_topic',
           name: (a.name as string) || '',
@@ -743,9 +749,55 @@ function CreateTopicModal({ open, onClose }: { open: boolean; onClose: () => voi
         })
       }
     }
-    if (newProposals.length > 0) {
-      setProposals((prev) => [...prev, ...newProposals])
-    }
+
+    setProposals((prev) => {
+      let updated = [...prev]
+
+      // Apply updates to matching proposals
+      for (const u of updates) {
+        const idx = updated.findIndex((p) => p.type === u.type && ('name' in p) && p.name === u.originalName)
+        if (idx !== -1) {
+          const existing = updated[idx]
+          if (u.type === 'create_topic' && existing.type === 'create_topic') {
+            updated[idx] = {
+              ...existing,
+              ...(u.fields.name != null && { name: u.fields.name as string }),
+              ...(u.fields.icon != null && { icon: u.fields.icon as string }),
+              ...(u.fields.description != null && { description: u.fields.description as string }),
+              ...(u.fields.platforms != null && { platforms: u.fields.platforms as string[] }),
+              ...(u.fields.keywords != null && { keywords: u.fields.keywords as string[] }),
+              ...(u.fields.schedule_interval_hours != null && { schedule_interval_hours: u.fields.schedule_interval_hours as number }),
+            }
+          } else if (u.type === 'create_user' && existing.type === 'create_user') {
+            updated[idx] = {
+              ...existing,
+              ...(u.fields.name != null && { name: u.fields.name as string }),
+              ...(u.fields.platform != null && { platform: u.fields.platform as string }),
+              ...(u.fields.profile_url != null && { profile_url: u.fields.profile_url as string }),
+              ...(u.fields.username != null && { username: u.fields.username as string }),
+              ...(u.fields.schedule_interval_hours != null && { schedule_interval_hours: u.fields.schedule_interval_hours as number }),
+            }
+          }
+          // Also update any subscribe refs that pointed to the old name
+          if (u.fields.name && u.fields.name !== u.originalName) {
+            const newName = u.fields.name as string
+            updated = updated.map((p) => {
+              if (p.type !== 'subscribe') return p
+              const sp = p as SubscribeProposal
+              if (u.type === 'create_topic' && sp.topic_ref === u.originalName) {
+                return { ...sp, topic_ref: newName }
+              }
+              if (u.type === 'create_user' && sp.user_ref === u.originalName) {
+                return { ...sp, user_ref: newName }
+              }
+              return p
+            })
+          }
+        }
+      }
+
+      return [...updated, ...newProposals]
+    })
   }, [])
 
   const {
