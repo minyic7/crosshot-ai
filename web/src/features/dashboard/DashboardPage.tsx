@@ -212,8 +212,12 @@ function TopicCard({
 
       {/* Hover actions — float top-right */}
       <div className="topic-card-actions">
-        <button className="topic-card-refresh" onClick={() => onRefresh(topic.id)}>
-          <RefreshCw size={11} />
+        <button
+          className="topic-card-refresh"
+          onClick={() => onRefresh(topic.id)}
+          disabled={topic.pipeline?.phase === 'analyzing' || topic.pipeline?.phase === 'summarizing'}
+        >
+          <RefreshCw size={11} className={topic.pipeline?.phase === 'analyzing' || topic.pipeline?.phase === 'summarizing' ? 'animate-spin' : ''} />
         </button>
       </div>
 
