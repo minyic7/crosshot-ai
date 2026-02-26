@@ -197,6 +197,68 @@ class TaskQueue:
         return tasks
 
     # ──────────────────────────────────────────────
+    # Startup recovery
+    # ──────────────────────────────────────────────
+
+    async def recover_from_pg(self, labels: list[str]) -> int:
+        """Re-queue pending/running tasks from PostgreSQL that are missing in Redis.
+
+        Called on agent startup to recover tasks lost when Redis restarts.
+        Only re-queues tasks whose label matches this agent's labels.
+        Running tasks are reset to pending (the agent that was running them is gone).
+
+        Returns the number of recovered tasks.
+        """
+        from shared.db.engine import get_session_factory
+        from shared.db.models import TaskRow
+
+        from sqlalchemy import select
+
+        session_factory = get_session_factory()
+        recovered = 0
+
+        async with session_factory() as session:
+            stmt = (
+                select(TaskRow)
+                .where(TaskRow.label.in_(labels))
+                .where(TaskRow.status.in_(["pending", "running"]))
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+
+            for row in rows:
+                # Check if already in Redis queue
+                existing = await self._load_task(str(row.id))
+                if existing and existing.status == TaskStatus.PENDING:
+                    # Already queued — check if it's actually in the sorted set
+                    score = await self._redis.zscore(
+                        f"task:queue:{row.label}", str(row.id),
+                    )
+                    if score is not None:
+                        continue
+
+                task = Task(
+                    id=str(row.id),
+                    label=row.label,
+                    priority=row.priority,
+                    status=TaskStatus.PENDING,
+                    payload=row.payload,
+                    parent_job_id=str(row.parent_job_id) if row.parent_job_id else None,
+                    assigned_to=None,
+                    created_at=row.created_at,
+                    retry_count=row.retry_count,
+                    max_retries=row.max_retries,
+                    error=None,
+                )
+                await self.push(task)
+                recovered += 1
+
+        if recovered:
+            logger.info("Recovered %d tasks from PostgreSQL for labels %s", recovered, labels)
+
+        return recovered
+
+    # ──────────────────────────────────────────────
     # Task storage
     # ──────────────────────────────────────────────
 

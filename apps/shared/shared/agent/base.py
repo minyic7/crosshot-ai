@@ -220,6 +220,14 @@ class BaseAgent:
             [t.name for t in self.tools],
         )
 
+        # Recover orphaned tasks from PostgreSQL (lost on Redis restart)
+        try:
+            recovered = await self._queue.recover_from_pg(self.labels)
+            if recovered:
+                logger.info("Recovered %d orphaned tasks into Redis queue", recovered)
+        except Exception:
+            logger.warning("Task recovery from PG failed (non-fatal)", exc_info=True)
+
         # Start heartbeat in background
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
