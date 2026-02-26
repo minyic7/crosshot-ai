@@ -167,6 +167,7 @@ function TopicCard({
   onPin,
   onRefresh,
   onClick,
+  refreshing,
   dragListeners,
   className = '',
   style,
@@ -176,6 +177,7 @@ function TopicCard({
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
+  refreshing?: boolean
   dragListeners?: Record<string, unknown>
   className?: string
   style?: React.CSSProperties
@@ -215,9 +217,9 @@ function TopicCard({
         <button
           className="topic-card-refresh"
           onClick={() => onRefresh(topic.id)}
-          disabled={topic.pipeline?.phase === 'analyzing' || topic.pipeline?.phase === 'summarizing'}
+          disabled={refreshing}
         >
-          <RefreshCw size={11} className={topic.pipeline?.phase === 'analyzing' || topic.pipeline?.phase === 'summarizing' ? 'animate-spin' : ''} />
+          <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
         </button>
       </div>
 
@@ -300,12 +302,14 @@ function SortableCard({
   onPin,
   onRefresh,
   onClick,
+  refreshing,
 }: {
   topic: Topic
   index: number
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
+  refreshing?: boolean
 }) {
   const skipPostDrop: AnimateLayoutChanges = (args) =>
     args.active ? defaultAnimateLayoutChanges(args) : false
@@ -340,6 +344,7 @@ function SortableCard({
         onPin={onPin}
         onRefresh={onRefresh}
         onClick={onClick}
+        refreshing={refreshing}
         dragListeners={listeners}
       />
     </div>
@@ -359,6 +364,7 @@ function ZoneGrid({
   onPin,
   onRefresh,
   onClick,
+  refreshingIds,
 }: {
   zone: 'pinned' | 'unpinned'
   title: string
@@ -370,6 +376,7 @@ function ZoneGrid({
   onPin: (id: string, pinned: boolean) => void
   onRefresh: (id: string) => void
   onClick: (id: string) => void
+  refreshingIds: Set<string>
 }) {
   const { setNodeRef } = useDroppable({ id: `zone-${zone}` })
 
@@ -412,6 +419,7 @@ function ZoneGrid({
               onPin={onPin}
               onRefresh={onRefresh}
               onClick={onClick}
+              refreshing={refreshingIds.has(topic.id)}
             />
           ))}
         </div>
@@ -1080,8 +1088,24 @@ export function DashboardPage() {
   const [reorderUsers] = useReorderUsersMutation()
   const [resetAllData, { isLoading: isResetting }] = useResetAllDataMutation()
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set())
+
+  // Clear refreshingIds when pipeline finishes
+  useEffect(() => {
+    if (!topics && !standaloneUsers) return
+    setRefreshingIds(prev => {
+      const next = new Set(prev)
+      for (const id of prev) {
+        const t = allTopicsRef.current.find(x => x.id === id)
+        const phase = t?.pipeline?.phase
+        if (!phase || phase === 'done' || phase === 'error') next.delete(id)
+      }
+      return next.size === prev.size ? prev : next
+    })
+  }, [topics, standaloneUsers])
 
   const handleRefresh = useCallback((id: string) => {
+    setRefreshingIds(prev => new Set(prev).add(id))
     const item = allTopicsRef.current.find((t) => t.id === id)
     if (item?.type === 'user') reanalyzeUser(id)
     else reanalyzeTopic(id)
@@ -1349,6 +1373,7 @@ export function DashboardPage() {
             onPin={handlePin}
             onRefresh={handleRefresh}
             onClick={handleTopicClick}
+            refreshingIds={refreshingIds}
           />
 
           {/* All Topics Zone */}
@@ -1363,6 +1388,7 @@ export function DashboardPage() {
             onPin={handlePin}
             onRefresh={handleRefresh}
             onClick={handleTopicClick}
+            refreshingIds={refreshingIds}
           />
 
           {/* Empty state */}
