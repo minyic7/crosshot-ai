@@ -398,19 +398,19 @@ export function ContentDetailPage() {
             >
               {(content.data as Record<string, unknown>)?.title as string ?? 'Untitled'}
             </h2>
-            {(content.data as Record<string, unknown>)?.site_name && (
+            {(content.data as Record<string, unknown>)?.site_name ? (
               <span
                 className="text-xs mb-3 block"
                 style={{ color: 'var(--foreground-muted)' }}
               >
-                {(content.data as Record<string, unknown>).site_name as string}
+                {String((content.data as Record<string, unknown>).site_name)}
               </span>
-            )}
+            ) : null}
             <p
               className="mb-4 whitespace-pre-wrap"
               style={{ lineHeight: 1.7, fontSize: '0.9375rem' }}
             >
-              {(content.data as Record<string, unknown>)?.content as string ?? content.text}
+              {String((content.data as Record<string, unknown>)?.content ?? '')}
             </p>
             <div
               className="flex items-center gap-3 pt-2"
