@@ -17,12 +17,7 @@ const STATUS_OPTIONS: { value: string | undefined; label: string }[] = [
   { value: 'failed', label: 'Failed' },
 ]
 
-const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'error' | 'muted'> = {
-  pending: 'muted',
-  running: 'warning',
-  completed: 'success',
-  failed: 'error',
-}
+
 
 export function AgentsPage() {
   const [submitOpen, setSubmitOpen] = useState(false)
