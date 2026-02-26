@@ -29,7 +29,7 @@ from .actions.search import search_tweets
 from .actions.timeline import fetch_timeline
 from .actions.tweet import fetch_tweet
 from .browser import ProxyConfig, XBrowserSession
-from .errors import ContentNotFoundError, NoCookiesAvailable, XCrawlerError
+from .errors import ContentNotFoundError, NoCookiesAvailable, RateLimitError, XCrawlerError
 from .query_builder import QueryValidationError, XQueryBuilder
 from .query_generator import QueryGenerator
 
@@ -92,6 +92,12 @@ class XExecutor(BasePlatformExecutor):
             await self._download_and_update_media(all_content_ids)
 
             return result
+
+        except RateLimitError as e:
+            # Rate limited — defer task instead of burning retries
+            await self._cookies_service.report_failure(cookie)
+            delay = e.retry_after or 120
+            raise RetryLater(delay, str(e)) from e
 
         except (ContentNotFoundError, QueryValidationError):
             # Not a cookie problem — still report success
