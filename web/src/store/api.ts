@@ -17,13 +17,17 @@ export const apiSlice = createApi({
     }),
 
     // Tasks
-    listTasks: builder.query<{ tasks: Task[]; total: number }, { label?: string; status?: string; limit?: number } | void>({
+    listTasks: builder.query<{ tasks: Task[]; total: number }, { label?: string; status?: string; limit?: number; offset?: number } | void>({
       query: (params) => ({ url: '/tasks', params: params ?? undefined }),
       providesTags: ['Task'],
     }),
     getTask: builder.query<Task, string>({
       query: (id) => `/tasks/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Task', id }],
+    }),
+    listTaskLabels: builder.query<{ labels: Record<string, Record<string, number>> }, void>({
+      query: () => '/tasks/labels',
+      providesTags: ['Task'],
     }),
 
     createTask: builder.mutation<{ task_id: string; label: string; status: string }, { label: string; payload: Record<string, unknown>; priority?: number }>({
@@ -208,6 +212,7 @@ export const {
   useGetDashboardStatsQuery,
   useListTasksQuery,
   useGetTaskQuery,
+  useListTaskLabelsQuery,
   useCreateTaskMutation,
   useCreateJobMutation,
   useGetJobQuery,

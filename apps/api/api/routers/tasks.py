@@ -46,32 +46,68 @@ async def list_tasks(
     label: str | None = None,
     status: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
-    """List tasks. Returns recent completed + pending queue tasks."""
-    queue = get_queue()
-    tasks = []
+    """List all tasks from PostgreSQL with filters and pagination."""
+    from shared.db.models import TaskRow
 
-    # Get recently completed/failed tasks
-    recent = await queue.get_recent_completed(limit=limit)
-    for t in recent:
-        if label and t.label != label:
-            continue
-        if status and t.status.value != status:
-            continue
-        tasks.append(t.model_dump(mode="json"))
+    factory = get_session_factory()
+    async with factory() as session:
+        stmt = select(TaskRow).order_by(TaskRow.created_at.desc())
+        count_stmt = select(func.count()).select_from(TaskRow)
 
-    # Get pending tasks from queue labels
-    if not status or status == "pending":
-        labels = await queue.get_queue_labels()
-        for q_label in labels:
-            if label and q_label != label:
-                continue
-            length = await queue.get_queue_length(q_label)
-            if length > 0:
-                # We can't easily list sorted set members, but we know the count
-                pass
+        if label:
+            stmt = stmt.where(TaskRow.label == label)
+            count_stmt = count_stmt.where(TaskRow.label == label)
+        if status:
+            stmt = stmt.where(TaskRow.status == status)
+            count_stmt = count_stmt.where(TaskRow.status == status)
 
-    return {"tasks": tasks[:limit], "total": len(tasks)}
+        total = (await session.execute(count_stmt)).scalar() or 0
+        rows = (await session.execute(stmt.offset(offset).limit(limit))).scalars().all()
+
+    tasks = [
+        {
+            "id": str(r.id),
+            "label": r.label,
+            "priority": r.priority,
+            "status": r.status,
+            "payload": r.payload or {},
+            "parent_job_id": str(r.parent_job_id) if r.parent_job_id else None,
+            "assigned_to": r.assigned_to,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            "retry_count": r.retry_count,
+            "max_retries": r.max_retries,
+            "error": r.error,
+            "result": r.result,
+        }
+        for r in rows
+    ]
+    return {"tasks": tasks, "total": total}
+
+
+@router.get("/tasks/labels")
+async def list_task_labels() -> dict:
+    """Get distinct task labels with counts by status."""
+    from shared.db.models import TaskRow
+
+    factory = get_session_factory()
+    async with factory() as session:
+        stmt = (
+            select(TaskRow.label, TaskRow.status, func.count())
+            .group_by(TaskRow.label, TaskRow.status)
+        )
+        rows = (await session.execute(stmt)).all()
+
+    labels: dict[str, dict[str, int]] = {}
+    for label, status, count in rows:
+        if label not in labels:
+            labels[label] = {}
+        labels[label][status] = count
+
+    return {"labels": labels}
 
 
 @router.get("/tasks/{task_id}")
