@@ -5,12 +5,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
-import httpx
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from tavily import AsyncTavilyClient
 
 from shared.config.settings import Settings
 from shared.db.models import ContentRow, TaskRow
@@ -18,8 +19,6 @@ from shared.search import index_contents
 from shared.tools.base import Tool
 
 logger = logging.getLogger(__name__)
-
-BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
 
 def make_tools(
@@ -31,53 +30,46 @@ def make_tools(
 
     The agent reference is needed so tools can read the current task context.
     """
+    tavily = AsyncTavilyClient(api_key=settings.tavily_api_key) if settings.tavily_api_key else None
 
     async def _web_search(
         query: str,
-        count: int = 10,
-        allowed_domains: list[str] | None = None,
-        excluded_domains: list[str] | None = None,
+        max_results: int = 10,
+        include_domains: list[str] | None = None,
+        exclude_domains: list[str] | None = None,
+        topic: str = "general",
+        time_range: str | None = None,
     ) -> str:
-        """Search the web using Brave Search API."""
-        if not settings.brave_api_key:
-            return "Error: BRAVE_API_KEY not configured."
-
-        # Apply domain filters to query string
-        effective_query = query
-        if allowed_domains:
-            sites = " OR ".join(f"site:{d}" for d in allowed_domains[:5])
-            effective_query = f"{query} ({sites})"
-        if excluded_domains:
-            exclusions = " ".join(f"-site:{d}" for d in excluded_domains[:5])
-            effective_query = f"{effective_query} {exclusions}"
+        """Search the web using Tavily Search API."""
+        if not tavily:
+            return "Error: TAVILY_API_KEY not configured."
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(
-                    BRAVE_SEARCH_URL,
-                    params={"q": effective_query, "count": min(count, 20)},
-                    headers={
-                        "X-Subscription-Token": settings.brave_api_key,
-                        "Accept": "application/json",
-                    },
-                )
-                if resp.status_code == 429:
-                    return "Rate limited. Wait before searching again."
-                resp.raise_for_status()
+            kwargs: dict[str, Any] = {
+                "max_results": min(max_results, 20),
+                "topic": topic,
+            }
+            if include_domains:
+                kwargs["include_domains"] = include_domains
+            if exclude_domains:
+                kwargs["exclude_domains"] = exclude_domains
+            if time_range:
+                kwargs["time_range"] = time_range
 
-                data = resp.json()
-                results = []
-                for item in data.get("web", {}).get("results", []):
-                    results.append({
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "snippet": item.get("description", ""),
-                        "site_name": item.get("meta_url", {}).get("hostname", ""),
-                        "age": item.get("age", ""),
-                    })
-                return json.dumps(results, ensure_ascii=False)
-        except httpx.HTTPStatusError as e:
-            return f"Search failed: HTTP {e.response.status_code}"
+            response = await tavily.search(query, **kwargs)
+
+            results = []
+            for item in response.get("results", []):
+                url = item.get("url", "")
+                results.append({
+                    "title": item.get("title", ""),
+                    "url": url,
+                    "content": item.get("content", ""),
+                    "score": item.get("score", 0),
+                    "site_name": urlparse(url).hostname or "",
+                    "published_date": item.get("published_date", ""),
+                })
+            return json.dumps(results, ensure_ascii=False)
         except Exception as e:
             return f"Search failed: {e}"
 
@@ -92,14 +84,12 @@ def make_tools(
 
         try:
             async with session_factory() as session:
-                # Build base filter
                 filters = []
                 if topic_id:
                     filters.append(ContentRow.topic_id == topic_id)
                 if user_id:
                     filters.append(ContentRow.user_id == user_id)
 
-                # Count by platform
                 platform_counts = await session.execute(
                     select(ContentRow.platform, func.count())
                     .where(*filters)
@@ -108,7 +98,6 @@ def make_tools(
                 platforms = {row[0]: row[1] for row in platform_counts}
                 total = sum(platforms.values())
 
-                # Get recent content titles/text
                 recent = await session.execute(
                     select(
                         ContentRow.text,
@@ -142,7 +131,6 @@ def make_tools(
                 "hours_since_newest": hours_since,
             }
 
-            # If a text query is provided, also search OpenSearch
             if query:
                 try:
                     from shared.search import search_contents
@@ -183,7 +171,6 @@ def make_tools(
         content_ids = []
         try:
             async with session_factory() as session:
-                # Ensure task row exists (FK requirement)
                 await session.execute(
                     pg_insert(TaskRow).values(
                         id=task.id,
@@ -199,7 +186,6 @@ def make_tools(
                         continue
 
                     content_id = str(uuid4())
-                    # Deterministic platform_content_id from URL for dedup
                     platform_content_id = hashlib.sha256(url.encode()).hexdigest()[:32]
 
                     stmt = pg_insert(ContentRow).values(
@@ -211,13 +197,14 @@ def make_tools(
                         platform_content_id=platform_content_id,
                         source_url=url,
                         author_display_name=item.get("site_name", ""),
-                        text=item.get("snippet", ""),
+                        text=item.get("content", ""),
                         data={
                             "title": item.get("title", ""),
-                            "description": item.get("snippet", ""),
+                            "content": item.get("content", ""),
                             "url": url,
                             "site_name": item.get("site_name", ""),
-                            "age": item.get("age", ""),
+                            "score": item.get("score", 0),
+                            "published_date": item.get("published_date", ""),
                         },
                         metrics={},
                     )
@@ -244,7 +231,7 @@ def make_tools(
                             "topic_id": topic_id,
                             "user_id": user_id,
                             "platform": "web",
-                            "text": item.get("snippet", ""),
+                            "text": item.get("content", ""),
                             "author_display_name": item.get("site_name", ""),
                             "crawled_at": datetime.now(timezone.utc).isoformat(),
                         })
@@ -260,9 +247,10 @@ def make_tools(
         Tool(
             name="web_search",
             description=(
-                "Search the web using Brave Search. Returns titles, URLs, and snippets. "
-                "Use allowed_domains to restrict to specific sites (e.g., reuters.com). "
-                "Use excluded_domains to skip low-quality sites."
+                "Search the web using Tavily. Returns titles, URLs, content snippets, and relevance scores. "
+                "Use include_domains to restrict to specific sites (e.g., reuters.com). "
+                "Use exclude_domains to skip low-quality sites. "
+                "Set topic to 'news' for recent news or 'finance' for financial data."
             ),
             parameters={
                 "type": "object",
@@ -271,25 +259,35 @@ def make_tools(
                         "type": "string",
                         "description": "Search query in natural language",
                     },
-                    "count": {
+                    "max_results": {
                         "type": "integer",
                         "description": "Number of results (1-20, default 10)",
                     },
-                    "allowed_domains": {
+                    "include_domains": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            "Only return results from these domains (max 5). "
+                            "Only return results from these domains. "
                             "E.g. ['reuters.com', 'bloomberg.com']"
                         ),
                     },
-                    "excluded_domains": {
+                    "exclude_domains": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
                             "Exclude results from these domains. "
                             "E.g. ['pinterest.com', 'quora.com']"
                         ),
+                    },
+                    "topic": {
+                        "type": "string",
+                        "enum": ["general", "news", "finance"],
+                        "description": "Search topic category (default: general)",
+                    },
+                    "time_range": {
+                        "type": "string",
+                        "enum": ["day", "week", "month", "year"],
+                        "description": "Filter results by recency",
                     },
                 },
                 "required": ["query"],
@@ -346,10 +344,11 @@ def make_tools(
                             "properties": {
                                 "title": {"type": "string"},
                                 "url": {"type": "string"},
-                                "snippet": {"type": "string"},
+                                "content": {"type": "string"},
                                 "site_name": {"type": "string"},
+                                "score": {"type": "number"},
                             },
-                            "required": ["title", "url", "snippet"],
+                            "required": ["title", "url", "content"],
                         },
                         "description": "Array of search result objects to save",
                     },

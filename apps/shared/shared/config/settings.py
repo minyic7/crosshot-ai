@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     grok_model: str = "grok-4-1-fast-reasoning"
     grok_fast_model: str = "grok-4-1-fast-non-reasoning"
 
-    # Brave Search API
-    brave_api_key: str = ""
+    # Tavily Search API
+    tavily_api_key: str = ""
 
     # OpenSearch
     opensearch_url: str = "http://opensearch:9200"
