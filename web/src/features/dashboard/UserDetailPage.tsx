@@ -500,8 +500,8 @@ export function UserDetailPage() {
           </div>
         </div>
         <div className="topic-detail-actions">
-          <button className="topic-card-refresh" onClick={() => reanalyzeUser(user.id)} disabled={isReanalyzing} title="Reanalyze">
-            <RefreshCw size={13} className={isReanalyzing ? 'animate-spin' : ''} />
+          <button className="topic-card-refresh" onClick={() => reanalyzeUser(user.id)} disabled={isReanalyzing || fastPoll} title="Reanalyze">
+            <RefreshCw size={13} className={isReanalyzing || fastPoll ? 'animate-spin' : ''} />
           </button>
           {user.profile_url && (
             <a href={user.profile_url} target="_blank" rel="noreferrer" className="topic-card-refresh" title="Open profile">

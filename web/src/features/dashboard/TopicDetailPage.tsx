@@ -500,8 +500,8 @@ export function TopicDetailPage() {
           </div>
         </div>
         <div className="topic-detail-actions">
-          <button className="topic-card-refresh" onClick={() => reanalyzeTopic(topic.id)} disabled={isReanalyzing} title="Reanalyze">
-            <RefreshCw size={13} className={isReanalyzing ? 'animate-spin' : ''} />
+          <button className="topic-card-refresh" onClick={() => reanalyzeTopic(topic.id)} disabled={isReanalyzing || fastPoll} title="Reanalyze">
+            <RefreshCw size={13} className={isReanalyzing || fastPoll ? 'animate-spin' : ''} />
           </button>
           <Button size="sm" variant="ghost" onClick={handleTogglePause}>
             {topic.status === 'active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
