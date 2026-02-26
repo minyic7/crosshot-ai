@@ -17,13 +17,10 @@ COPY apps/api/pyproject.toml apps/api/pyproject.toml
 
 # Copy source code for this agent and shared library
 COPY apps/shared apps/shared
-COPY apps/agent-crawler apps/agent-crawler
+COPY apps/agent-searcher apps/agent-searcher
 
 # Install only this package's dependencies
-RUN uv sync --frozen --package agent-crawler
-
-# Install Playwright browsers
-RUN uv run --package agent-crawler playwright install --with-deps chromium
+RUN uv sync --frozen --package agent-searcher
 
 # Default command
-CMD ["uv", "run", "--package", "agent-crawler", "python", "-m", "agent_crawler"]
+CMD ["uv", "run", "--package", "agent-searcher", "python", "-m", "agent_searcher"]

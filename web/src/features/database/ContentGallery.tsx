@@ -36,6 +36,15 @@ interface TweetData {
   created_at?: string
 }
 
+interface WebData {
+  title?: string
+  content?: string
+  url?: string
+  site_name?: string
+  score?: number
+  published_date?: string
+}
+
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
@@ -177,7 +186,7 @@ export function ContentGallery() {
         </div>
 
         <div className="content-platform-filter">
-          {['', 'x', 'xhs'].map(p => (
+          {['', 'x', 'xhs', 'web'].map(p => (
             <button
               key={p}
               onClick={() => setPlatform(p)}
@@ -253,7 +262,9 @@ function MasonryCard({
   index: number
   onClick: () => void
 }) {
-  const tweet = content.data as unknown as TweetData
+  const isWeb = content.platform === 'web'
+  const tweet = isWeb ? null : (content.data as unknown as TweetData)
+  const web = isWeb ? (content.data as unknown as WebData) : null
   const media = tweet?.media ?? []
   const firstMedia = media[0]
   const hasMedia = firstMedia && (firstMedia.local_path || firstMedia.url)
@@ -265,10 +276,12 @@ function MasonryCard({
   const [textOverflows, setTextOverflows] = useState(false)
   const textRef = useRef<HTMLParagraphElement>(null)
 
+  const displayText = isWeb ? (web?.content ?? '') : (tweet?.text ?? '')
+
   useEffect(() => {
     const el = textRef.current
     if (el) setTextOverflows(el.scrollHeight > el.clientHeight)
-  }, [tweet?.text])
+  }, [displayText])
 
   return (
     <div
@@ -282,7 +295,7 @@ function MasonryCard({
       {/* Shimmer overlay */}
       <div className="content-card-shimmer" />
 
-      {/* Media */}
+      {/* Media (social platforms only) */}
       {hasMedia && !imgError && (
         <div className="relative overflow-hidden" style={{ background: 'var(--surface-muted)' }}>
           {!imgLoaded && (
@@ -323,7 +336,7 @@ function MasonryCard({
       <div className="content-card-body" style={{
         ...(!hasMedia && !expanded ? { height: TEXT_CARD_HEIGHT - 2, overflow: 'hidden' } : {}),
       }}>
-        {/* Author row */}
+        {/* Author row — social platforms */}
         {tweet?.author && (
           <div className="content-card-author">
             <div className="content-card-avatar">
@@ -341,15 +354,25 @@ function MasonryCard({
           </div>
         )}
 
+        {/* Web result — title + source */}
+        {isWeb && web?.title && (
+          <>
+            <p className="content-card-web-title">{web.title}</p>
+            {web.site_name && (
+              <span className="content-card-web-source">{web.site_name}</span>
+            )}
+          </>
+        )}
+
         {/* Text */}
-        {tweet?.text && (
+        {displayText && (
           <p
             ref={textRef}
             className="content-card-text"
             style={{
               ...(!expanded ? {
                 display: '-webkit-box',
-                WebkitLineClamp: hasMedia ? 3 : 5,
+                WebkitLineClamp: hasMedia ? 3 : (isWeb && web?.title ? 4 : 5),
                 WebkitBoxOrient: 'vertical' as const,
                 overflow: 'hidden',
               } : {}),
@@ -357,7 +380,7 @@ function MasonryCard({
               minHeight: 0,
             }}
           >
-            {tweet.text}
+            {displayText}
           </p>
         )}
 
@@ -371,7 +394,7 @@ function MasonryCard({
           </button>
         )}
 
-        {/* Hashtags */}
+        {/* Hashtags (social platforms only) */}
         {tweet?.hashtags && tweet.hashtags.length > 0 && (
           <div className="content-card-tags">
             {tweet.hashtags.slice(0, 3).map(tag => (
@@ -408,7 +431,11 @@ function MasonryCard({
           <div className="flex items-center gap-2">
             <span className="content-card-platform">{content.platform.toUpperCase()}</span>
             <span className="content-card-time">
-              {tweet?.created_at ? timeAgo(tweet.created_at) : timeAgo(content.crawled_at)}
+              {isWeb && web?.published_date
+                ? timeAgo(web.published_date)
+                : tweet?.created_at
+                  ? timeAgo(tweet.created_at)
+                  : timeAgo(content.crawled_at)}
             </span>
           </div>
         </div>

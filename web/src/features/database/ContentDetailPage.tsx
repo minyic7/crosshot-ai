@@ -386,9 +386,51 @@ export function ContentDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Tweet content */}
+      {/* Content by platform */}
       {content.platform === 'x' && tweet?.tweet_id ? (
         <TweetCard tweet={tweet} />
+      ) : content.platform === 'web' ? (
+        <Card>
+          <CardContent>
+            <h2
+              className="text-lg font-semibold mb-2"
+              style={{ lineHeight: 1.4 }}
+            >
+              {(content.data as Record<string, unknown>)?.title as string ?? 'Untitled'}
+            </h2>
+            {(content.data as Record<string, unknown>)?.site_name && (
+              <span
+                className="text-xs mb-3 block"
+                style={{ color: 'var(--foreground-muted)' }}
+              >
+                {(content.data as Record<string, unknown>).site_name as string}
+              </span>
+            )}
+            <p
+              className="mb-4 whitespace-pre-wrap"
+              style={{ lineHeight: 1.7, fontSize: '0.9375rem' }}
+            >
+              {(content.data as Record<string, unknown>)?.content as string ?? content.text}
+            </p>
+            <div
+              className="flex items-center gap-3 pt-2"
+              style={{ borderTop: '1px solid var(--border-default)', color: 'var(--foreground-subtle)' }}
+            >
+              <span className="text-xs">{new Date(content.crawled_at).toLocaleString()}</span>
+              {content.source_url && (
+                <a
+                  href={content.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto flex items-center gap-1 text-xs"
+                  style={{ color: 'var(--teal)' }}
+                >
+                  <ExternalLink size={12} /> View source
+                </a>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent>

@@ -565,8 +565,16 @@ def _build_crawler_tasks(
         else:
             payload["user_id"] = entity_id
 
+        # Route web searches to searcher agent; include entity context
+        if platform == "web":
+            payload["name"] = entity.get("name", "")
+            payload["keywords"] = entity.get("keywords", [])
+            label = "searcher:web"
+        else:
+            label = f"crawler:{platform}"
+
         tasks.append(Task(
-            label=f"crawler:{platform}",
+            label=label,
             payload=payload,
             parent_job_id=parent_job_id,
         ))

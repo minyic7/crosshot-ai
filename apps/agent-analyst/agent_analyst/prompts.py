@@ -275,17 +275,24 @@ def build_gap_analysis_prompt(
 ## Instructions
 
 Based on the gaps and current knowledge, construct targeted crawl tasks.
-Use X search operators to filter noise (min_faves, lang, date range).
-**IMPORTANT**: Always use `since:` with a recent date (within last 7-30 days from today).
-Do NOT crawl old/historical data unless explicitly needed — focus on what's happening NOW.
+
+**Platform guidelines:**
+- `x`: Use X search operators (min_faves, lang, date range). Always use `since:` with a recent date.
+- `xhs`: Use Chinese keywords for Xiaohongshu content.
+- `web`: Use for news articles, expert analysis, official announcements, research papers.
+  Web queries should be natural language — the searcher agent will autonomously find relevant sources.
+
+**IMPORTANT**: Focus on what's happening NOW — do NOT crawl old/historical data unless explicitly needed.
 Only suggest queries that would meaningfully improve our understanding.
+Include `web` queries when you need authoritative sources, industry analysis, or information not found on social media.
 
 Return **only** a JSON object:
 ```json
 {{
   "crawl_tasks": [
     {{"platform": "x", "query": "keyword min_faves:10", "action": "search"}},
-    {{"platform": "xhs", "query": "中文关键词", "action": "search"}}
+    {{"platform": "xhs", "query": "中文关键词", "action": "search"}},
+    {{"platform": "web", "query": "topic latest news analysis", "action": "search"}}
   ],
   "reasoning": "Brief explanation of why these queries"
 }}

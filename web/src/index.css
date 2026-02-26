@@ -6392,6 +6392,21 @@ h3 {
   color: var(--foreground-subtle);
 }
 
+.content-card-web-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-1);
+  margin-bottom: 2px;
+}
+
+.content-card-web-source {
+  font-size: 0.6875rem;
+  color: var(--foreground-subtle);
+  margin-bottom: 6px;
+  display: block;
+}
+
 .content-card-text {
   font-size: 0.8125rem;
   line-height: 1.6;

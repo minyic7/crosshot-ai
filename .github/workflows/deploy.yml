@@ -26,6 +26,7 @@ jobs:
     outputs:
       crawler: ${{ steps.filter.outputs.crawler }}
       analyst: ${{ steps.filter.outputs.analyst }}
+      searcher: ${{ steps.filter.outputs.searcher }}
       api: ${{ steps.filter.outputs.api }}
       web: ${{ steps.filter.outputs.web }}
       infra: ${{ steps.filter.outputs.infra }}
@@ -46,6 +47,11 @@ jobs:
               - 'apps/shared/**'
               - 'pyproject.toml'
               - 'uv.lock'
+            searcher:
+              - 'apps/agent-searcher/**'
+              - 'apps/shared/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
             api:
               - 'apps/api/**'
               - 'apps/shared/**'
@@ -59,6 +65,7 @@ jobs:
         run: |
           if [[ "${{ steps.filter.outputs.crawler }}" == "true" || \
                 "${{ steps.filter.outputs.analyst }}" == "true" || \
+                "${{ steps.filter.outputs.searcher }}" == "true" || \
                 "${{ steps.filter.outputs.api }}" == "true" || \
                 "${{ steps.filter.outputs.web }}" == "true" || \
                 "${{ steps.filter.outputs.infra }}" == "true" ]]; then
@@ -88,6 +95,10 @@ jobs:
             file: apps/agent-analyst/Dockerfile
             context: .
             changed: ${{ needs.changes.outputs.analyst }}
+          - name: searcher
+            file: apps/agent-searcher/Dockerfile
+            context: .
+            changed: ${{ needs.changes.outputs.searcher }}
           - name: api
             file: apps/api/Dockerfile
             context: .

@@ -119,6 +119,31 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  searcher:
+    image: ghcr.io/minyic7/crosshot-ai-searcher:latest
+    build:
+      context: .
+      dockerfile: apps/agent-searcher/Dockerfile
+    restart: unless-stopped
+    environment:
+      AGENT_NAME: searcher
+      REDIS_URL: redis://redis:6379/0
+      DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
+      OPENSEARCH_URL: http://opensearch:9200
+      GROK_API_KEY: ${GROK_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ──────────────────────────────────────
   # API
   # ──────────────────────────────────────
