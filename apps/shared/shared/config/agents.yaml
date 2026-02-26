@@ -32,7 +32,7 @@ agents:
     ai_enabled: true
     fan_in: true
     llm:
-      model: "grok-4-1-reasoning"
+      model: "grok-4-1-fast-reasoning"
     system_prompt: |
       You are an intelligent research agent for Crosshot AI.
       Your mission is to search the web and find high-quality, relevant information
