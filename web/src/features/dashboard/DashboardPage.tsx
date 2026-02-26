@@ -43,6 +43,7 @@ import {
   useListUsersQuery,
   useCreateUserMutation,
   useUpdateUserMutation,
+  useReanalyzeUserMutation,
   useReorderUsersMutation,
   useAttachUserMutation,
   useResetAllDataMutation,
@@ -1070,12 +1071,17 @@ export function DashboardPage() {
   const [updateTopic] = useUpdateTopicMutation()
   const [updateUser] = useUpdateUserMutation()
   const [reanalyzeTopic] = useReanalyzeTopicMutation()
+  const [reanalyzeUser] = useReanalyzeUserMutation()
   const [reorderTopics] = useReorderTopicsMutation()
   const [reorderUsers] = useReorderUsersMutation()
   const [resetAllData, { isLoading: isResetting }] = useResetAllDataMutation()
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  const handleRefresh = useCallback((id: string) => { reanalyzeTopic(id) }, [reanalyzeTopic])
+  const handleRefresh = useCallback((id: string) => {
+    const item = allTopicsRef.current.find((t) => t.id === id)
+    if (item?.type === 'user') reanalyzeUser(id)
+    else reanalyzeTopic(id)
+  }, [reanalyzeTopic, reanalyzeUser])
   const handleTopicClick = useCallback((id: string) => {
     // Check if it's a user card (type === 'user') by looking up in allTopics
     const item = allTopicsRef.current.find((t) => t.id === id)
