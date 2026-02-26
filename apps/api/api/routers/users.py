@@ -300,8 +300,8 @@ async def reorder_users(body: UserReorder) -> dict:
 
 
 @router.post("/users/{user_id}/reanalyze")
-async def reanalyze_user(user_id: str) -> dict:
-    """Re-run analysis for a standalone user."""
+async def reanalyze_user(user_id: str, crawl: bool = False) -> dict:
+    """Re-run analysis on existing data. Set crawl=true to also fetch new data."""
     factory = get_session_factory()
     async with factory() as session:
         user = await session.get(UserRow, user_id)
@@ -317,6 +317,8 @@ async def reanalyze_user(user_id: str) -> dict:
             "profile_url": user.profile_url,
             "config": user.config,
         }
+        if not crawl:
+            payload["skip_crawl"] = True
         task = Task(
             label="analyst:analyze",
             priority=TaskPriority.MEDIUM,

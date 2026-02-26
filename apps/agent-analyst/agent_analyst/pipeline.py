@@ -85,10 +85,11 @@ def make_pipeline(
         topic_id = task.payload.get("topic_id")
         user_id = task.payload.get("user_id")
         force_crawl = task.payload.get("force_crawl", False)
+        skip_crawl = task.payload.get("skip_crawl", False)
 
         entity_type = "topic" if topic_id else "user"
         entity_id = topic_id or user_id
-        logger.info("Pipeline analyze: %s_id=%s force_crawl=%s", entity_type, entity_id, force_crawl)
+        logger.info("Pipeline analyze: %s_id=%s force_crawl=%s skip_crawl=%s", entity_type, entity_id, force_crawl, skip_crawl)
 
         # Step 1: Load entity config
         entity = await get_entity_config(session_factory, topic_id=topic_id, user_id=user_id)
@@ -182,53 +183,55 @@ def make_pipeline(
             logger.info("Integrated %d contents into knowledge", len(integrated_ids))
 
         # Step 6: Gap detection + crawl task building
-        gaps = _detect_gaps(entity, overview, force_crawl)
-        logger.info(
-            "Gap detection: missing_platforms=%s stale=%s low_volume=%s force=%s",
-            gaps["missing_platforms"], gaps["stale"], gaps["low_volume"], gaps["force_crawl"],
-        )
-
-        # Build crawler tasks
         new_tasks: list[Task] = []
 
-        # Check if attached users have been crawled at least once.
-        # If not, skip gap analysis (search queries) and prioritize user timelines.
-        # The summarize phase will re-analyze with user data available.
-        users_never_crawled = [
-            u for u in entity.get("users", []) if not u.get("last_crawl_at")
-        ]
-        skip_gap_analysis = bool(users_never_crawled) and topic_id is not None
-        if skip_gap_analysis:
+        if skip_crawl:
+            logger.info("skip_crawl=True — skipping gap detection and crawler tasks")
+        else:
+            gaps = _detect_gaps(entity, overview, force_crawl)
             logger.info(
-                "Skipping gap analysis: %d attached user(s) never crawled — "
-                "prioritizing user timelines first",
-                len(users_never_crawled),
+                "Gap detection: missing_platforms=%s stale=%s low_volume=%s force=%s",
+                gaps["missing_platforms"], gaps["stale"], gaps["low_volume"], gaps["force_crawl"],
             )
 
-        # Detail tasks from triage (analyst decides, not crawler)
-        if detail_content_ids:
-            detail_tasks = _build_detail_tasks(unprocessed, detail_content_ids, entity, task.parent_job_id)
-            new_tasks.extend(detail_tasks)
-            logger.info("Dispatching %d detail tasks from triage", len(detail_tasks))
+            # Check if attached users have been crawled at least once.
+            # If not, skip gap analysis (search queries) and prioritize user timelines.
+            # The summarize phase will re-analyze with user data available.
+            users_never_crawled = [
+                u for u in entity.get("users", []) if not u.get("last_crawl_at")
+            ]
+            skip_gap_analysis = bool(users_never_crawled) and topic_id is not None
+            if skip_gap_analysis:
+                logger.info(
+                    "Skipping gap analysis: %d attached user(s) never crawled — "
+                    "prioritizing user timelines first",
+                    len(users_never_crawled),
+                )
 
-        # Search tasks from gap analysis (skip if users need crawling first)
-        if not skip_gap_analysis:
-            has_gaps = (gaps["missing_platforms"] or gaps["stale"] or gaps["low_volume"] or gaps["force_crawl"])
-            if has_gaps:
-                gap_analysis = await _llm_gap_analysis(entity, overview, gaps, knowledge_doc, chat_insights)
-                crawl_tasks = gap_analysis.get("crawl_tasks", [])
-                if crawl_tasks:
-                    search_tasks = _build_crawler_tasks(entity, crawl_tasks, task.parent_job_id)
-                    new_tasks.extend(search_tasks)
-                    logger.info("Dispatching %d search tasks from gap analysis", len(search_tasks))
+            # Detail tasks from triage (analyst decides, not crawler)
+            if detail_content_ids:
+                detail_tasks = _build_detail_tasks(unprocessed, detail_content_ids, entity, task.parent_job_id)
+                new_tasks.extend(detail_tasks)
+                logger.info("Dispatching %d detail tasks from triage", len(detail_tasks))
 
-        # Timeline tasks for attached users
-        if topic_id:
-            user_timeline_tasks = _build_user_timeline_tasks(entity, payload_users, task.parent_job_id)
-            new_tasks.extend(user_timeline_tasks)
-        elif user_id:
-            user_timeline_tasks = _build_user_timeline_tasks(entity, [], task.parent_job_id)
-            new_tasks.extend(user_timeline_tasks)
+            # Search tasks from gap analysis (skip if users need crawling first)
+            if not skip_gap_analysis:
+                has_gaps = (gaps["missing_platforms"] or gaps["stale"] or gaps["low_volume"] or gaps["force_crawl"])
+                if has_gaps:
+                    gap_analysis = await _llm_gap_analysis(entity, overview, gaps, knowledge_doc, chat_insights)
+                    crawl_tasks = gap_analysis.get("crawl_tasks", [])
+                    if crawl_tasks:
+                        search_tasks = _build_crawler_tasks(entity, crawl_tasks, task.parent_job_id)
+                        new_tasks.extend(search_tasks)
+                        logger.info("Dispatching %d search tasks from gap analysis", len(search_tasks))
+
+            # Timeline tasks for attached users
+            if topic_id:
+                user_timeline_tasks = _build_user_timeline_tasks(entity, payload_users, task.parent_job_id)
+                new_tasks.extend(user_timeline_tasks)
+            elif user_id:
+                user_timeline_tasks = _build_user_timeline_tasks(entity, [], task.parent_job_id)
+                new_tasks.extend(user_timeline_tasks)
 
         # Step 7: Dispatch or finish
         if new_tasks:

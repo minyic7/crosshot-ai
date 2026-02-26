@@ -100,7 +100,7 @@ def _topic_to_dict(t: TopicRow, *, include_users: bool = False) -> dict:
 
 
 async def _dispatch_analyze(
-    topic: TopicRow, *, force_crawl: bool = False,
+    topic: TopicRow, *, force_crawl: bool = False, skip_crawl: bool = False,
 ) -> str:
     """Push an analyst:analyze task and set pipeline stage to 'analyzing'."""
     queue = get_queue()
@@ -113,6 +113,8 @@ async def _dispatch_analyze(
     }
     if force_crawl:
         payload["force_crawl"] = True
+    if skip_crawl:
+        payload["skip_crawl"] = True
 
     # Include attached users info for the analyst
     try:
@@ -319,8 +321,8 @@ async def delete_topic(topic_id: str) -> dict:
 
 
 @router.post("/topics/{topic_id}/reanalyze")
-async def reanalyze_topic(topic_id: str) -> dict:
-    """Re-run analysis — analyst decides if new data is needed."""
+async def reanalyze_topic(topic_id: str, crawl: bool = False) -> dict:
+    """Re-run analysis on existing data. Set crawl=true to also fetch new data."""
     factory = get_session_factory()
     async with factory() as session:
         stmt = select(TopicRow).where(TopicRow.id == topic_id).options(
@@ -331,7 +333,7 @@ async def reanalyze_topic(topic_id: str) -> dict:
         if topic is None:
             return {"error": "Topic not found"}
 
-        task_id = await _dispatch_analyze(topic)
+        task_id = await _dispatch_analyze(topic, skip_crawl=not crawl)
         return {"status": "reanalyzing", "task_id": task_id}
 
 
