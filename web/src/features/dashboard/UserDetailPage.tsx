@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, ExternalLink, Pencil, X, Check } from 'lucide-react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -336,7 +336,8 @@ function UserPipelineTasks({ entityId }: { entityId: string }) {
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: user, isLoading, isError } = useGetUserQuery(id ?? '', { skip: !id, pollingInterval: 10000 })
+  const [fastPoll, setFastPoll] = useState(false)
+  const { data: user, isLoading, isError } = useGetUserQuery(id ?? '', { skip: !id, pollingInterval: fastPoll ? 3000 : 10000 })
   const { data: trend } = useGetUserTrendQuery(id ?? '', { skip: !id })
   const [reanalyzeUser, { isLoading: isReanalyzing }] = useReanalyzeUserMutation()
   const [updateUser] = useUpdateUserMutation()
@@ -351,6 +352,11 @@ export function UserDetailPage() {
   const [editingTopics, setEditingTopics] = useState(false)
   const [pendingDetach, setPendingDetach] = useState<Set<string>>(new Set())
   const statsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const active = user?.pipeline?.phase && user.pipeline.phase !== 'done' && user.pipeline.phase !== 'error'
+    setFastPoll(!!active)
+  }, [user?.pipeline?.phase])
 
   const handleTranslate = useCallback(async (text: string) => {
     if (translating || translated) { setTranslated(''); return }
