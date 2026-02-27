@@ -558,7 +558,7 @@ export function DashboardPage() {
     pipeline: u.pipeline,
     created_at: u.created_at,
     updated_at: u.updated_at,
-    users: u.topics?.map(t => ({ id: t.id, name: t.name, platform: '', username: null, profile_url: t.icon || '📊' })), // carry bound topics via users field; icon stored in profile_url
+    users: u.topics?.map(t => ({ id: t.id, name: t.name, platform: '', username: null, profile_url: t.icon || '📊' }) as UserType), // carry bound topics via users field; icon stored in profile_url
   }), [])
 
   // Merge topics + users (only when toggle is on)
