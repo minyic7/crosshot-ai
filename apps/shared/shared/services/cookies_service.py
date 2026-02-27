@@ -122,9 +122,13 @@ class CookiesService:
 
     async def report_success(self, cookie: CookiesPool) -> None:
         """Report successful use of a cookie. Resets fail count."""
-        cookie.fail_count = 0
-        cookie.cooldown_until = None
-        await self._save(cookie)
+        # Re-read fresh state to avoid overwriting concurrent updates
+        fresh = await self._load(cookie.id)
+        if fresh is None:
+            return
+        fresh.fail_count = 0
+        fresh.cooldown_until = None
+        await self._save(fresh)
 
     async def report_failure(
         self, cookie: CookiesPool, error: str | None = None,
@@ -133,25 +137,37 @@ class CookiesService:
 
         Increments fail_count, applies cooldown, deactivates if too many failures.
         """
-        config = PLATFORM_RATE_CONFIGS.get(cookie.platform, DEFAULT_RATE_CONFIG)
-        cookie.fail_count += 1
-        cooldown_secs = config.base_cooldown_seconds * cookie.fail_count
-        cookie.cooldown_until = datetime.now() + timedelta(seconds=cooldown_secs)
+        # Re-read fresh state to avoid overwriting concurrent updates
+        fresh = await self._load(cookie.id)
+        if fresh is None:
+            return
 
-        if cookie.fail_count >= config.max_fail_count:
-            cookie.is_active = False
+        config = PLATFORM_RATE_CONFIGS.get(fresh.platform, DEFAULT_RATE_CONFIG)
+        fresh.fail_count += 1
+        cooldown_secs = config.base_cooldown_seconds * fresh.fail_count
+        fresh.cooldown_until = datetime.now() + timedelta(seconds=cooldown_secs)
+
+        if fresh.fail_count >= config.max_fail_count:
+            fresh.is_active = False
             logger.warning(
                 "Cookie %s (%s) deactivated after %d failures. Last error: %s",
-                cookie.id[:8], cookie.name, cookie.fail_count, error,
+                fresh.id[:8], fresh.name, fresh.fail_count, error,
             )
         else:
             logger.warning(
                 "Cookie %s (%s) failed (%d/%d), cooldown %ds. Error: %s",
-                cookie.id[:8], cookie.name, cookie.fail_count,
+                fresh.id[:8], fresh.name, fresh.fail_count,
                 config.max_fail_count, cooldown_secs, error,
             )
 
-        await self._save(cookie)
+        await self._save(fresh)
+
+    async def _load(self, cookie_id: str) -> CookiesPool | None:
+        """Load fresh cookie state from Redis."""
+        data = await self._redis.get(f"cookies:pool:{cookie_id}")
+        if data is None:
+            return None
+        return CookiesPool.model_validate_json(data)
 
     async def _save(self, cookie: CookiesPool) -> None:
         """Persist cookie state to Redis."""

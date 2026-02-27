@@ -495,7 +495,7 @@ def _detect_gaps(entity: dict, overview: dict, force_crawl: bool) -> dict:
     if hours_since is not None and hours_since > interval * 1.5:
         gaps["stale"] = True
 
-    if overview["metrics"]["total_contents"] < 10:
+    if overview["data_status"]["total_contents_all_time"] < 10:
         gaps["low_volume"] = True
 
     return gaps

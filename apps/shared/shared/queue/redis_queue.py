@@ -103,6 +103,7 @@ class TaskQueue:
         if result is not None:
             task.result = result if isinstance(result, dict) else {"data": result}
         await self._store_task(task)
+        await self._sync_pg_status(task)
         await self._redis.lpush("task:recent_completed", task.id)
         await self._redis.ltrim("task:recent_completed", 0, 99)
         logger.info("Task %s completed", task.id)
@@ -127,6 +128,7 @@ class TaskQueue:
             task.status = TaskStatus.FAILED
             task.completed_at = datetime.now()
             await self._store_task(task)
+            await self._sync_pg_status(task)
             await self._redis.lpush("task:dead_letter", task.id)
             await self._redis.lpush("task:recent_completed", task.id)
             await self._redis.ltrim("task:recent_completed", 0, 99)
@@ -227,15 +229,10 @@ class TaskQueue:
             rows = result.scalars().all()
 
             for row in rows:
-                # Check if already in Redis queue
+                # Check if already in Redis (pending in queue or running on an agent)
                 existing = await self._load_task(str(row.id))
-                if existing and existing.status == TaskStatus.PENDING:
-                    # Already queued — check if it's actually in the sorted set
-                    score = await self._redis.zscore(
-                        f"task:queue:{row.label}", str(row.id),
-                    )
-                    if score is not None:
-                        continue
+                if existing and existing.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
+                    continue
 
                 task = Task(
                     id=str(row.id),
@@ -261,6 +258,26 @@ class TaskQueue:
     # ──────────────────────────────────────────────
     # Task storage
     # ──────────────────────────────────────────────
+
+    async def _sync_pg_status(self, task: Task) -> None:
+        """Sync task status/result/error to PostgreSQL so recover_from_pg won't re-queue."""
+        try:
+            from shared.db.engine import get_session_factory
+            from shared.db.models import TaskRow
+
+            factory = get_session_factory()
+            async with factory() as session:
+                row = await session.get(TaskRow, task.id)
+                if row:
+                    row.status = task.status.value if hasattr(task.status, "value") else task.status
+                    row.completed_at = task.completed_at
+                    row.assigned_to = task.assigned_to
+                    row.error = task.error
+                    row.result = task.result
+                    row.retry_count = task.retry_count
+                    await session.commit()
+        except Exception:
+            logger.debug("PG status sync failed for task %s (non-fatal)", task.id, exc_info=True)
 
     async def _store_task(self, task: Task) -> None:
         """Store full task as JSON string in Redis (7-day expiry)."""

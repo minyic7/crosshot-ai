@@ -168,7 +168,7 @@ def make_tools(
             return "Error: no current task context."
 
         saved = 0
-        content_ids = []
+        saved_items: list[tuple[str, dict]] = []  # (actual_id, item) pairs
         try:
             async with session_factory() as session:
                 await session.execute(
@@ -214,27 +214,28 @@ def make_tools(
                             "text": stmt.excluded.text,
                             "data": stmt.excluded.data,
                         },
-                    )
-                    await session.execute(stmt)
-                    content_ids.append(content_id)
+                    ).returning(ContentRow.id)
+                    result_row = await session.execute(stmt)
+                    actual_id = str(result_row.scalar())
+                    saved_items.append((actual_id, item))
                     saved += 1
 
                 await session.commit()
 
-            # Index to OpenSearch (best-effort)
+            # Index to OpenSearch using actual row IDs (not phantom UUIDs)
             try:
-                os_docs = []
-                for i, item in enumerate(results):
-                    if i < len(content_ids):
-                        os_docs.append({
-                            "id": content_ids[i],
-                            "topic_id": topic_id,
-                            "user_id": user_id,
-                            "platform": "web",
-                            "text": item.get("content", ""),
-                            "author_display_name": item.get("site_name", ""),
-                            "crawled_at": datetime.now(timezone.utc).isoformat(),
-                        })
+                os_docs = [
+                    {
+                        "id": actual_id,
+                        "topic_id": topic_id,
+                        "user_id": user_id,
+                        "platform": "web",
+                        "text": item.get("content", ""),
+                        "author_display_name": item.get("site_name", ""),
+                        "crawled_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    for actual_id, item in saved_items
+                ]
                 await index_contents(os_docs)
             except Exception as e:
                 logger.warning("OpenSearch index failed (non-fatal): %s", e)

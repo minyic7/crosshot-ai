@@ -177,7 +177,8 @@ class BaseAgent:
 
         if remaining <= 0:
             on_complete_key = f"{entity_type}:{entity_id}:on_complete"
-            on_complete_raw = await self._redis.get(on_complete_key)
+            # Atomic GETDEL prevents race where two agents both read the key
+            on_complete_raw = await self._redis.getdel(on_complete_key)
             if on_complete_raw:
                 cfg = json.loads(on_complete_raw)
                 next_task = Task(
@@ -188,18 +189,18 @@ class BaseAgent:
                 await self._queue.push(next_task)
                 next_phase = cfg.get("next_phase", "summarizing")
                 await self._redis.hset(pipeline_key, "phase", next_phase)
-                await self._redis.delete(on_complete_key)
                 logger.info(
                     "%s %s: fan-in complete, triggered %s",
                     entity_type, entity_id, next_task.label,
                 )
 
-            # Clean up task progress keys
+            # Clean up task progress keys and pending counter
             task_ids_key = f"{entity_type}:{entity_id}:task_ids"
             task_ids = await self._redis.smembers(task_ids_key)
+            cleanup_keys = [pending_key, task_ids_key]
             if task_ids:
-                progress_keys = [f"task:{tid}:progress" for tid in task_ids]
-                await self._redis.delete(*progress_keys, task_ids_key)
+                cleanup_keys.extend(f"task:{tid}:progress" for tid in task_ids)
+            await self._redis.delete(*cleanup_keys)
 
     # ──────────────────────────────────────────────
     # Main loop
