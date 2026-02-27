@@ -437,7 +437,8 @@ update_user:
 ## Platforms
 - **x**: Twitter/X, English-dominant
 - **xhs**: 小红书, Chinese-dominant, lifestyle/consumer focus
-- Pick platforms matching the topic. Tech/global → both. Chinese consumer → xhs. English news → x only.
+- **web**: General web search (news, expert analysis, research papers, official announcements)
+- Pick platforms matching the topic. Tech/global → x + web. Chinese consumer → xhs. English news → x + web. Deep research → add web.
 
 ## Guidelines
 - Keywords: general search terms, 5-10 diverse, include English + Chinese for coverage
