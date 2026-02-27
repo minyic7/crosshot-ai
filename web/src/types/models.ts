@@ -132,6 +132,15 @@ export interface TopicPipeline {
   updated_at?: string
 }
 
+/** Slim stub returned by list endpoints for relationship display */
+export interface TopicUserStub {
+  id: string
+  name: string
+  platform: string
+  username: string | null
+  profile_url: string
+}
+
 export interface Topic {
   id: string
   type: string
@@ -152,7 +161,7 @@ export interface Topic {
   created_at: string
   updated_at: string
   user_count?: number
-  users?: User[]
+  users?: TopicUserStub[]
 }
 
 export interface PipelineTaskProgress {

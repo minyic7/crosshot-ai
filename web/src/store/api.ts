@@ -92,8 +92,8 @@ export const apiSlice = createApi({
     }),
 
     // Topics
-    listTopics: builder.query<Topic[], void>({
-      query: () => '/topics',
+    listTopics: builder.query<Topic[], { include_users?: boolean } | void>({
+      query: (params) => ({ url: '/topics', params: params ?? undefined }),
       transformResponse: (res: { topics: Topic[] }) => res.topics,
       providesTags: ['Topic'],
     }),
@@ -142,7 +142,7 @@ export const apiSlice = createApi({
     }),
 
     // Users
-    listUsers: builder.query<User[], { standalone?: boolean } | void>({
+    listUsers: builder.query<User[], { standalone?: boolean; include_topics?: boolean } | void>({
       query: (params) => ({ url: '/users', params: params ?? undefined }),
       transformResponse: (res: { users: User[] }) => res.users,
       providesTags: ['User'],

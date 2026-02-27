@@ -482,8 +482,8 @@ export function DashboardPage() {
 
   // Poll faster when any entity has an active pipeline
   const [pollingInterval, setPollingInterval] = useState(30_000)
-  const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval })
-  const { data: allUsers, isLoading: usersLoading } = useListUsersQuery(undefined, { pollingInterval })
+  const { data: topics, isLoading: topicsLoading } = useListTopicsQuery({ include_users: true }, { pollingInterval })
+  const { data: allUsers, isLoading: usersLoading } = useListUsersQuery({ include_topics: true }, { pollingInterval })
 
   useEffect(() => {
     const hasActivePipeline = topics?.some((t) => t.pipeline && t.pipeline.phase !== 'done')
@@ -526,17 +526,19 @@ export function DashboardPage() {
     if (item?.type === 'user') navigate(`/user/${id}`)
     else navigate(`/topic/${id}`)
   }, [navigate])
+  const allUsersRef = useRef(allUsers)
+  allUsersRef.current = allUsers
   const handleEdit = useCallback((id: string) => {
     const item = allTopicsRef.current.find((t) => t.id === id)
     if (!item) return
     if (item.type === 'user') {
       // Convert back from Topic-like to UserType for the modal
-      const u = allUsers?.find((u) => u.id === id)
+      const u = allUsersRef.current?.find((u) => u.id === id)
       if (u) setEditEntity(u)
     } else {
       setEditEntity(item)
     }
-  }, [allUsers])
+  }, [])
 
   // Map users to Topic-like objects for the shared grid
   const userAsTopic = useCallback((u: UserType): Topic => ({
@@ -558,7 +560,7 @@ export function DashboardPage() {
     pipeline: u.pipeline,
     created_at: u.created_at,
     updated_at: u.updated_at,
-    users: u.topics?.map(t => ({ id: t.id, name: t.name, platform: '', username: null, profile_url: t.icon || '📊' }) as UserType), // carry bound topics via users field; icon stored in profile_url
+    users: u.topics?.map(t => ({ id: t.id, name: t.name, platform: '', username: null, profile_url: t.icon || '📊' })), // carry bound topics via users field; icon stored in profile_url
   }), [])
 
   // Merge topics + users (only when toggle is on)
@@ -755,7 +757,7 @@ export function DashboardPage() {
           {([
             { key: 'All' as const, count: allTopics.length },
             { key: 'Active' as const, count: allTopics.filter(t => t.status === 'active').length },
-            { key: 'Paused' as const, count: allTopics.filter(t => t.status !== 'active').length },
+            { key: 'Paused' as const, count: allTopics.filter(t => t.status === 'paused').length },
           ]).map((f) => (
             <button
               key={f.key}
@@ -775,7 +777,7 @@ export function DashboardPage() {
           >
             <Users size={13} />
             Users
-            <span className="filter-pill-count">{allUsers!.length}</span>
+            <span className="filter-pill-count">{allUsers?.length ?? 0}</span>
           </button>
         )}
       </div>

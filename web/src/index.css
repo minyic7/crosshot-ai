@@ -1582,8 +1582,10 @@ h3 {
   transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
-.topic-card:hover .topic-pin-btn {
-  opacity: 1;
+@media (hover: hover) {
+  .topic-card:hover .topic-pin-btn {
+    opacity: 1;
+  }
 }
 
 .topic-pin-btn.active {
@@ -1609,8 +1611,10 @@ h3 {
   z-index: 2;
 }
 
-.topic-card:hover .topic-card-actions {
-  opacity: 1;
+@media (hover: hover) {
+  .topic-card:hover .topic-card-actions {
+    opacity: 1;
+  }
 }
 
 .topic-card-refresh {
@@ -1685,9 +1689,11 @@ h3 {
   transition: opacity 0.15s ease;
 }
 
-.topic-card:hover .topic-status-pill {
-  opacity: 0;
-  pointer-events: none;
+@media (hover: hover) {
+  .topic-card:hover .topic-status-pill {
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 .topic-status-pill.active {
@@ -2333,6 +2339,7 @@ h3 {
   border-color: var(--accent);
   box-shadow: 0 16px 48px var(--border-default);
   opacity: 0.95;
+  pointer-events: none; /* prevent accidental clicks during drag */
 }
 
 .topic-card.drag-flying.cross-zone {

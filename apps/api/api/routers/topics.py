@@ -184,12 +184,13 @@ async def create_topic(body: TopicCreate) -> dict:
 
 
 @router.get("/topics")
-async def list_topics(status: str | None = None) -> dict:
+async def list_topics(status: str | None = None, include_users: bool = False) -> dict:
     factory = get_session_factory()
     async with factory() as session:
-        stmt = select(TopicRow).options(
-            selectinload(TopicRow.users)
-        ).order_by(
+        stmt = select(TopicRow)
+        if include_users:
+            stmt = stmt.options(selectinload(TopicRow.users))
+        stmt = stmt.order_by(
             TopicRow.is_pinned.desc(),
             TopicRow.position,
             TopicRow.created_at.desc(),
@@ -211,7 +212,7 @@ async def list_topics(status: str | None = None) -> dict:
 
         topic_list = []
         for i, t in enumerate(topics):
-            d = _topic_to_dict(t, include_users=True)
+            d = _topic_to_dict(t, include_users=include_users)
             stage = stages[i] if stages[i] else None
             # Filter out 'done' — no need to show completed pipelines
             if stage and stage.get("phase") == "done":
