@@ -325,8 +325,8 @@ export function CreateEditModal({ open, onClose, editEntity }: CreateEditModalPr
   const [submitting, setSubmitting] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
 
-  const { data: allUsers } = useListUsersQuery()
-  const { data: allTopics } = useListTopicsQuery()
+  const { data: allUsers } = useListUsersQuery({ include_topics: true })
+  const { data: allTopics } = useListTopicsQuery({ include_users: true })
   const [createTopic] = useCreateTopicMutation()
   const [createUser] = useCreateUserMutation()
   const [updateTopic] = useUpdateTopicMutation()

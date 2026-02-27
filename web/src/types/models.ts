@@ -198,6 +198,13 @@ export interface PipelineDetail {
 
 export type UserStatus = 'active' | 'paused' | 'cancelled'
 
+/** Slim stub returned by list endpoints for relationship display */
+export interface UserTopicStub {
+  id: string
+  name: string
+  icon: string
+}
+
 export interface User {
   id: string
   name: string
@@ -215,5 +222,5 @@ export interface User {
   pipeline: TopicPipeline | null
   created_at: string
   updated_at: string
-  topics?: Topic[]
+  topics?: UserTopicStub[]
 }
