@@ -1185,6 +1185,7 @@ h3 {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 10px;
 }
 
 .filter-pills {
@@ -1308,6 +1309,40 @@ h3 {
   .filter-pill:active:not(.filter-pill-active) {
     transform: none;
   }
+}
+
+/* Users toggle chip */
+.user-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--ink-3);
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-toggle:hover {
+  border-color: rgba(167, 139, 250, 0.3);
+  color: var(--ink-2);
+}
+
+.user-toggle.active {
+  background: rgba(167, 139, 250, 0.10);
+  border-color: rgba(167, 139, 250, 0.35);
+  color: #A78BFA;
+}
+
+[data-theme="light"] .user-toggle.active {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.25);
+  color: #7C3AED;
 }
 
 /* ── New Topic Button ──────────────────────────── */
@@ -2077,6 +2112,53 @@ h3 {
   border: 1px solid var(--accent-glow);
   font-weight: 700;
   color: var(--accent);
+}
+
+/* User avatars in topic card footer */
+.topic-card-avatars {
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+}
+
+.topic-card-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #A78BFA, #7C3AED);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace;
+  border: 1.5px solid var(--glass);
+  margin-left: -4px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  padding: 0;
+}
+
+.topic-card-avatar:first-child { margin-left: 0; }
+
+.topic-card-avatar:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 6px rgba(167, 139, 250, 0.4);
+  z-index: 1;
+}
+
+.topic-card-avatar-more {
+  margin-left: 4px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.625rem;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+[data-theme="light"] .topic-card-avatar {
+  background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+  border-color: var(--glass);
 }
 
 

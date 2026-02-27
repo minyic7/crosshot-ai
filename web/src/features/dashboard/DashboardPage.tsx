@@ -27,7 +27,7 @@ import {
   Plus, Pin, RefreshCw, GripVertical,
   AlertTriangle, Trash2,
   Sparkles, Loader2,
-  Pencil,
+  Pencil, Users,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
@@ -170,6 +170,7 @@ function TopicCard({
   className?: string
   style?: React.CSSProperties
 }) {
+  const navigate = useNavigate()
   const alerts = (topic.summary_data?.alerts ?? []).map(normalizeAlert)
   const d = index * 80
   const [risen, setRisen] = useState(false)
@@ -280,8 +281,22 @@ function TopicCard({
               )}
             </>
           )}
-          {(topic.user_count ?? 0) > 0 && (
-            <span className="topic-tag">{topic.user_count} users</span>
+          {(topic.users ?? []).length > 0 && (
+            <div className="topic-card-avatars">
+              {topic.users!.slice(0, 3).map((u) => (
+                <button
+                  key={u.id}
+                  className="topic-card-avatar"
+                  title={u.username ? `@${u.username}` : u.name}
+                  onClick={(e) => { e.stopPropagation(); navigate(`/user/${u.id}`) }}
+                >
+                  {(u.username || u.name || '?')[0].toUpperCase()}
+                </button>
+              ))}
+              {topic.users!.length > 3 && (
+                <span className="topic-card-avatar-more">+{topic.users!.length - 3}</span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -437,6 +452,7 @@ export function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editEntity, setEditEntity] = useState<Topic | UserType | null>(null)
   const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
+  const [showUsers, setShowUsers] = useState(false)
 
   // Sliding indicator for filter pills
   const pillsRef = useRef<HTMLDivElement>(null)
@@ -527,12 +543,13 @@ export function DashboardPage() {
     updated_at: u.updated_at,
   }), [])
 
-  // Merge topics + standalone users
+  // Merge topics + standalone users (only when toggle is on)
   const allTopics = useMemo(() => {
     const t = topics ?? []
+    if (!showUsers) return t
     const u = (standaloneUsers ?? []).map(userAsTopic)
     return [...t, ...u]
-  }, [topics, standaloneUsers, userAsTopic])
+  }, [topics, standaloneUsers, userAsTopic, showUsers])
   const allTopicsRef = useRef(allTopics)
   allTopicsRef.current = allTopics
   const filtered = filter === 'All' ? allTopics : filter === 'Active' ? allTopics.filter((t) => t.status === 'active') : allTopics.filter((t) => t.status === 'paused')
@@ -732,6 +749,17 @@ export function DashboardPage() {
             </button>
           ))}
         </div>
+        {(standaloneUsers?.length ?? 0) > 0 && (
+          <button
+            className={`user-toggle${showUsers ? ' active' : ''}`}
+            onClick={() => setShowUsers(v => !v)}
+            title={showUsers ? 'Hide standalone users' : 'Show standalone users'}
+          >
+            <Users size={13} />
+            Users
+            <span className="filter-pill-count">{standaloneUsers!.length}</span>
+          </button>
+        )}
       </div>
 
       {/* Topic zones */}
