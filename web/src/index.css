@@ -2148,6 +2148,19 @@ h3 {
   z-index: 1;
 }
 
+/* Topic indicator variant — on user cards, shows bound topic icons */
+.topic-card-avatar--topic {
+  background: var(--accent-surface);
+  border-color: var(--accent-glow);
+  border-radius: 5px;
+  font-size: 0.5rem;
+  line-height: 1;
+}
+
+.topic-card-avatar--topic:hover {
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
 .topic-card-avatar-more {
   margin-left: 4px;
   font-family: 'Space Mono', monospace;
@@ -2159,6 +2172,11 @@ h3 {
 [data-theme="light"] .topic-card-avatar {
   background: linear-gradient(135deg, #8B5CF6, #6D28D9);
   border-color: var(--glass);
+}
+
+[data-theme="light"] .topic-card-avatar--topic {
+  background: var(--accent-surface);
+  border-color: var(--accent-glow);
 }
 
 

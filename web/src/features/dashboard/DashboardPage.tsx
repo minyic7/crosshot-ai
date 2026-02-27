@@ -281,7 +281,24 @@ function TopicCard({
               )}
             </>
           )}
-          {(topic.users ?? []).length > 0 && (
+          {topic.type === 'user' && (topic.users ?? []).length > 0 && (
+            <div className="topic-card-avatars">
+              {topic.users!.slice(0, 3).map((u) => (
+                <button
+                  key={u.id}
+                  className="topic-card-avatar topic-card-avatar--topic"
+                  title={u.name}
+                  onClick={(e) => { e.stopPropagation(); navigate(`/topic/${u.id}`) }}
+                >
+                  {u.profile_url || '📊'}
+                </button>
+              ))}
+              {topic.users!.length > 3 && (
+                <span className="topic-card-avatar-more">+{topic.users!.length - 3}</span>
+              )}
+            </div>
+          )}
+          {topic.type !== 'user' && (topic.users ?? []).length > 0 && (
             <div className="topic-card-avatars">
               {topic.users!.slice(0, 3).map((u) => (
                 <button
@@ -452,7 +469,7 @@ export function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editEntity, setEditEntity] = useState<Topic | UserType | null>(null)
   const [filter, setFilter] = useState<'All' | 'Active' | 'Paused'>('All')
-  const [showUsers, setShowUsers] = useState(false)
+  const [showUsers, setShowUsers] = useState(true)
 
   // Sliding indicator for filter pills
   const pillsRef = useRef<HTMLDivElement>(null)
@@ -466,13 +483,13 @@ export function DashboardPage() {
   // Poll faster when any entity has an active pipeline
   const [pollingInterval, setPollingInterval] = useState(30_000)
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery(undefined, { pollingInterval })
-  const { data: standaloneUsers, isLoading: usersLoading } = useListUsersQuery({ standalone: true }, { pollingInterval })
+  const { data: allUsers, isLoading: usersLoading } = useListUsersQuery(undefined, { pollingInterval })
 
   useEffect(() => {
     const hasActivePipeline = topics?.some((t) => t.pipeline && t.pipeline.phase !== 'done')
-      || standaloneUsers?.some((u) => u.pipeline && u.pipeline.phase !== 'done')
+      || allUsers?.some((u) => u.pipeline && u.pipeline.phase !== 'done')
     setPollingInterval(hasActivePipeline ? 3_000 : 30_000)
-  }, [topics, standaloneUsers])
+  }, [topics, allUsers])
 
   const [updateTopic] = useUpdateTopicMutation()
   const [updateUser] = useUpdateUserMutation()
@@ -486,7 +503,7 @@ export function DashboardPage() {
 
   // Clear refreshingIds when pipeline finishes
   useEffect(() => {
-    if (!topics && !standaloneUsers) return
+    if (!topics && !allUsers) return
     setRefreshingIds(prev => {
       const next = new Set(prev)
       for (const id of prev) {
@@ -496,7 +513,7 @@ export function DashboardPage() {
       }
       return next.size === prev.size ? prev : next
     })
-  }, [topics, standaloneUsers])
+  }, [topics, allUsers])
 
   const handleRefresh = useCallback((id: string) => {
     setRefreshingIds(prev => new Set(prev).add(id))
@@ -514,14 +531,14 @@ export function DashboardPage() {
     if (!item) return
     if (item.type === 'user') {
       // Convert back from Topic-like to UserType for the modal
-      const u = standaloneUsers?.find((u) => u.id === id)
+      const u = allUsers?.find((u) => u.id === id)
       if (u) setEditEntity(u)
     } else {
       setEditEntity(item)
     }
-  }, [standaloneUsers])
+  }, [allUsers])
 
-  // Map standalone users to Topic-like objects for the shared grid
+  // Map users to Topic-like objects for the shared grid
   const userAsTopic = useCallback((u: UserType): Topic => ({
     id: u.id,
     type: 'user',
@@ -541,15 +558,16 @@ export function DashboardPage() {
     pipeline: u.pipeline,
     created_at: u.created_at,
     updated_at: u.updated_at,
+    users: u.topics?.map(t => ({ id: t.id, name: t.name, platform: '', username: null, profile_url: t.icon || '📊' })), // carry bound topics via users field; icon stored in profile_url
   }), [])
 
-  // Merge topics + standalone users (only when toggle is on)
+  // Merge topics + users (only when toggle is on)
   const allTopics = useMemo(() => {
     const t = topics ?? []
     if (!showUsers) return t
-    const u = (standaloneUsers ?? []).map(userAsTopic)
+    const u = (allUsers ?? []).map(userAsTopic)
     return [...t, ...u]
-  }, [topics, standaloneUsers, userAsTopic, showUsers])
+  }, [topics, allUsers, userAsTopic, showUsers])
   const allTopicsRef = useRef(allTopics)
   allTopicsRef.current = allTopics
   const filtered = filter === 'All' ? allTopics : filter === 'Active' ? allTopics.filter((t) => t.status === 'active') : allTopics.filter((t) => t.status === 'paused')
@@ -749,15 +767,15 @@ export function DashboardPage() {
             </button>
           ))}
         </div>
-        {(standaloneUsers?.length ?? 0) > 0 && (
+        {(allUsers?.length ?? 0) > 0 && (
           <button
             className={`user-toggle${showUsers ? ' active' : ''}`}
             onClick={() => setShowUsers(v => !v)}
-            title={showUsers ? 'Hide standalone users' : 'Show standalone users'}
+            title={showUsers ? 'Hide user cards' : 'Show user cards'}
           >
             <Users size={13} />
             Users
-            <span className="filter-pill-count">{standaloneUsers!.length}</span>
+            <span className="filter-pill-count">{allUsers!.length}</span>
           </button>
         )}
       </div>

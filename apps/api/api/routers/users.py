@@ -116,7 +116,9 @@ async def create_user(body: UserCreate) -> dict:
 async def list_users(standalone: bool | None = None, status: str | None = None) -> dict:
     factory = get_session_factory()
     async with factory() as session:
-        stmt = select(UserRow).order_by(
+        stmt = select(UserRow).options(
+            selectinload(UserRow.topics)
+        ).order_by(
             UserRow.is_pinned.desc(),
             UserRow.position,
             UserRow.created_at.desc(),
@@ -143,7 +145,7 @@ async def list_users(standalone: bool | None = None, status: str | None = None) 
 
         user_list = []
         for i, u in enumerate(users):
-            d = _user_to_dict(u)
+            d = _user_to_dict(u, include_topics=True)
             stage = stages[i] if stages[i] else None
             if stage and stage.get("phase") == "done":
                 stage = None
