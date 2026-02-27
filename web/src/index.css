@@ -1434,6 +1434,45 @@ h3 {
   opacity: 0.6;
 }
 
+/* User card — violet accent to distinguish from blue topic cards */
+.topic-card.user-card {
+  --_user: #A78BFA;
+  --_user-glow: rgba(167, 139, 250, 0.18);
+  --_user-surface: rgba(167, 139, 250, 0.10);
+}
+
+.topic-card.user-card::before {
+  background: linear-gradient(90deg, transparent 8%, rgba(167, 139, 250, 0.35) 50%, transparent 92%);
+}
+
+.topic-card.user-card.pinned {
+  border-left-color: var(--_user);
+}
+
+.topic-card.user-card .topic-card-icon-box {
+  background: var(--_user-surface);
+  border-color: var(--_user-glow);
+}
+
+.topic-card.user-card .topic-tag {
+  background: var(--_user-surface);
+  color: var(--_user);
+}
+
+.topic-card.user-card .topic-tag.platform {
+  background: var(--_user-surface);
+  border-color: var(--_user-glow);
+  color: var(--_user);
+}
+
+.topic-card.user-card .topic-status-pill.active {
+  color: var(--_user);
+}
+
+.topic-card.user-card .topic-status-pill.active .topic-status-pill-dot {
+  box-shadow: 0 0 5px var(--_user);
+}
+
 .topic-card.dragging {
   opacity: 0.5;
   border: 2px dashed var(--accent);
@@ -1479,6 +1518,12 @@ h3 {
 
 [data-theme="light"] .topic-drag-handle:active {
   background: rgba(37, 99, 235, 0.12);
+}
+
+[data-theme="light"] .topic-card.user-card {
+  --_user: #7C3AED;
+  --_user-glow: rgba(124, 58, 237, 0.14);
+  --_user-surface: rgba(124, 58, 237, 0.08);
 }
 
 /* Pin button — positioned independently, always visible when active */

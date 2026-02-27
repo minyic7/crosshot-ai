@@ -176,7 +176,7 @@ function TopicCard({
 
   return (
     <div
-      className={`topic-card${risen ? '' : ' rise'}${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''} ${className}`}
+      className={`topic-card${risen ? '' : ' rise'}${topic.is_pinned ? ' pinned' : ''}${topic.status === 'paused' ? ' paused' : ''}${topic.type === 'user' ? ' user-card' : ''} ${className}`}
       style={{ animationDelay: risen ? undefined : `${180 + d}ms`, ...style }}
       onAnimationEnd={(e) => { if (e.animationName === 'rise') setRisen(true) }}
       onClick={(e) => {
