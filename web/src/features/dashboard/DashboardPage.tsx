@@ -51,7 +51,7 @@ import {
 import type { Topic, TopicAlert, TopicPipeline, User as UserType, TopicStatus } from '@/types/models'
 
 const EMOJI_OPTIONS = ['📊', '🔍', '🚀', '💡', '🔥', '📈', '🎯', '🌐', '💰', '⚡', '🤖', '📱']
-const PLATFORM_OPTIONS = ['x', 'xhs']
+const PLATFORM_OPTIONS = ['x', 'xhs', 'web']
 
 /** uid() requires HTTPS; fallback for HTTP contexts */
 const uid = (): string =>
