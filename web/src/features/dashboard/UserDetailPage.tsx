@@ -19,6 +19,7 @@ import {
 import type { TopicInsight, PipelineTask } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
 import { useSSEChat } from '@/hooks/useSSEChat'
+import { CreateEditModal } from './CreateEditModal'
 
 function normalizeInsights(data: { alerts?: unknown[]; insights?: unknown[] } | null): TopicInsight[] {
   const result: TopicInsight[] = []
@@ -337,6 +338,7 @@ export function UserDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [fastPoll, setFastPoll] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const { data: user, isLoading, isError } = useGetUserQuery(id ?? '', { skip: !id, pollingInterval: fastPoll ? 3000 : 10000 })
   const { data: trend } = useGetUserTrendQuery(id ?? '', { skip: !id })
   const [reanalyzeUser, { isLoading: isReanalyzing }] = useReanalyzeUserMutation()
@@ -500,6 +502,9 @@ export function UserDetailPage() {
           </div>
         </div>
         <div className="topic-detail-actions">
+          <button className="topic-card-refresh" onClick={() => setShowEdit(true)} title="Edit">
+            <Pencil size={13} />
+          </button>
           <button className="topic-card-refresh" onClick={() => reanalyzeUser(user.id)} disabled={isReanalyzing || fastPoll} title="Reanalyze">
             <RefreshCw size={13} className={isReanalyzing || fastPoll ? 'animate-spin' : ''} />
           </button>
@@ -798,6 +803,7 @@ export function UserDetailPage() {
           </pre>
         </details>
       )}
+      <CreateEditModal open={showEdit} onClose={() => setShowEdit(false)} editEntity={user} />
     </div>
   )
 }

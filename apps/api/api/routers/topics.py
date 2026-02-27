@@ -59,6 +59,7 @@ class AssistMessage(BaseModel):
 
 class TopicAssistRequest(BaseModel):
     messages: list[AssistMessage]
+    edit_context: dict | None = None
 
 
 # ── Helpers ─────────────────────────────────────────
@@ -509,6 +510,18 @@ async def assist_topic(body: TopicAssistRequest):
     )
 
     system_prompt = await _build_assist_system()
+    if body.edit_context:
+        ctx = body.edit_context
+        entity_type = ctx.get("type", "topic")
+        entity_name = ctx.get("name", "")
+        system_prompt += f"""
+## Editing Mode
+You are helping the user EDIT an existing {entity_type}. Current config:
+{json.dumps(ctx, ensure_ascii=False, indent=2)}
+
+Use update_{entity_type} with original_name="{entity_name}" to suggest changes.
+Do NOT create new topics/users — only update the existing one.
+"""
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     for m in body.messages:
         messages.append({"role": m.role, "content": m.content})
