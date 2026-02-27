@@ -197,7 +197,7 @@ function TopicCard({
         onClick={() => onPin(topic.id, !topic.is_pinned)}
         title={topic.is_pinned ? 'Unpin' : 'Pin'}
       >
-        <Pin size={13} />
+        <Pin size={12} />
       </button>
 
       {/* Hover actions — float top-right */}
@@ -207,14 +207,14 @@ function TopicCard({
           onClick={() => onEdit(topic.id)}
           title="Edit"
         >
-          <Pencil size={11} />
+          <Pencil size={10} />
         </button>
         <button
           className="topic-card-refresh"
           onClick={() => onRefresh(topic.id)}
           disabled={refreshing}
         >
-          <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
+          <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
         </button>
       </div>
 
