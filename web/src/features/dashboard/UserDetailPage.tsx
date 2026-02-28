@@ -221,6 +221,8 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
   const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, scrollLeft: 0 })
 
   const BAR_WIDTH = 20
   const CONTAINER_WIDTH = 280
@@ -235,9 +237,38 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
     }
   }, [metricKey, isScrollable])
 
+  // Drag to scroll
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!scrollRef.current) return
+    setIsDragging(true)
+    setDragStart({
+      x: e.pageX - scrollRef.current.offsetLeft,
+      scrollLeft: scrollRef.current.scrollLeft,
+    })
+  }, [])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !scrollRef.current) return
+    e.preventDefault()
+    const x = e.pageX - scrollRef.current.offsetLeft
+    const walk = (x - dragStart.x) * 1.5
+    scrollRef.current.scrollLeft = dragStart.scrollLeft - walk
+  }, [isDragging, dragStart])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
   return (
     <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
-      <div ref={scrollRef} className={`trend-sparkline-scroll${isScrollable ? ' scrollable' : ''}`}>
+      <div
+        ref={scrollRef}
+        className={`trend-sparkline-scroll${isScrollable ? ' scrollable' : ''}${isDragging ? ' dragging' : ''}`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
         <div style={{ width: isScrollable ? chartWidth : '100%', height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 20, right: 8, left: 24, bottom: 60 }}>
@@ -253,8 +284,22 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
                 dy={4}
                 height={50}
               />
-              <Tooltip content={<TrendTooltip metricLabel={metricKey} />} />
-              <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} label={showLabels ? { position: 'top', fill: 'var(--ink-2)', fontSize: 11, formatter: fmtNum } : false} />
+              <Tooltip content={<TrendTooltip metricLabel={metricKey} />} cursor={false} />
+              <Bar
+                dataKey={metricKey}
+                fill={meta.color}
+                opacity={0.7}
+                radius={[4, 4, 0, 0]}
+                label={showLabels ? { position: 'top', fill: 'var(--ink-2)', fontSize: 11, formatter: fmtNum } : false}
+                activeBar={{
+                  fill: meta.color,
+                  opacity: 0.7,
+                  stroke: 'var(--lavender)',
+                  strokeWidth: 2,
+                  strokeDasharray: '4 4',
+                  radius: [4, 4, 0, 0],
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

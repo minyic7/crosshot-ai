@@ -2629,6 +2629,10 @@ button.progress-tasks-header:hover {
 .trend-sparkline-scroll.scrollable:active {
   cursor: grabbing;
 }
+.trend-sparkline-scroll.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
 .trend-sparkline-scroll.scrollable::-webkit-scrollbar {
   height: 4px;
 }
