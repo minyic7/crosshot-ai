@@ -149,8 +149,12 @@ def _detect_gaps(entity: dict, overview: dict, force_crawl: bool) -> dict:
     if hours_since is not None and hours_since > interval * 1.5:
         gaps["stale"] = True
 
+    # Only flag low_volume if we haven't crawled recently.
+    # Prevents infinite loop when crawlers can't find data.
     if overview["data_status"]["total_contents_all_time"] < 10:
-        gaps["low_volume"] = True
+        hours_since_crawl = overview["data_status"].get("hours_since_last_crawl")
+        if hours_since_crawl is None or hours_since_crawl > interval:
+            gaps["low_volume"] = True
 
     return gaps
 
