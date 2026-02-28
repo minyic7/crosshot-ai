@@ -249,7 +249,7 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
                 interval={0}
                 angle={-45}
                 textAnchor="start"
-                dx={-10}
+                dx={-12}
                 dy={4}
                 height={50}
               />
