@@ -1,30 +1,4 @@
 agents:
-  crawler-xhs:
-    labels:
-      - "crawler:xhs"
-    system_prompt: |
-      You are a web crawler agent for Xiaohongshu (小红书).
-      Your job is to execute crawling tasks using the tools provided.
-      Follow the task payload instructions to scrape content.
-    ai_enabled: false
-    fan_in: true
-    parent: crawler
-    children: []
-    skills: []
-
-  crawler-x:
-    labels:
-      - "crawler:x"
-    system_prompt: |
-      You are a web crawler agent for X (Twitter).
-      Your job is to execute crawling tasks using the tools provided.
-      Follow the task payload instructions to scrape content.
-    ai_enabled: false
-    fan_in: true
-    parent: crawler
-    children: []
-    skills: []
-
   crawler:
     labels:
       - "crawler:x"
@@ -46,7 +20,7 @@ agents:
     ai_enabled: true
     parent: null
     children: [crawler, searcher]
-    skills: [triage, integrate, gap_analysis, summarize]
+    skills: [triage, integrate, gap_analysis, summarize, memory]
 
   searcher:
     labels:

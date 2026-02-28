@@ -73,6 +73,9 @@ You have the following tools. Call them by name with `entity_type` and `entity_i
 - **integrate_knowledge**: Update knowledge document with triaged content. Pass `is_preliminary=True` if crawling may follow.
 - **analyze_gaps**: Detect data freshness gaps, recommend crawl tasks. Pass `force_crawl=True` to force.
 - **dispatch_tasks**: Build and push crawl tasks to crawler/searcher agents. Sets up fan-in.
+- **save_snapshot**: Save current metrics as a time-series snapshot for trend tracking.
+- **save_note**: Save a persistent analysis note (survives summary rewrites).
+- **create_alert**: Create an alert for anomalies or notable events (use sparingly).
 
 If the task payload contains `chat_insights`, pass them to `integrate_knowledge` and `analyze_gaps`.
 After completing all steps, respond with a brief text summary (no tool call) to finish."""
@@ -87,7 +90,9 @@ All dispatched crawlers have completed. Process their results:
 1. Call `get_overview` to see current data status
 2. Call `triage_contents` with `downgrade_detail=True` — no more detail tasks will run
 3. Call `integrate_knowledge` with `is_preliminary=False` — this is the final summary
-4. Respond with a brief summary of what was integrated"""
+4. Call `save_snapshot` with the metrics from get_overview to track trends
+5. If anything notable happened, use `save_note` or `create_alert`
+6. Respond with a brief summary of what was integrated"""
     else:
         task_section = """\
 ## Current Task: Analyze

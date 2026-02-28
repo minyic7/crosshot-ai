@@ -132,9 +132,17 @@ def make_dispatch_tool(
             entity_type=entity_type,
         )
 
-        # Push all tasks to queue
+        # Push all tasks to queue and track IDs for child result collection
+        task_ids: list[str] = []
         for t in new_tasks:
             await queue.push(t)
+            task_ids.append(t.id)
+
+        # Store task IDs in Redis for fan-in child result collection
+        task_ids_key = f"{entity_type}:{entity_id}:task_ids"
+        await redis_client.delete(task_ids_key)
+        await redis_client.sadd(task_ids_key, *task_ids)
+        await redis_client.expire(task_ids_key, 86400)
 
         logger.info(
             "Dispatched %d tasks for %s %s", len(new_tasks), entity_type, entity_id

@@ -20,12 +20,15 @@ from shared.skills.models import Skill
 from shared.tools.base import Tool
 
 from agent_analyst.prompts import build_analyst_system_prompt
+from agent_analyst.tools.alert_tool import make_alert_tool
 from agent_analyst.tools.dispatch_tool import make_dispatch_tool
 from agent_analyst.tools.gap_tool import make_gap_tool
 from agent_analyst.tools.integrate_tool import make_integrate_tool
+from agent_analyst.tools.notes_tool import make_notes_tool
 from agent_analyst.tools.overview_tool import make_overview_tool
 from agent_analyst.tools.pipeline import set_pipeline_stage
 from agent_analyst.tools.query import mark_detail_ready
+from agent_analyst.tools.snapshot_tool import make_snapshot_tool
 from agent_analyst.tools.summary import update_entity_summary
 from agent_analyst.tools.triage_tool import make_triage_tool
 
@@ -50,6 +53,10 @@ def make_analyst_tools(
         make_integrate_tool(session_factory, llm_client, model),
         make_gap_tool(session_factory, llm_client, model),
         make_dispatch_tool(session_factory, redis_client, queue),
+        # Memory tools (Phase 5)
+        make_snapshot_tool(session_factory),
+        make_notes_tool(session_factory),
+        make_alert_tool(session_factory),
     ]
 
 

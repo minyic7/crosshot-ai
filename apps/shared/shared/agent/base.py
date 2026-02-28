@@ -193,17 +193,26 @@ class BaseAgent:
             on_complete_raw = await self._redis.getdel(on_complete_key)
             if on_complete_raw:
                 cfg = json.loads(on_complete_raw)
+                payload = cfg.get("payload", {})
+
+                # Collect child task results for feedback to parent
+                child_results = await self._collect_child_results(
+                    entity_type, entity_id,
+                )
+                if child_results:
+                    payload["child_results"] = child_results
+
                 next_task = Task(
                     label=cfg["label"],
-                    payload=cfg.get("payload", {}),
+                    payload=payload,
                     parent_job_id=task.parent_job_id,
                 )
                 await self._queue.push(next_task)
                 next_phase = cfg.get("next_phase", "summarizing")
                 await self._redis.hset(pipeline_key, "phase", next_phase)
                 logger.info(
-                    "%s %s: fan-in complete, triggered %s",
-                    entity_type, entity_id, next_task.label,
+                    "%s %s: fan-in complete, triggered %s (child_results=%d)",
+                    entity_type, entity_id, next_task.label, len(child_results),
                 )
 
             # Clean up task progress keys and pending counter
@@ -213,6 +222,41 @@ class BaseAgent:
             if task_ids:
                 cleanup_keys.extend(f"task:{tid}:progress" for tid in task_ids)
             await self._redis.delete(*cleanup_keys)
+
+    async def _collect_child_results(
+        self, entity_type: str, entity_id: str,
+    ) -> list[dict]:
+        """Collect results from completed child tasks for fan-in feedback.
+
+        Returns a compact summary of each child task's outcome so the parent
+        (e.g., analyst:summarize) can review what happened.
+        """
+        task_ids_key = f"{entity_type}:{entity_id}:task_ids"
+        task_ids = await self._redis.smembers(task_ids_key)
+        if not task_ids:
+            return []
+
+        results: list[dict] = []
+        for tid in task_ids:
+            raw = await self._redis.get(f"task:{tid}")
+            if not raw:
+                continue
+            try:
+                child = json.loads(raw)
+                results.append({
+                    "task_id": tid,
+                    "label": child.get("label", ""),
+                    "status": child.get("status", ""),
+                    "result": child.get("result"),
+                })
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        logger.info(
+            "Collected %d child results for %s %s", len(results),
+            entity_type, entity_id,
+        )
+        return results
 
     # ──────────────────────────────────────────────
     # Main loop
