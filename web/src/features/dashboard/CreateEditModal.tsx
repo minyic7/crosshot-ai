@@ -586,7 +586,7 @@ export function CreateEditModal({ open, onClose, editEntity }: CreateEditModalPr
             platforms: tp.platforms,
             keywords: tp.keywords,
             config: { ...((editEntity as Topic).config || {}), schedule_interval_hours: tp.schedule_interval_hours },
-          }).unwrap() as Record<string, unknown>
+          }).unwrap() as unknown as Record<string, unknown>
         } else if (p.type === 'create_user') {
           const up = p as CreateUserProposal
           result = await updateUser({
@@ -596,7 +596,7 @@ export function CreateEditModal({ open, onClose, editEntity }: CreateEditModalPr
             profile_url: up.profile_url.trim(),
             username: up.username || undefined,
             config: { ...((editEntity as UserType).config || {}), schedule_interval_hours: up.schedule_interval_hours },
-          }).unwrap() as Record<string, unknown>
+          }).unwrap() as unknown as Record<string, unknown>
         }
         setStatus(p._id, 'done')
         if (result?.reanalysis_triggered) {
