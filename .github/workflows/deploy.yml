@@ -186,8 +186,13 @@ jobs:
             # Pull new images
             $COMPOSE pull
 
-            # Restart containers (recreate only changed images)
-            $COMPOSE up -d --remove-orphans
+            # Clean up orphaned/stopped containers to prevent name conflicts
+            echo "Cleaning up old containers..."
+            $COMPOSE down --remove-orphans || true
+            $DOCKER container prune -f || true
+
+            # Start containers with fresh state
+            $COMPOSE up -d --remove-orphans --force-recreate
 
             # Wait for API to be ready (retry up to 30s)
             echo "Waiting for API..."
