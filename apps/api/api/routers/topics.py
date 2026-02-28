@@ -299,15 +299,36 @@ async def get_topic_trend(topic_id: str, days: int = 30) -> list[dict]:
 async def update_topic(topic_id: str, body: TopicUpdate) -> dict:
     factory = get_session_factory()
     async with factory() as session:
-        topic = await session.get(TopicRow, topic_id)
+        stmt = select(TopicRow).where(TopicRow.id == topic_id).options(
+            selectinload(TopicRow.users)
+        )
+        result = await session.execute(stmt)
+        topic = result.scalar_one_or_none()
         if topic is None:
             return {"error": "Topic not found"}
+
+        # Snapshot fields that trigger reanalysis when changed
+        old_platforms = set(topic.platforms or [])
+        old_keywords = set(topic.keywords or [])
+
         update_data = body.model_dump(exclude_none=True)
         for key, value in update_data.items():
             setattr(topic, key, value)
         topic.updated_at = datetime.now(timezone.utc)
         await session.commit()
         await session.refresh(topic)
+
+        # Auto-dispatch reanalysis if platforms or keywords changed
+        new_platforms = set(topic.platforms or [])
+        new_keywords = set(topic.keywords or [])
+        if new_platforms != old_platforms or new_keywords != old_keywords:
+            force = bool(new_platforms - old_platforms)  # force crawl if new platforms added
+            task_id = await _dispatch_analyze(topic, force_crawl=force)
+            logger.info(
+                "Auto-dispatched reanalysis for topic %s (platforms: %s→%s, keywords: %s→%s, task=%s)",
+                topic_id, old_platforms, new_platforms, old_keywords, new_keywords, task_id,
+            )
+
         return _topic_to_dict(topic)
 
 

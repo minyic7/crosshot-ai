@@ -177,12 +177,48 @@ async def update_user(user_id: str, body: UserUpdate) -> dict:
         user = await session.get(UserRow, user_id)
         if user is None:
             return {"error": "User not found"}
+
+        old_platform = user.platform
+        old_username = user.username
+
         update_data = body.model_dump(exclude_none=True)
         for key, value in update_data.items():
             setattr(user, key, value)
         user.updated_at = datetime.now(timezone.utc)
         await session.commit()
         await session.refresh(user)
+
+        # Auto-dispatch reanalysis if platform or username changed
+        if user.platform != old_platform or user.username != old_username:
+            queue = get_queue()
+            payload: dict[str, Any] = {
+                "user_id": str(user.id),
+                "name": user.name,
+                "platform": user.platform,
+                "username": user.username,
+                "profile_url": user.profile_url,
+                "config": user.config,
+                "force_crawl": True,
+            }
+            task = Task(
+                label="analyst:analyze",
+                priority=TaskPriority.MEDIUM,
+                payload=payload,
+            )
+            await queue.push(task)
+
+            redis = get_redis()
+            progress_key = f"user:{user.id}:progress"
+            await redis.hset(progress_key, mapping={
+                "phase": "analyzing",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            await redis.expire(progress_key, 86400)
+            logger.info(
+                "Auto-dispatched reanalysis for user %s (platform: %s→%s, username: %s→%s)",
+                user_id, old_platform, user.platform, old_username, user.username,
+            )
+
         return _user_to_dict(user)
 
 
