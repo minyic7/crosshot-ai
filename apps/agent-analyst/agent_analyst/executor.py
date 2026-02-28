@@ -6,7 +6,6 @@ The executor wraps react() with pre-/post-processing for progress tracking.
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
 from openai import AsyncOpenAI
@@ -31,9 +30,6 @@ from agent_analyst.tools.query import mark_detail_ready
 from agent_analyst.tools.snapshot_tool import make_snapshot_tool
 from agent_analyst.tools.summary import update_entity_summary
 from agent_analyst.tools.triage_tool import make_triage_tool
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

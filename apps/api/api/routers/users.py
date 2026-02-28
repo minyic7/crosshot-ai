@@ -247,8 +247,8 @@ async def get_user_progress(user_id: str) -> dict:
 
     redis = get_redis()
 
-    progress = await redis.hgetall(f"user:{user_id}:progress")
-    if not progress:
+    user_progress = await redis.hgetall(f"user:{user_id}:progress")
+    if not user_progress:
         return {"progress": None, "tasks": []}
 
     task_ids = await redis.smembers(f"user:{user_id}:task_ids")
@@ -268,7 +268,7 @@ async def get_user_progress(user_id: str) -> dict:
                 continue
 
             task_data = json.loads(task_raw) if isinstance(task_raw, str) else task_raw
-            progress = json.loads(progress_raw) if progress_raw else None
+            task_progress = json.loads(progress_raw) if progress_raw else None
 
             tasks_info.append({
                 "id": task_data.get("id"),
@@ -279,12 +279,12 @@ async def get_user_progress(user_id: str) -> dict:
                     "username": task_data.get("payload", {}).get("username"),
                     "query": (task_data.get("payload", {}).get("query") or "")[:80],
                 },
-                "progress": progress,
+                "progress": task_progress,
                 "started_at": task_data.get("started_at"),
                 "completed_at": task_data.get("completed_at"),
             })
 
-    return {"progress": progress, "tasks": tasks_info}
+    return {"progress": user_progress, "tasks": tasks_info}
 
 
 @router.post("/users/reorder")

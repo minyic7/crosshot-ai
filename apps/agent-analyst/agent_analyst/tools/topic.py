@@ -101,3 +101,11 @@ async def get_entity_config(
             }
 
         return {"error": "Must provide either topic_id or user_id"}
+
+
+def get_knowledge_doc(entity: dict) -> str:
+    """Extract knowledge document from entity's summary_data."""
+    summary_data = entity.get("summary_data") or {}
+    if isinstance(summary_data, dict):
+        return summary_data.get("knowledge", "")
+    return ""

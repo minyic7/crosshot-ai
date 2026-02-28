@@ -346,8 +346,8 @@ async def get_topic_progress(topic_id: str) -> dict:
     """Get progress state and active crawler task progress for a topic."""
     redis = get_redis()
 
-    progress = await redis.hgetall(f"topic:{topic_id}:progress")
-    if not progress:
+    topic_progress = await redis.hgetall(f"topic:{topic_id}:progress")
+    if not topic_progress:
         return {"progress": None, "tasks": []}
 
     task_ids = await redis.smembers(f"topic:{topic_id}:task_ids")
@@ -367,7 +367,7 @@ async def get_topic_progress(topic_id: str) -> dict:
                 continue
 
             task_data = json.loads(task_raw) if isinstance(task_raw, str) else task_raw
-            progress = json.loads(progress_raw) if progress_raw else None
+            task_progress = json.loads(progress_raw) if progress_raw else None
 
             tasks_info.append({
                 "id": task_data.get("id"),
@@ -378,12 +378,12 @@ async def get_topic_progress(topic_id: str) -> dict:
                     "username": task_data.get("payload", {}).get("username"),
                     "query": (task_data.get("payload", {}).get("query") or "")[:80],
                 },
-                "progress": progress,
+                "progress": task_progress,
                 "started_at": task_data.get("started_at"),
                 "completed_at": task_data.get("completed_at"),
             })
 
-    return {"progress": progress, "tasks": tasks_info}
+    return {"progress": topic_progress, "tasks": tasks_info}
 
 
 @router.post("/topics/reorder")

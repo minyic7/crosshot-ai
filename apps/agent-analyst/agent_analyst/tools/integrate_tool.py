@@ -15,7 +15,7 @@ from agent_analyst.tools.query import (
     query_integration_ready,
 )
 from agent_analyst.tools.summary import update_entity_summary
-from agent_analyst.tools.topic import get_entity_config
+from agent_analyst.tools.topic import get_entity_config, get_knowledge_doc
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def make_integrate_tool(
             user_ids=attached_user_ids or None,
         )
 
-        knowledge_doc = _get_knowledge_doc(entity)
+        knowledge_doc = get_knowledge_doc(entity)
 
         if not integration_ready:
             # No new content to integrate — save current state
@@ -226,11 +226,3 @@ def _normalize_insights(analysis: dict) -> list[dict]:
                     result.append({"text": item, "sentiment": "neutral"})
             return result
     return []
-
-
-def _get_knowledge_doc(entity: dict) -> str:
-    """Extract knowledge document from entity's summary_data."""
-    summary_data = entity.get("summary_data") or {}
-    if isinstance(summary_data, dict):
-        return summary_data.get("knowledge", "")
-    return ""

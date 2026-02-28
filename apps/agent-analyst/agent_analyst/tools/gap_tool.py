@@ -11,7 +11,7 @@ from shared.tools.base import Tool
 
 from agent_analyst.prompts import build_gap_analysis_prompt, build_system_prompt
 from agent_analyst.tools.query import query_entity_overview
-from agent_analyst.tools.topic import get_entity_config
+from agent_analyst.tools.topic import get_entity_config, get_knowledge_doc
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def make_gap_tool(
 
         crawl_tasks: list[dict] = []
         if has_gaps and not skip_search:
-            knowledge_doc = _get_knowledge_doc(entity)
+            knowledge_doc = get_knowledge_doc(entity)
             gap_analysis = await _llm_gap_analysis(
                 entity, overview, gaps, knowledge_doc,
                 llm_client, model, chat_insights,
@@ -187,11 +187,3 @@ async def _llm_gap_analysis(
     except Exception as e:
         logger.error("Gap analysis LLM call failed: %s", e)
         return {"crawl_tasks": []}
-
-
-def _get_knowledge_doc(entity: dict) -> str:
-    """Extract knowledge document from entity's summary_data."""
-    summary_data = entity.get("summary_data") or {}
-    if isinstance(summary_data, dict):
-        return summary_data.get("knowledge", "")
-    return ""

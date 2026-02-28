@@ -399,11 +399,11 @@ class XExecutor(BasePlatformExecutor):
         self, task: Task, tweets: list[dict[str, Any]],
     ) -> list[str]:
         """Save parsed tweets to PostgreSQL."""
+        if not tweets:
+            return []
+
         content_ids = [str(uuid4()) for _ in tweets]
-
-        if content_ids:
-            await self._save_to_pg(task, tweets, content_ids)
-
+        await self._save_to_pg(task, tweets, content_ids)
         logger.info("Saved %d content items for task %s", len(content_ids), task.id)
         return content_ids
 
@@ -415,7 +415,7 @@ class XExecutor(BasePlatformExecutor):
             return [], 0
 
         content_ids = [str(uuid4()) for _ in tweets]
-        new_count = await self._save_to_pg_upsert(task, tweets, content_ids)
+        new_count = await self._save_to_pg(task, tweets, content_ids, count_new=True)
         logger.info(
             "Saved %d content items (%d new) for task %s",
             len(content_ids), new_count, task.id,
@@ -427,8 +427,14 @@ class XExecutor(BasePlatformExecutor):
         task: Task,
         tweets: list[dict[str, Any]],
         content_ids: list[str],
-    ) -> None:
-        """Persist content rows to PostgreSQL for SQL-based analytics."""
+        count_new: bool = False,
+    ) -> int:
+        """Persist content rows to PostgreSQL with upsert.
+
+        Updates metrics/text on conflict. Returns the number of truly new rows
+        inserted when count_new=True, otherwise 0.
+        """
+        new_count = 0
         try:
             from shared.db.engine import get_session_factory
             from shared.db.models import ContentRow, TaskRow
@@ -448,7 +454,6 @@ class XExecutor(BasePlatformExecutor):
                     ).on_conflict_do_nothing(index_elements=["id"])
                 )
 
-                # Upsert content rows (deduplicate by platform+content_id, update metrics on conflict)
                 for i, tweet in enumerate(tweets):
                     author = tweet.get("author", {})
                     stmt = pg_insert(ContentRow).values(
@@ -481,94 +486,22 @@ class XExecutor(BasePlatformExecutor):
                 await session.commit()
 
             await self._index_to_opensearch(task, tweets, content_ids)
+
+            if count_new:
+                # Count how many of our generated IDs were actually inserted
+                # (conflicting rows keep their original ID, so ours won't exist)
+                async with factory() as session:
+                    from sqlalchemy import text as sql_text
+                    row = await session.execute(
+                        sql_text(
+                            "SELECT COUNT(*) FROM contents WHERE id = ANY(:ids)"
+                        ),
+                        {"ids": content_ids},
+                    )
+                    new_count = row.scalar() or 0
+
         except Exception as e:
             logger.warning("PG save failed (non-fatal): %s", e)
-
-    async def _save_to_pg_upsert(
-        self,
-        task: Task,
-        tweets: list[dict[str, Any]],
-        content_ids: list[str],
-    ) -> int:
-        """Persist content rows with upsert — updates metrics/text on conflict.
-
-        Returns the number of truly new rows inserted.
-        """
-        new_count = 0
-        try:
-            from shared.db.engine import get_session_factory
-            from shared.db.models import ContentRow, TaskRow
-            from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-            topic_id = task.payload.get("topic_id")
-            user_id = task.payload.get("user_id")
-            factory = get_session_factory()
-            async with factory() as session:
-                await session.execute(
-                    pg_insert(TaskRow).values(
-                        id=task.id,
-                        label=task.label,
-                        priority=task.priority,
-                        payload=task.payload,
-                    ).on_conflict_do_nothing(index_elements=["id"])
-                )
-
-                for i, tweet in enumerate(tweets):
-                    author = tweet.get("author", {})
-                    stmt = pg_insert(ContentRow).values(
-                        id=content_ids[i],
-                        task_id=task.id,
-                        topic_id=topic_id,
-                        user_id=user_id,
-                        platform="x",
-                        platform_content_id=tweet.get("tweet_id"),
-                        source_url=tweet.get("source_url", ""),
-                        author_uid=author.get("user_id"),
-                        author_username=author.get("username"),
-                        author_display_name=author.get("display_name"),
-                        text=tweet.get("text"),
-                        lang=tweet.get("lang"),
-                        hashtags=tweet.get("hashtags", []),
-                        metrics=tweet.get("metrics", {}),
-                        data=tweet,
-                    )
-                    # On conflict: update metrics + text (detect edits)
-                    stmt = stmt.on_conflict_do_update(
-                        index_elements=["platform", "platform_content_id"],
-                        set_={
-                            "metrics": stmt.excluded.metrics,
-                            "text": stmt.excluded.text,
-                            "data": stmt.excluded.data,
-                        },
-                    )
-                    result = await session.execute(stmt)
-                    # xmax = 0 means a fresh insert (not an update)
-                    # For pg_insert ... on_conflict_do_update, rowcount is always 1
-                    # We use a simpler heuristic: check if the ID we provided was used
-                    # by querying back. Instead, just count via platform_content_id.
-                    # Simpler: just check if this tweet_id was in known set before saving.
-                    # But we don't have known_ids here, so we rely on the caller.
-                    new_count += 1  # provisional — actual new vs update below
-
-                await session.commit()
-
-            await self._index_to_opensearch(task, tweets, content_ids)
-
-            # Correct new_count: query how many of our IDs actually exist
-            # (the ones that conflicted got a different existing ID)
-            async with factory() as session:
-                from sqlalchemy import text as sql_text
-                row = await session.execute(
-                    sql_text(
-                        "SELECT COUNT(*) FROM contents WHERE id = ANY(:ids)"
-                    ),
-                    {"ids": content_ids},
-                )
-                actually_inserted = row.scalar() or 0
-                new_count = actually_inserted
-
-        except Exception as e:
-            logger.warning("PG upsert save failed (non-fatal): %s", e)
 
         return new_count
 

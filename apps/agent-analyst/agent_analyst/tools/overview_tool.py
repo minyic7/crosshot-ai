@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from shared.tools.base import Tool
 
 from agent_analyst.tools.query import query_entity_overview
-from agent_analyst.tools.topic import get_entity_config
+from agent_analyst.tools.topic import get_entity_config, get_knowledge_doc
 
 
 def make_overview_tool(
@@ -47,7 +47,7 @@ def make_overview_tool(
                 "config": entity.get("config", {}),
             },
             "overview": overview,
-            "knowledge_doc": _get_knowledge_doc(entity),
+            "knowledge_doc": get_knowledge_doc(entity),
         }
         return json.dumps(result, ensure_ascii=False, default=str)
 
@@ -74,11 +74,3 @@ def make_overview_tool(
         },
         func=get_overview,
     )
-
-
-def _get_knowledge_doc(entity: dict) -> str:
-    """Extract knowledge document from entity's summary_data."""
-    summary_data = entity.get("summary_data") or {}
-    if isinstance(summary_data, dict):
-        return summary_data.get("knowledge", "")
-    return ""
