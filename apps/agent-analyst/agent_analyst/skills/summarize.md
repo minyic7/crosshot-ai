@@ -24,5 +24,5 @@ Use this context to inform your analysis — if a crawler found nothing, note th
 If a crawler found a viral post, prioritize analyzing it.
 
 ## Completion
-After integration, the pipeline status is set to "done" automatically.
+After integration, the progress status is set to "done" automatically.
 If there are attached users, their stats get updated too.

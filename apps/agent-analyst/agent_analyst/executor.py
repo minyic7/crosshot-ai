@@ -1,7 +1,7 @@
 """Skill-based executor for the analyst agent.
 
 Replaces the hardcoded pipeline with a ReAct loop guided by skill markdowns.
-The executor wraps react() with pre-/post-processing for pipeline bookkeeping.
+The executor wraps react() with pre-/post-processing for progress tracking.
 """
 
 import logging
@@ -26,7 +26,7 @@ from agent_analyst.tools.gap_tool import make_gap_tool
 from agent_analyst.tools.integrate_tool import make_integrate_tool
 from agent_analyst.tools.notes_tool import make_notes_tool
 from agent_analyst.tools.overview_tool import make_overview_tool
-from agent_analyst.tools.pipeline import set_pipeline_stage
+from agent_analyst.tools.progress import set_progress_stage
 from agent_analyst.tools.query import mark_detail_ready
 from agent_analyst.tools.snapshot_tool import make_snapshot_tool
 from agent_analyst.tools.summary import update_entity_summary
@@ -91,7 +91,7 @@ def make_skill_executor(
                 "Executor failed for %s %s: %s", entity_type, entity_id, e,
                 exc_info=True,
             )
-            await set_pipeline_stage(
+            await set_progress_stage(
                 redis_client, entity_id, "error",
                 error_msg=str(e), entity_type=entity_type,
             )
@@ -101,8 +101,8 @@ def make_skill_executor(
         task: Task, entity_type: str, entity_id: str,
     ) -> Result:
         """Pre-process → ReAct → post-process for analyst:analyze tasks."""
-        # Pre-processing: pipeline stage + chat rotation
-        await set_pipeline_stage(
+        # Pre-processing: progress stage + chat rotation
+        await set_progress_stage(
             redis_client, entity_id, "analyzing", entity_type=entity_type,
         )
 
@@ -119,8 +119,8 @@ def make_skill_executor(
         result = await agent.react(task, system_prompt=system_prompt)
 
         # Post-processing: check if dispatch happened
-        pipeline_key = f"{entity_type}:{entity_id}:pipeline"
-        phase = await redis_client.hget(pipeline_key, "phase")
+        progress_key = f"{entity_type}:{entity_id}:progress"
+        phase = await redis_client.hget(progress_key, "phase")
 
         if phase != "crawling":
             # No dispatch happened — finalize summary
@@ -130,7 +130,7 @@ def make_skill_executor(
                 user_id=entity_id if entity_type == "user" else None,
                 is_preliminary=False,
             )
-            await set_pipeline_stage(
+            await set_progress_stage(
                 redis_client, entity_id, "done", entity_type=entity_type,
             )
             logger.info(
@@ -158,7 +158,7 @@ def make_skill_executor(
         system_prompt = build_analyst_system_prompt(skills, task.label)
         result = await agent.react(task, system_prompt=system_prompt)
 
-        # Post-processing: update attached user stats, set pipeline done
+        # Post-processing: update attached user stats, set progress done
         if topic_id:
             from agent_analyst.tools.topic import get_entity_config
 
@@ -169,7 +169,7 @@ def make_skill_executor(
             if attached_user_ids:
                 await _update_attached_user_stats(attached_user_ids)
 
-        await set_pipeline_stage(
+        await set_progress_stage(
             redis_client, entity_id, "done", entity_type=entity_type,
         )
         logger.info("Summarize complete for %s %s", entity_type, entity_id)

@@ -2,7 +2,7 @@
 
 The crawler agent receives tasks with labels like "crawler:x", "crawler:xhs".
 This dispatcher maps labels to the correct platform executor.
-Fan-in (pipeline countdown) is handled generically by BaseAgent.
+Fan-in (progress countdown) is handled generically by BaseAgent.
 """
 
 from __future__ import annotations

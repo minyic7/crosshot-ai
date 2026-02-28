@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User, PipelineDetail } from '@/types/models'
+import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User, ProgressDetail } from '@/types/models'
 
 export const apiSlice = createApi({
   reducerPath: 'api',
@@ -121,8 +121,8 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/topics/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['Topic'],
     }),
-    getTopicPipeline: builder.query<PipelineDetail, string>({
-      query: (id) => `/topics/${id}/pipeline`,
+    getTopicProgress: builder.query<ProgressDetail, string>({
+      query: (id) => `/topics/${id}/progress`,
     }),
     getTopicChatHistory: builder.query<{ messages: { role: string; content: string; created_at: string }[] }, string>({
       query: (id) => `/topics/${id}/chat/history`,
@@ -189,8 +189,8 @@ export const apiSlice = createApi({
       query: (id) => ({ url: `/users/${id}/reanalyze`, method: 'POST' }),
       invalidatesTags: ['User'],
     }),
-    getUserPipeline: builder.query<PipelineDetail, string>({
-      query: (id) => `/users/${id}/pipeline`,
+    getUserProgress: builder.query<ProgressDetail, string>({
+      query: (id) => `/users/${id}/progress`,
     }),
     getUserTrend: builder.query<{ day: string; posts: number; likes: number; views: number; retweets: number; replies: number; media_posts: number }[], string>({
       query: (id) => `/users/${id}/trend`,
@@ -234,7 +234,7 @@ export const {
   useGetTopicTrendQuery,
   useReanalyzeTopicMutation,
   useReorderTopicsMutation,
-  useGetTopicPipelineQuery,
+  useGetTopicProgressQuery,
   useGetTopicChatHistoryQuery,
   useListUsersQuery,
   useGetUserQuery,
@@ -245,7 +245,7 @@ export const {
   useDetachUserMutation,
   useReorderUsersMutation,
   useReanalyzeUserMutation,
-  useGetUserPipelineQuery,
+  useGetUserProgressQuery,
   useGetUserTrendQuery,
   useGetUserChatHistoryQuery,
   useResetAllDataMutation,

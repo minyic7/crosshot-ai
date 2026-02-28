@@ -1773,8 +1773,8 @@ h3 {
   font-style: italic;
 }
 
-/* Pipeline progress badge */
-.pipeline-badge {
+/* Progress badge */
+.progress-badge {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1785,35 +1785,35 @@ h3 {
   font-family: 'Outfit', system-ui, sans-serif;
 }
 
-.pipeline-badge.analyzing {
+.progress-badge.analyzing {
   background: rgba(139, 92, 246, 0.08);
   color: var(--lavender);
   border-left: 2px solid #8b5cf6;
 }
 
-.pipeline-badge.crawling {
+.progress-badge.crawling {
   background: rgba(59, 130, 246, 0.08);
   color: var(--blue);
   border-left: 2px solid var(--blue);
 }
 
-.pipeline-badge.summarizing {
+.progress-badge.summarizing {
   background: rgba(245, 158, 11, 0.08);
   color: var(--warning);
   border-left: 2px solid var(--warning);
 }
 
-.pipeline-badge.error {
+.progress-badge.error {
   background: var(--negative-surface);
   color: var(--negative);
   border-left: 2px solid var(--negative);
 }
 
-.pipeline-spin {
+.progress-spin {
   animation: spin 1.5s linear infinite;
 }
 
-.pipeline-bar {
+.progress-bar {
   flex: 1;
   height: 4px;
   border-radius: 100px;
@@ -1822,22 +1822,22 @@ h3 {
   min-width: 40px;
 }
 
-.pipeline-bar-fill {
+.progress-bar-fill {
   height: 100%;
   border-radius: 100px;
   background: var(--blue);
   transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Pipeline tasks section (detail pages) */
-.pipeline-tasks-section {
+/* Progress tasks section (detail pages) */
+.progress-tasks-section {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   overflow: hidden;
 }
 
-.pipeline-tasks-header {
+.progress-tasks-header {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1850,22 +1850,22 @@ h3 {
   font-size: 0.75rem;
   color: var(--ink-1);
 }
-.pipeline-tasks-header:hover {
+.progress-tasks-header:hover {
   background: var(--glass-hover);
 }
 
-.pipeline-tasks-header-left {
+.progress-tasks-header-left {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
 
-.pipeline-tasks-phase {
+.progress-tasks-phase {
   font-weight: 600;
 }
 
-.pipeline-tasks-overall-bar {
+.progress-tasks-overall-bar {
   flex: 1;
   height: 3px;
   border-radius: 100px;
@@ -1873,50 +1873,50 @@ h3 {
   overflow: hidden;
   min-width: 60px;
 }
-.pipeline-tasks-overall-fill {
+.progress-tasks-overall-fill {
   height: 100%;
   border-radius: 100px;
   background: var(--accent);
   transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.pipeline-tasks-chevron {
+.progress-tasks-chevron {
   font-size: 0.625rem;
   color: var(--ink-3);
   margin-left: auto;
 }
 
-.pipeline-tasks-list {
+.progress-tasks-list {
   border-top: 1px solid var(--glass-border);
   padding: 4px 0;
 }
 
-.pipeline-task-item {
+.progress-task-item {
   padding: 8px 16px;
   transition: background 0.15s;
 }
-.pipeline-task-item:hover {
+.progress-task-item:hover {
   background: var(--glass-hover);
 }
-.pipeline-task-item.done {
+.progress-task-item.done {
   opacity: 0.5;
 }
-.pipeline-task-item.failed {
+.progress-task-item.failed {
   opacity: 0.7;
 }
 
-.pipeline-task-row {
+.progress-task-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.pipeline-task-icon {
+.progress-task-icon {
   font-size: 0.75rem;
   flex-shrink: 0;
 }
 
-.pipeline-task-label {
+.progress-task-label {
   font-family: 'Space Mono', monospace;
   font-size: 0.6875rem;
   color: var(--ink-2);
@@ -1926,19 +1926,19 @@ h3 {
   white-space: nowrap;
 }
 
-.pipeline-task-status {
+.progress-task-status {
   font-family: 'Space Mono', monospace;
   font-size: 0.625rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
 }
-.pipeline-task-status.completed { color: var(--positive); }
-.pipeline-task-status.failed { color: var(--negative); }
-.pipeline-task-status.running { color: var(--accent); }
-.pipeline-task-status.pending { color: var(--ink-3); }
+.progress-task-status.completed { color: var(--positive); }
+.progress-task-status.failed { color: var(--negative); }
+.progress-task-status.running { color: var(--accent); }
+.progress-task-status.pending { color: var(--ink-3); }
 
-.pipeline-task-message {
+.progress-task-message {
   font-family: 'Space Mono', monospace;
   font-size: 0.625rem;
   color: var(--ink-3);
@@ -1946,7 +1946,7 @@ h3 {
   padding-left: 24px;
 }
 
-.pipeline-task-bar {
+.progress-task-bar {
   height: 2px;
   border-radius: 100px;
   background: var(--border-default);
@@ -1954,7 +1954,7 @@ h3 {
   margin-top: 4px;
   margin-left: 24px;
 }
-.pipeline-task-bar-fill {
+.progress-task-bar-fill {
   height: 100%;
   border-radius: 100px;
   background: var(--accent);

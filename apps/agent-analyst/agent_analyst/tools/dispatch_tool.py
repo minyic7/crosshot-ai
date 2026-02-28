@@ -12,7 +12,7 @@ from shared.models.task import Task, TaskPriority
 from shared.queue.redis_queue import TaskQueue
 from shared.tools.base import Tool
 
-from agent_analyst.tools.pipeline import set_pipeline_stage
+from agent_analyst.tools.progress import set_progress_stage
 from agent_analyst.tools.query import query_unprocessed_contents
 from agent_analyst.tools.topic import get_entity_config
 
@@ -36,7 +36,7 @@ def make_dispatch_tool(
     ) -> str:
         """Build and dispatch crawl tasks to crawler/searcher agents.
 
-        Sets up fan-in pipeline so analyst:summarize is triggered when all complete.
+        Sets up fan-in so analyst:summarize is triggered when all complete.
         """
         topic_id = entity_id if entity_type == "topic" else None
         user_id = entity_id if entity_type == "user" else None
@@ -123,8 +123,8 @@ def make_dispatch_tool(
                 "message": "No crawl tasks to dispatch",
             }, ensure_ascii=False)
 
-        # Set up fan-in pipeline
-        await set_pipeline_stage(
+        # Set up fan-in progress tracking
+        await set_progress_stage(
             redis_client,
             entity_id,
             "crawling",

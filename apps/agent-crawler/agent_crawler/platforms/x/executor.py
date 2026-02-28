@@ -278,7 +278,7 @@ class XExecutor(BasePlatformExecutor):
         - Reports real-time progress to Redis for UI display
 
         Note: Detail task dispatch (fetching comments/quotes for high-value
-        tweets) is handled by the analyst pipeline's triage step, not here.
+        tweets) is handled by the analyst's triage step, not here.
         The crawler is a dumb executor — the analyst decides what needs
         deeper investigation.
         """

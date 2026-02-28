@@ -154,7 +154,7 @@ class BaseAgent:
             await asyncio.sleep(10)
 
     # ──────────────────────────────────────────────
-    # Fan-in (generic pipeline countdown)
+    # Fan-in (generic progress countdown)
     # ──────────────────────────────────────────────
 
     @staticmethod
@@ -175,13 +175,13 @@ class BaseAgent:
             return
 
         pending_key = f"{entity_type}:{entity_id}:pending"
-        pipeline_key = f"{entity_type}:{entity_id}:pipeline"
+        progress_key = f"{entity_type}:{entity_id}:progress"
 
         # Atomic: decrement pending + update progress
         pipe = self._redis.pipeline()
         pipe.decr(pending_key)
-        pipe.hincrby(pipeline_key, "done", 1)
-        pipe.hset(pipeline_key, "updated_at", datetime.now(timezone.utc).isoformat())
+        pipe.hincrby(progress_key, "done", 1)
+        pipe.hset(progress_key, "updated_at", datetime.now(timezone.utc).isoformat())
         results = await pipe.execute()
         remaining = results[0]
 
@@ -209,7 +209,7 @@ class BaseAgent:
                 )
                 await self._queue.push(next_task)
                 next_phase = cfg.get("next_phase", "summarizing")
-                await self._redis.hset(pipeline_key, "phase", next_phase)
+                await self._redis.hset(progress_key, "phase", next_phase)
                 logger.info(
                     "%s %s: fan-in complete, triggered %s (child_results=%d)",
                     entity_type, entity_id, next_task.label, len(child_results),
@@ -323,7 +323,7 @@ class BaseAgent:
                             task.id,
                         )
 
-                    # Store sub-task IDs in Redis for pipeline progress tracking
+                    # Store sub-task IDs in Redis for progress tracking
                     if sub_task_ids:
                         et, eid = self._extract_entity(task)
                         if et and eid:

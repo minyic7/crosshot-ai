@@ -87,7 +87,7 @@ class ContentRow(Base):
     # Media
     media_downloaded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # Knowledge pipeline — triage + integration status
+    # Knowledge processing — triage + integration status
     processing_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     key_points: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 

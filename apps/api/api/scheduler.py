@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_INTERVAL_HOURS = 6
 CHECK_INTERVAL_SECONDS = 60
-PIPELINE_STALE_HOURS = 1  # Reset stuck pipelines after this duration
+PROGRESS_STALE_HOURS = 1  # Reset stuck progress after this duration
 
 
 async def scheduler_loop(queue: TaskQueue) -> None:
@@ -68,15 +68,15 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
             if topic.last_crawl_at and (now - topic.last_crawl_at) < interval:
                 continue
 
-            pipeline = await redis_client.hgetall(f"topic:{topic.id}:pipeline")
-            if pipeline and pipeline.get("phase") not in (None, "", "done"):
-                if _is_pipeline_stale(pipeline, now):
+            progress = await redis_client.hgetall(f"topic:{topic.id}:progress")
+            if progress and progress.get("phase") not in (None, "", "done"):
+                if _is_progress_stale(progress, now):
                     logger.warning(
-                        "Resetting stale pipeline for topic '%s' (stuck in '%s')",
-                        topic.name, pipeline.get("phase"),
+                        "Resetting stale progress for topic '%s' (stuck in '%s')",
+                        topic.name, progress.get("phase"),
                     )
                     await redis_client.hset(
-                        f"topic:{topic.id}:pipeline", mapping={"phase": "done"}
+                        f"topic:{topic.id}:progress", mapping={"phase": "done"}
                     )
                     await redis_client.delete(f"topic:{topic.id}:pending")
                 else:
@@ -122,15 +122,15 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
             if user.last_crawl_at and (now - user.last_crawl_at) < interval:
                 continue
 
-            pipeline = await redis_client.hgetall(f"user:{user.id}:pipeline")
-            if pipeline and pipeline.get("phase") not in (None, "", "done"):
-                if _is_pipeline_stale(pipeline, now):
+            progress = await redis_client.hgetall(f"user:{user.id}:progress")
+            if progress and progress.get("phase") not in (None, "", "done"):
+                if _is_progress_stale(progress, now):
                     logger.warning(
-                        "Resetting stale pipeline for user '%s' (stuck in '%s')",
-                        user.name, pipeline.get("phase"),
+                        "Resetting stale progress for user '%s' (stuck in '%s')",
+                        user.name, progress.get("phase"),
                     )
                     await redis_client.hset(
-                        f"user:{user.id}:pipeline", mapping={"phase": "done"}
+                        f"user:{user.id}:progress", mapping={"phase": "done"}
                     )
                     await redis_client.delete(f"user:{user.id}:pending")
                 else:
@@ -154,13 +154,13 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
         await redis_client.aclose()
 
 
-def _is_pipeline_stale(pipeline: dict, now: datetime) -> bool:
-    """Check if a pipeline has been stuck for longer than PIPELINE_STALE_HOURS."""
-    updated_at = pipeline.get("updated_at")
+def _is_progress_stale(progress: dict, now: datetime) -> bool:
+    """Check if progress has been stuck for longer than PROGRESS_STALE_HOURS."""
+    updated_at = progress.get("updated_at")
     if not updated_at:
         return True
     try:
         updated = datetime.fromisoformat(updated_at)
-        return (now - updated) > timedelta(hours=PIPELINE_STALE_HOURS)
+        return (now - updated) > timedelta(hours=PROGRESS_STALE_HOURS)
     except (ValueError, TypeError):
         return True

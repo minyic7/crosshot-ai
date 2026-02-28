@@ -13,10 +13,10 @@ import {
   useUpdateTopicMutation,
   useDeleteTopicMutation,
   useDetachUserMutation,
-  useGetTopicPipelineQuery,
+  useGetTopicProgressQuery,
   useGetTopicChatHistoryQuery,
 } from '@/store/api'
-import type { TopicInsight, PipelineTask } from '@/types/models'
+import type { TopicInsight, ProgressTask } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
 import { useSSEChat } from '@/hooks/useSSEChat'
 import { CreateEditModal } from './CreateEditModal'
@@ -251,7 +251,7 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
   )
 }
 
-function getTaskIcon(task: PipelineTask): string {
+function getTaskIcon(task: ProgressTask): string {
   const action = task.payload?.action || task.progress?.action
   if (action === 'timeline') return '📋'
   if (action === 'search') return '🔍'
@@ -259,7 +259,7 @@ function getTaskIcon(task: PipelineTask): string {
   return '⚡'
 }
 
-function getTaskLabel(task: PipelineTask): string {
+function getTaskLabel(task: ProgressTask): string {
   const action = task.payload?.action
   if (action === 'timeline' && task.payload?.username) return `Timeline @${task.payload.username}`
   if (action === 'search' && task.payload?.query) return `Search: ${task.payload.query}`
@@ -267,7 +267,7 @@ function getTaskLabel(task: PipelineTask): string {
   return task.label || 'Task'
 }
 
-function getTaskProgressPct(task: PipelineTask): number | null {
+function getTaskProgressPct(task: ProgressTask): number | null {
   const p = task.progress
   if (!p) return null
   // Timeline: new_count / target_new
@@ -277,65 +277,65 @@ function getTaskProgressPct(task: PipelineTask): number | null {
   return null
 }
 
-function PipelineTasks({ entityId }: { entityId: string }) {
-  const { data } = useGetTopicPipelineQuery(entityId, { pollingInterval: 2000 })
+function ProgressTasks({ entityId }: { entityId: string }) {
+  const { data } = useGetTopicProgressQuery(entityId, { pollingInterval: 2000 })
   const [expanded, setExpanded] = useState(true)
 
-  if (!data?.pipeline || data.pipeline.phase === 'done') return null
-  if (data.tasks.length === 0 && data.pipeline.phase !== 'crawling') return null
+  if (!data?.progress || data.progress.phase === 'done') return null
+  if (data.tasks.length === 0 && data.progress.phase !== 'crawling') return null
 
-  const phase = data.pipeline.phase
-  const total = Number(data.pipeline.total) || 0
-  const done = Number(data.pipeline.done) || 0
+  const phase = data.progress.phase
+  const total = Number(data.progress.total) || 0
+  const done = Number(data.progress.done) || 0
   const overallPct = total > 0 ? Math.round((done / total) * 100) : 0
 
   return (
-    <div className="pipeline-tasks-section pop" style={{ animationDelay: '120ms' }}>
-      <button className="pipeline-tasks-header" onClick={() => setExpanded((p) => !p)}>
-        <div className="pipeline-tasks-header-left">
-          {phase === 'analyzing' && <Loader2 size={14} className="pipeline-spin" />}
-          {phase === 'crawling' && <RefreshCw size={14} className="pipeline-spin" />}
-          {phase === 'summarizing' && <TrendingUp size={14} className="pipeline-spin" />}
+    <div className="progress-tasks-section pop" style={{ animationDelay: '120ms' }}>
+      <button className="progress-tasks-header" onClick={() => setExpanded((p) => !p)}>
+        <div className="progress-tasks-header-left">
+          {phase === 'analyzing' && <Loader2 size={14} className="progress-spin" />}
+          {phase === 'crawling' && <RefreshCw size={14} className="progress-spin" />}
+          {phase === 'summarizing' && <TrendingUp size={14} className="progress-spin" />}
           {phase === 'error' && <span style={{ color: 'var(--negative)' }}>!</span>}
-          <span className="pipeline-tasks-phase">
+          <span className="progress-tasks-phase">
             {phase === 'analyzing' && 'Analyzing...'}
             {phase === 'crawling' && `Crawling ${done}/${total}`}
             {phase === 'summarizing' && 'Summarizing...'}
-            {phase === 'error' && `Error: ${data.pipeline.error_msg || 'Unknown'}`}
+            {phase === 'error' && `Error: ${data.progress.error_msg || 'Unknown'}`}
           </span>
         </div>
         {phase === 'crawling' && total > 0 && (
-          <div className="pipeline-tasks-overall-bar">
-            <div className="pipeline-tasks-overall-fill" style={{ width: `${overallPct}%` }} />
+          <div className="progress-tasks-overall-bar">
+            <div className="progress-tasks-overall-fill" style={{ width: `${overallPct}%` }} />
           </div>
         )}
-        <span className="pipeline-tasks-chevron">{expanded ? '▾' : '▸'}</span>
+        <span className="progress-tasks-chevron">{expanded ? '▾' : '▸'}</span>
       </button>
       {expanded && data.tasks.length > 0 && (
-        <div className="pipeline-tasks-list">
+        <div className="progress-tasks-list">
           {data.tasks.map((task) => {
             const pct = getTaskProgressPct(task)
             const isDone = task.status === 'completed'
             const isFailed = task.status === 'failed'
             const isRunning = task.status === 'running'
             return (
-              <div key={task.id} className={`pipeline-task-item ${isDone ? 'done' : ''} ${isFailed ? 'failed' : ''} ${isRunning ? 'running' : ''}`}>
-                <div className="pipeline-task-row">
-                  <span className="pipeline-task-icon">{getTaskIcon(task)}</span>
-                  <span className="pipeline-task-label">{getTaskLabel(task)}</span>
-                  <span className={`pipeline-task-status ${task.status}`}>
+              <div key={task.id} className={`progress-task-item ${isDone ? 'done' : ''} ${isFailed ? 'failed' : ''} ${isRunning ? 'running' : ''}`}>
+                <div className="progress-task-row">
+                  <span className="progress-task-icon">{getTaskIcon(task)}</span>
+                  <span className="progress-task-label">{getTaskLabel(task)}</span>
+                  <span className={`progress-task-status ${task.status}`}>
                     {isDone && '✓'}
                     {isFailed && '✗'}
-                    {isRunning && <Loader2 size={10} className="pipeline-spin" />}
+                    {isRunning && <Loader2 size={10} className="progress-spin" />}
                     {task.status === 'pending' && '○'}
                   </span>
                 </div>
                 {task.progress?.message && isRunning && (
-                  <div className="pipeline-task-message">{task.progress.message}</div>
+                  <div className="progress-task-message">{task.progress.message}</div>
                 )}
                 {pct !== null && isRunning && (
-                  <div className="pipeline-task-bar">
-                    <div className="pipeline-task-bar-fill" style={{ width: `${pct}%` }} />
+                  <div className="progress-task-bar">
+                    <div className="progress-task-bar-fill" style={{ width: `${pct}%` }} />
                   </div>
                 )}
               </div>
@@ -368,11 +368,11 @@ export function TopicDetailPage() {
   const [pendingDetach, setPendingDetach] = useState<Set<string>>(new Set())
   const statsRef = useRef<HTMLDivElement>(null)
 
-  // Poll faster while pipeline is active (analyzing/crawling/summarizing)
+  // Poll faster while progress is active (analyzing/crawling/summarizing)
   useEffect(() => {
-    const active = topic?.pipeline?.phase && topic.pipeline.phase !== 'done' && topic.pipeline.phase !== 'error'
+    const active = topic?.progress?.phase && topic.progress.phase !== 'done' && topic.progress.phase !== 'error'
     setFastPoll(!!active)
-  }, [topic?.pipeline?.phase])
+  }, [topic?.progress?.phase])
 
   const handleTranslate = useCallback(async (text: string) => {
     if (translating || translated) { setTranslated(''); return }
@@ -763,8 +763,8 @@ export function TopicDetailPage() {
         </div>
       )}
 
-      {/* Active Pipeline Tasks */}
-      <PipelineTasks entityId={topic.id} />
+      {/* Active Progress Tasks */}
+      <ProgressTasks entityId={topic.id} />
 
       {/* Summary + Chat (integrated) */}
       {topic.last_summary && (

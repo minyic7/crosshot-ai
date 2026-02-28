@@ -137,11 +137,11 @@ async def list_users(standalone: bool | None = None, status: str | None = None, 
         result = await session.execute(stmt)
         users = result.scalars().all()
 
-        # Batch read pipeline stages from Redis
+        # Batch read progress stages from Redis
         redis = get_redis()
         pipe = redis.pipeline()
         for u in users:
-            pipe.hgetall(f"user:{u.id}:pipeline")
+            pipe.hgetall(f"user:{u.id}:progress")
         stages = await pipe.execute()
 
         user_list = []
@@ -150,7 +150,7 @@ async def list_users(standalone: bool | None = None, status: str | None = None, 
             stage = stages[i] if stages[i] else None
             if stage and stage.get("phase") == "done":
                 stage = None
-            d["pipeline"] = stage
+            d["progress"] = stage
             user_list.append(d)
 
         return {"users": user_list, "total": len(users)}
@@ -240,16 +240,16 @@ async def detach_user(user_id: str, body: AttachDetach) -> dict:
         return {"status": "detached", "user_id": user_id, "topic_id": body.topic_id}
 
 
-@router.get("/users/{user_id}/pipeline")
-async def get_user_pipeline(user_id: str) -> dict:
-    """Get pipeline state and active crawler task progress for a user."""
+@router.get("/users/{user_id}/progress")
+async def get_user_progress(user_id: str) -> dict:
+    """Get progress state and active crawler task progress for a user."""
     import json
 
     redis = get_redis()
 
-    pipeline = await redis.hgetall(f"user:{user_id}:pipeline")
-    if not pipeline:
-        return {"pipeline": None, "tasks": []}
+    progress = await redis.hgetall(f"user:{user_id}:progress")
+    if not progress:
+        return {"progress": None, "tasks": []}
 
     task_ids = await redis.smembers(f"user:{user_id}:task_ids")
 
@@ -284,7 +284,7 @@ async def get_user_pipeline(user_id: str) -> dict:
                 "completed_at": task_data.get("completed_at"),
             })
 
-    return {"pipeline": pipeline, "tasks": tasks_info}
+    return {"progress": progress, "tasks": tasks_info}
 
 
 @router.post("/users/reorder")
@@ -330,12 +330,12 @@ async def reanalyze_user(user_id: str, crawl: bool = False) -> dict:
         await queue.push(task)
 
         redis = get_redis()
-        pipeline_key = f"user:{user.id}:pipeline"
-        await redis.hset(pipeline_key, mapping={
+        progress_key = f"user:{user.id}:progress"
+        await redis.hset(progress_key, mapping={
             "phase": "analyzing",
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
-        await redis.expire(pipeline_key, 86400)
+        await redis.expire(progress_key, 86400)
 
         return {"status": "reanalyzing", "task_id": task.id}
 

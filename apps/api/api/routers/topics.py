@@ -103,7 +103,7 @@ def _topic_to_dict(t: TopicRow, *, include_users: bool = False) -> dict:
 async def _dispatch_analyze(
     topic: TopicRow, *, force_crawl: bool = False, skip_crawl: bool = False,
 ) -> str:
-    """Push an analyst:analyze task and set pipeline stage to 'analyzing'."""
+    """Push an analyst:analyze task and set progress stage to 'analyzing'."""
     queue = get_queue()
     payload: dict[str, Any] = {
         "topic_id": str(topic.id),
@@ -141,14 +141,14 @@ async def _dispatch_analyze(
     )
     await queue.push(task)
 
-    # Set initial pipeline stage
+    # Set initial progress stage
     redis = get_redis()
-    pipeline_key = f"topic:{topic.id}:pipeline"
-    await redis.hset(pipeline_key, mapping={
+    progress_key = f"topic:{topic.id}:progress"
+    await redis.hset(progress_key, mapping={
         "phase": "analyzing",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
-    await redis.expire(pipeline_key, 86400)
+    await redis.expire(progress_key, 86400)
 
     return task.id
 
@@ -203,21 +203,21 @@ async def list_topics(status: str | None = None, include_users: bool = False) ->
         result = await session.execute(stmt)
         topics = result.scalars().all()
 
-        # Batch read pipeline stages from Redis
+        # Batch read progress stages from Redis
         redis = get_redis()
         pipe = redis.pipeline()
         for t in topics:
-            pipe.hgetall(f"topic:{t.id}:pipeline")
+            pipe.hgetall(f"topic:{t.id}:progress")
         stages = await pipe.execute()
 
         topic_list = []
         for i, t in enumerate(topics):
             d = _topic_to_dict(t, include_users=include_users)
             stage = stages[i] if stages[i] else None
-            # Filter out 'done' — no need to show completed pipelines
+            # Filter out 'done' — no need to show completed progress
             if stage and stage.get("phase") == "done":
                 stage = None
-            d["pipeline"] = stage
+            d["progress"] = stage
             topic_list.append(d)
 
         return {
@@ -341,14 +341,14 @@ async def reanalyze_topic(topic_id: str, crawl: bool = False) -> dict:
         return {"status": "reanalyzing", "task_id": task_id}
 
 
-@router.get("/topics/{topic_id}/pipeline")
-async def get_topic_pipeline(topic_id: str) -> dict:
-    """Get pipeline state and active crawler task progress for a topic."""
+@router.get("/topics/{topic_id}/progress")
+async def get_topic_progress(topic_id: str) -> dict:
+    """Get progress state and active crawler task progress for a topic."""
     redis = get_redis()
 
-    pipeline = await redis.hgetall(f"topic:{topic_id}:pipeline")
-    if not pipeline:
-        return {"pipeline": None, "tasks": []}
+    progress = await redis.hgetall(f"topic:{topic_id}:progress")
+    if not progress:
+        return {"progress": None, "tasks": []}
 
     task_ids = await redis.smembers(f"topic:{topic_id}:task_ids")
 
@@ -383,7 +383,7 @@ async def get_topic_pipeline(topic_id: str) -> dict:
                 "completed_at": task_data.get("completed_at"),
             })
 
-    return {"pipeline": pipeline, "tasks": tasks_info}
+    return {"progress": progress, "tasks": tasks_info}
 
 
 @router.post("/topics/reorder")

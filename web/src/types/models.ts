@@ -124,7 +124,7 @@ export interface TopicSummaryData {
   widgets?: TopicWidget[]
 }
 
-export interface TopicPipeline {
+export interface TopicProgress {
   phase: 'analyzing' | 'crawling' | 'summarizing' | 'done' | 'error'
   total?: string
   done?: string
@@ -157,14 +157,14 @@ export interface Topic {
   last_crawl_at: string | null
   last_summary: string | null
   summary_data: TopicSummaryData | null
-  pipeline: TopicPipeline | null
+  progress: TopicProgress | null
   created_at: string
   updated_at: string
   user_count?: number
   users?: TopicUserStub[]
 }
 
-export interface PipelineTaskProgress {
+export interface ProgressTaskProgress {
   action?: string
   target?: string
   phase?: string
@@ -177,7 +177,7 @@ export interface PipelineTaskProgress {
   updated_at?: string
 }
 
-export interface PipelineTask {
+export interface ProgressTask {
   id: string
   label: string
   status: TaskStatus
@@ -186,14 +186,14 @@ export interface PipelineTask {
     username?: string
     query?: string
   }
-  progress: PipelineTaskProgress | null
+  progress: ProgressTaskProgress | null
   started_at: string | null
   completed_at: string | null
 }
 
-export interface PipelineDetail {
-  pipeline: TopicPipeline | null
-  tasks: PipelineTask[]
+export interface ProgressDetail {
+  progress: TopicProgress | null
+  tasks: ProgressTask[]
 }
 
 export type UserStatus = 'active' | 'paused' | 'cancelled'
@@ -219,7 +219,7 @@ export interface User {
   last_crawl_at: string | null
   last_summary: string | null
   summary_data: TopicSummaryData | null
-  pipeline: TopicPipeline | null
+  progress: TopicProgress | null
   created_at: string
   updated_at: string
   topics?: UserTopicStub[]

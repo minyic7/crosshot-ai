@@ -1,6 +1,6 @@
-"""Content query functions for the incremental knowledge pipeline.
+"""Content query functions for the incremental knowledge process.
 
-Provides focused queries for each pipeline stage:
+Provides focused queries for each analysis stage:
 - query_entity_overview: metrics + data status (deterministic)
 - query_unprocessed_contents: for triage (processing_status IS NULL)
 - query_integration_ready: for knowledge integration (briefed/detail_ready)

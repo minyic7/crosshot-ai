@@ -42,7 +42,7 @@ import {
   useReorderUsersMutation,
   useResetAllDataMutation,
 } from '@/store/api'
-import type { Topic, TopicAlert, TopicPipeline, User as UserType, TopicStatus } from '@/types/models'
+import type { Topic, TopicAlert, TopicProgress, User as UserType, TopicStatus } from '@/types/models'
 import { CreateEditModal } from './CreateEditModal'
 
 // ─── Custom Sensor (ignores buttons) ────────────────────────
@@ -95,15 +95,15 @@ function fmtNum(n: number): string {
   return String(n)
 }
 
-// ─── Pipeline Badge ──────────────────────────────────────────
+// ─── Progress Badge ──────────────────────────────────────────
 
-function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
-  const { phase, total, done } = pipeline
+function ProgressBadge({ progress }: { progress: TopicProgress }) {
+  const { phase, total, done } = progress
 
   if (phase === 'analyzing') {
     return (
-      <div className="pipeline-badge analyzing">
-        <Loader2 size={12} className="pipeline-spin" />
+      <div className="progress-badge analyzing">
+        <Loader2 size={12} className="progress-spin" />
         <span>Analyzing topic data...</span>
       </div>
     )
@@ -114,11 +114,11 @@ function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
     const d = Number(done) || 0
     const pct = t > 0 ? Math.round((d / t) * 100) : 0
     return (
-      <div className="pipeline-badge crawling">
-        <RefreshCw size={12} className="pipeline-spin" />
+      <div className="progress-badge crawling">
+        <RefreshCw size={12} className="progress-spin" />
         <span>Crawling {d}/{t}</span>
-        <div className="pipeline-bar">
-          <div className="pipeline-bar-fill" style={{ width: `${pct}%` }} />
+        <div className="progress-bar">
+          <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
         </div>
       </div>
     )
@@ -126,8 +126,8 @@ function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
 
   if (phase === 'summarizing') {
     return (
-      <div className="pipeline-badge summarizing">
-        <Sparkles size={12} className="pipeline-spin" />
+      <div className="progress-badge summarizing">
+        <Sparkles size={12} className="progress-spin" />
         <span>Analyzing data...</span>
       </div>
     )
@@ -135,9 +135,9 @@ function PipelineBadge({ pipeline }: { pipeline: TopicPipeline }) {
 
   if (phase === 'error') {
     return (
-      <div className="pipeline-badge error">
+      <div className="progress-badge error">
         <AlertTriangle size={12} />
-        <span>{pipeline.error_msg || 'Pipeline error'}</span>
+        <span>{progress.error_msg || 'Error'}</span>
       </div>
     )
   }
@@ -236,8 +236,8 @@ function TopicCard({
         {fmtNum(topic.total_contents)} posts
       </div>
 
-      {/* Pipeline progress */}
-      {topic.pipeline && <PipelineBadge pipeline={topic.pipeline} />}
+      {/* Progress badge */}
+      {topic.progress && <ProgressBadge progress={topic.progress} />}
 
       {/* MIDDLE — description + future per-topic widget slot */}
       <div className="topic-card-middle">
@@ -250,7 +250,7 @@ function TopicCard({
           </p>
         ) : topic.last_summary ? (
           <p className="topic-card-summary">{stripMarkdown(topic.last_summary)}</p>
-        ) : !topic.pipeline ? (
+        ) : !topic.progress ? (
           <p className="topic-card-empty">Awaiting first analysis cycle...</p>
         ) : null}
       </div>
@@ -480,15 +480,15 @@ export function DashboardPage() {
     if (btn) setSlider({ left: btn.offsetLeft, width: btn.offsetWidth, ready: true })
   }, [filter])
 
-  // Poll faster when any entity has an active pipeline
+  // Poll faster when any entity has active progress
   const [pollingInterval, setPollingInterval] = useState(30_000)
   const { data: topics, isLoading: topicsLoading } = useListTopicsQuery({ include_users: true }, { pollingInterval })
   const { data: allUsers, isLoading: usersLoading } = useListUsersQuery({ include_topics: true }, { pollingInterval })
 
   useEffect(() => {
-    const hasActivePipeline = topics?.some((t) => t.pipeline && t.pipeline.phase !== 'done')
-      || allUsers?.some((u) => u.pipeline && u.pipeline.phase !== 'done')
-    setPollingInterval(hasActivePipeline ? 3_000 : 30_000)
+    const hasActiveProgress = topics?.some((t) => t.progress && t.progress.phase !== 'done')
+      || allUsers?.some((u) => u.progress && u.progress.phase !== 'done')
+    setPollingInterval(hasActiveProgress ? 3_000 : 30_000)
   }, [topics, allUsers])
 
   const [updateTopic] = useUpdateTopicMutation()
@@ -501,14 +501,14 @@ export function DashboardPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set())
 
-  // Clear refreshingIds when pipeline finishes
+  // Clear refreshingIds when progress finishes
   useEffect(() => {
     if (!topics && !allUsers) return
     setRefreshingIds(prev => {
       const next = new Set(prev)
       for (const id of prev) {
         const t = allTopicsRef.current.find(x => x.id === id)
-        const phase = t?.pipeline?.phase
+        const phase = t?.progress?.phase
         if (!phase || phase === 'done' || phase === 'error') next.delete(id)
       }
       return next.size === prev.size ? prev : next
@@ -557,7 +557,7 @@ export function DashboardPage() {
     last_crawl_at: u.last_crawl_at,
     last_summary: u.last_summary,
     summary_data: u.summary_data,
-    pipeline: u.pipeline,
+    progress: u.progress,
     created_at: u.created_at,
     updated_at: u.updated_at,
     users: u.topics?.map(t => ({ id: t.id, name: t.name, platform: '', username: null, profile_url: t.icon || '📊' })), // carry bound topics via users field; icon stored in profile_url
