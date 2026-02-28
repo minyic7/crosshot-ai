@@ -286,7 +286,7 @@ function UserProgressTasks({ entityId, onRetry }: { entityId: string; onRetry?: 
     )
   }
 
-  if (data.tasks.length === 0 && data.progress.phase !== 'crawling') return null
+  if (data.tasks.length === 0 && !['analyzing', 'crawling', 'summarizing', 'error'].includes(data.progress.phase)) return null
 
   const phase = data.progress.phase
   const total = Number(data.progress.total) || 0
