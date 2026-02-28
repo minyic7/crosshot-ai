@@ -260,7 +260,9 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
                 tickLine={false}
                 interval={0}
                 angle={-45}
-                textAnchor="end"
+                textAnchor="start"
+                dx={-6}
+                dy={4}
                 height={50}
               />
               <Tooltip content={<TrendTooltip metricLabel={metricKey} />} />
