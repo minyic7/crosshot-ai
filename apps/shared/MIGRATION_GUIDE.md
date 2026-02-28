@@ -212,6 +212,34 @@ If the migration is slow on large datasets:
 2. The exclusion constraint on `analysis_periods` requires GIST index which can be slow on first build
 3. Materialized view refresh can be deferred to after migration
 
+## Data Migration: Backfill Period 0
+
+After schema migrations complete, you need to create Period 0 for existing topics/users:
+
+```bash
+# From local machine, copy script to NAS
+scp apps/shared/scripts/migrate_period_zero.py minyic@192.168.0.190:/share/CACHEDEV1_DATA/minyic-volumn/crosshot-ai/
+
+# On NAS, run inside API container
+docker compose run --rm api bash
+cd /app
+export DATABASE_URL="postgresql+asyncpg://crosshot:crosshot@postgres:5432/crosshot"
+
+# DRY RUN first
+python /share/CACHEDEV1_DATA/minyic-volumn/crosshot-ai/migrate_period_zero.py --dry-run
+
+# Run for real
+python /share/CACHEDEV1_DATA/minyic-volumn/crosshot-ai/migrate_period_zero.py
+```
+
+**What it does:**
+- Creates Period 0 for each topic/user that has contents
+- Links all existing contents to their Period 0
+- Preserves existing summary_data as insights/metrics in the period
+- Sets `discovered_at` = `crawled_at` for all contents
+
+**See [MIGRATION_RUNBOOK.md](./MIGRATION_RUNBOOK.md) for complete step-by-step production migration procedure.**
+
 ## Next Steps
 
 After successful migration:
