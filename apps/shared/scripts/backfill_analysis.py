@@ -339,9 +339,9 @@ async def main() -> None:
         logger.info("DRY RUN — no changes will be saved")
 
     # Setup DB
-    db_url = os.environ.get("DATABASE_URL", "")
+    db_url = os.environ.get("DATABASE_URL", "") or os.environ.get("DB_URL", "")
     if not db_url:
-        logger.error("DATABASE_URL not set")
+        logger.error("DATABASE_URL / DB_URL not set")
         sys.exit(1)
     if db_url.startswith("postgresql://"):
         db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -354,10 +354,10 @@ async def main() -> None:
     # Setup LLM
     from openai import AsyncOpenAI
 
-    api_key = os.environ.get("XAI_API_KEY", os.environ.get("GROK_API_KEY", ""))
+    api_key = os.environ.get("GROK_API_KEY", os.environ.get("XAI_API_KEY", ""))
     base_url = os.environ.get("GROK_BASE_URL", "https://api.x.ai/v1")
     if not api_key:
-        logger.error("XAI_API_KEY / GROK_API_KEY not set")
+        logger.error("GROK_API_KEY / XAI_API_KEY not set")
         sys.exit(1)
 
     llm_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
