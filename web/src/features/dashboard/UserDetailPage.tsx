@@ -240,13 +240,16 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
       <div ref={scrollRef} className={`trend-sparkline-scroll${isScrollable ? ' scrollable' : ''}`}>
         <div style={{ width: isScrollable ? chartWidth : '100%', height: 200 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 20, right: 8, left: 8, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 20, right: 8, left: 8, bottom: 40 }}>
               <XAxis
                 dataKey="day"
                 tick={{ fill: 'var(--ink-3)', fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={50}
               />
               <Tooltip content={<TrendTooltip metricLabel={metricKey} />} />
               <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} label={showLabels ? { position: 'top', fill: 'var(--ink-2)', fontSize: 11, formatter: fmtNum } : false} />
