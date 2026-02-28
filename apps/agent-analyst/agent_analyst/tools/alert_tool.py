@@ -1,12 +1,12 @@
-"""Tool: create_alert — proactive alerts for anomalies and notable events."""
+"""Tool: create_alert — track significant events via temporal_events table."""
 
 import json
 import logging
+from datetime import datetime, timezone
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from shared.db.models import AlertRow
+from shared.db.models import TemporalEventRow
 from shared.tools.base import Tool
 
 logger = logging.getLogger(__name__)
@@ -15,42 +15,51 @@ logger = logging.getLogger(__name__)
 def make_alert_tool(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> Tool:
-    """Create the create_alert tool."""
+    """Create the create_alert tool (backed by temporal_events)."""
 
     async def create_alert(
         entity_type: str,
         entity_id: str,
         level: str,
         message: str,
+        event_type: str = "anomaly",
     ) -> str:
         """Create an alert for a notable event or anomaly.
 
         Levels: info, warning, critical
+        Event types: anomaly, controversy, trend_shift, milestone, risk
         """
+        now = datetime.now(timezone.utc)
         async with session_factory() as session:
-            row = AlertRow(
+            row = TemporalEventRow(
                 entity_type=entity_type,
                 entity_id=entity_id,
-                level=level,
-                message=message,
+                event_type=event_type,
+                severity=level,
+                title=message[:256],
+                description=message,
+                first_detected_at=now,
+                last_updated_at=now,
             )
             session.add(row)
             await session.commit()
 
             logger.info(
-                "Alert [%s] for %s %s: %s",
-                level, entity_type, entity_id, message[:80],
+                "Event [%s/%s] for %s %s: %s",
+                level, event_type, entity_type, entity_id, message[:80],
             )
             return json.dumps({
                 "status": "created",
-                "alert_id": str(row.id),
-                "level": level,
+                "event_id": str(row.id),
+                "severity": level,
+                "event_type": event_type,
             }, ensure_ascii=False)
 
     return Tool(
         name="create_alert",
         description=(
-            "Create a proactive alert for anomalies, significant changes, or notable events. "
+            "Create an alert for anomalies, significant changes, or notable events. "
+            "Events are tracked across analysis periods with lifecycle management. "
             "Use sparingly — only for genuinely notable situations."
         ),
         parameters={
@@ -72,6 +81,12 @@ def make_alert_tool(
                 "message": {
                     "type": "string",
                     "description": "Alert message (Chinese preferred)",
+                },
+                "event_type": {
+                    "type": "string",
+                    "enum": ["anomaly", "controversy", "trend_shift", "milestone", "risk"],
+                    "description": "Type of event",
+                    "default": "anomaly",
                 },
             },
             "required": ["entity_type", "entity_id", "level", "message"],

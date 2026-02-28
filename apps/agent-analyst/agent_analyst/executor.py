@@ -1,7 +1,8 @@
 """Skill-based executor for the analyst agent.
 
 Replaces the hardcoded pipeline with a ReAct loop guided by skill markdowns.
-The executor wraps react() with pre-/post-processing for progress tracking.
+The executor wraps react() with pre-/post-processing for progress tracking
+and temporal period management.
 """
 
 import logging
@@ -9,10 +10,17 @@ from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 from openai import AsyncOpenAI
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.agent.base import BaseAgent, Result
+from shared.db.models import (
+    AnalysisPeriodRow,
+    ContentRow,
+    TemporalEventRow,
+    TopicRow,
+    UserRow,
+)
 from shared.models.task import Task
 from shared.queue.redis_queue import TaskQueue
 from shared.skills.models import Skill
@@ -41,10 +49,9 @@ _TOOL_MESSAGES: dict[str, str] = {
     "analyze_gaps": "Detecting coverage gaps...",
     "dispatch_tasks": "Dispatching crawl tasks...",
     "query_topic_contents": "Reading collected content...",
-    "save_metric_snapshot": "Recording metrics...",
-    "query_analysis_notes": "Reading analysis notes...",
-    "save_analysis_note": "Saving analysis note...",
-    "manage_alerts": "Managing alerts...",
+    "save_snapshot": "Recording metrics...",
+    "save_note": "Saving analysis note...",
+    "create_alert": "Tracking event...",
 }
 
 
@@ -63,7 +70,6 @@ def make_analyst_tools(
         make_integrate_tool(session_factory, llm_client, model),
         make_gap_tool(session_factory, llm_client, model),
         make_dispatch_tool(session_factory, redis_client, queue),
-        # Memory tools (Phase 5)
         make_snapshot_tool(session_factory),
         make_notes_tool(session_factory),
         make_alert_tool(session_factory),
@@ -111,6 +117,8 @@ def make_skill_executor(
         task: Task, entity_type: str, entity_id: str,
     ) -> Result:
         """Pre-process → ReAct → post-process for analyst:analyze tasks."""
+        period_start = datetime.now(timezone.utc)
+
         # Pre-processing: progress stage + chat rotation
         await set_progress_stage(
             redis_client, entity_id, "analyzing", entity_type=entity_type,
@@ -137,12 +145,18 @@ def make_skill_executor(
         phase = await redis_client.hget(progress_key, "phase")
 
         if phase != "crawling":
-            # No dispatch happened — finalize summary
+            # No dispatch happened — finalize summary and save period
             await update_entity_summary(
                 session_factory,
                 topic_id=entity_id if entity_type == "topic" else None,
                 user_id=entity_id if entity_type == "user" else None,
                 is_preliminary=False,
+            )
+            await _save_analysis_period(
+                entity_type, entity_id,
+                period_start=period_start,
+                chat_summary=chat_insights or None,
+                execution_log={"task_label": task.label, "dispatched": False},
             )
             await set_progress_stage(
                 redis_client, entity_id, "done", entity_type=entity_type,
@@ -151,6 +165,13 @@ def make_skill_executor(
                 "Analyze complete for %s %s (no crawling needed)",
                 entity_type, entity_id,
             )
+        else:
+            # Crawling started — store period_start in Redis for summarize to use
+            await redis_client.hset(
+                progress_key, "period_start", period_start.isoformat(),
+            )
+            if chat_insights:
+                await redis_client.hset(progress_key, "chat_summary", chat_insights)
 
         return result
 
@@ -160,6 +181,15 @@ def make_skill_executor(
         """Pre-process → ReAct → post-process for analyst:summarize tasks."""
         topic_id = entity_id if entity_type == "topic" else None
         user_id = entity_id if entity_type == "user" else None
+
+        # Recover period_start from the analyze phase
+        progress_key = f"{entity_type}:{entity_id}:progress"
+        period_start_str = await redis_client.hget(progress_key, "period_start")
+        if period_start_str:
+            period_start = datetime.fromisoformat(period_start_str)
+        else:
+            period_start = datetime.now(timezone.utc)
+        chat_summary = await redis_client.hget(progress_key, "chat_summary")
 
         # Pre-processing: upgrade detail_pending → detail_ready
         await mark_detail_ready(
@@ -176,7 +206,14 @@ def make_skill_executor(
 
         result = await agent.react(task, system_prompt=system_prompt, on_step=on_step)
 
-        # Post-processing: update attached user stats, set progress done
+        # Post-processing: save period + update attached user stats
+        await _save_analysis_period(
+            entity_type, entity_id,
+            period_start=period_start,
+            chat_summary=chat_summary or None,
+            execution_log={"task_label": task.label, "dispatched": True},
+        )
+
         if topic_id:
             from agent_analyst.tools.topic import get_entity_config
 
@@ -202,6 +239,160 @@ def make_skill_executor(
         msg = _TOOL_MESSAGES.get(tool_name, f"Running {tool_name}...")
         progress_key = f"{entity_type}:{entity_id}:progress"
         await redis_client.hset(progress_key, "step", msg)
+
+    async def _save_analysis_period(
+        entity_type: str,
+        entity_id: str,
+        period_start: datetime,
+        chat_summary: str | None = None,
+        execution_log: dict | None = None,
+    ) -> None:
+        """Save a complete analysis period record after analysis finishes."""
+        period_end = datetime.now(timezone.utc)
+        duration_hours = (period_end - period_start).total_seconds() / 3600.0
+
+        try:
+            async with session_factory() as session:
+                # Get entity to read current state
+                if entity_type == "topic":
+                    entity = await session.get(TopicRow, entity_id)
+                else:
+                    entity = await session.get(UserRow, entity_id)
+
+                if not entity:
+                    logger.error("Entity %s %s not found for period save", entity_type, entity_id)
+                    return
+
+                # Determine next period number
+                current = entity.current_period_number
+                next_period = (current + 1) if current is not None else 1
+
+                # Count contents processed in this period
+                content_count_result = await session.execute(
+                    select(func.count()).where(
+                        ContentRow.analysis_period_id.is_(None),
+                        (ContentRow.topic_id == entity_id) if entity_type == "topic"
+                        else (ContentRow.user_id == entity_id),
+                        ContentRow.processing_status.isnot(None),
+                    )
+                )
+                new_content_count = content_count_result.scalar() or 0
+
+                # Build metrics from summary_data
+                summary_data = entity.summary_data or {}
+                metrics = summary_data.get("metrics", {})
+                insights_raw = summary_data.get("insights", [])
+                insights = {"items": insights_raw} if isinstance(insights_raw, list) else insights_raw
+
+                # Compute delta from previous period
+                prev_period = None
+                if current is not None:
+                    prev_result = await session.execute(
+                        select(AnalysisPeriodRow)
+                        .where(
+                            AnalysisPeriodRow.entity_type == entity_type,
+                            AnalysisPeriodRow.entity_id == entity_id,
+                            AnalysisPeriodRow.period_number == current,
+                            AnalysisPeriodRow.status == "active",
+                        )
+                        .limit(1)
+                    )
+                    prev_period = prev_result.scalar_one_or_none()
+
+                metrics_delta = {}
+                if prev_period and prev_period.metrics:
+                    for key in set(list(metrics.keys()) + list(prev_period.metrics.keys())):
+                        curr_val = metrics.get(key)
+                        prev_val = prev_period.metrics.get(key)
+                        if isinstance(curr_val, (int, float)) and isinstance(prev_val, (int, float)):
+                            metrics_delta[key] = curr_val - prev_val
+
+                # Use previous period_end as this period_start for continuity
+                if prev_period:
+                    period_start = prev_period.period_end
+
+                # Create the period record
+                period = AnalysisPeriodRow(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    period_number=next_period,
+                    duration_hours=round(duration_hours, 2),
+                    status="active",
+                    content_count=new_content_count,
+                    summary=entity.last_summary or "(no summary)",
+                    summary_short=(entity.last_summary or "")[:200] or None,
+                    insights=insights or {},
+                    metrics=metrics,
+                    metrics_delta=metrics_delta,
+                    chat_summary=chat_summary,
+                    knowledge_version=next_period,
+                    knowledge_doc=summary_data.get("knowledge_doc"),
+                    execution_log=execution_log or {},
+                )
+                session.add(period)
+                await session.flush()  # Get period.id
+
+                # Link unlinked contents to this period
+                if entity_type == "topic":
+                    content_filter = ContentRow.topic_id == entity_id
+                else:
+                    content_filter = ContentRow.user_id == entity_id
+
+                await session.execute(
+                    update(ContentRow)
+                    .where(
+                        content_filter,
+                        ContentRow.analysis_period_id.is_(None),
+                        ContentRow.processing_status.isnot(None),
+                    )
+                    .values(analysis_period_id=period.id)
+                )
+
+                # Link unattached temporal events to this period
+                await session.execute(
+                    update(TemporalEventRow)
+                    .where(
+                        TemporalEventRow.entity_type == entity_type,
+                        TemporalEventRow.entity_id == entity_id,
+                        TemporalEventRow.period_id.is_(None),
+                    )
+                    .values(period_id=period.id)
+                )
+
+                # Update entity period tracking
+                entity.current_period_number = next_period
+                entity.last_period_id = period.id
+                entity.total_periods = next_period + 1  # Includes period 0
+                if not entity.first_analysis_at:
+                    entity.first_analysis_at = period_end
+
+                # Compute rolling average duration
+                if next_period > 0:
+                    avg_result = await session.execute(
+                        select(func.avg(AnalysisPeriodRow.duration_hours))
+                        .where(
+                            AnalysisPeriodRow.entity_type == entity_type,
+                            AnalysisPeriodRow.entity_id == entity_id,
+                            AnalysisPeriodRow.status == "active",
+                        )
+                    )
+                    entity.avg_period_duration_hours = avg_result.scalar()
+
+                await session.commit()
+
+                logger.info(
+                    "Saved Period %d for %s %s (%.1fh, %d contents, %d metric deltas)",
+                    next_period, entity_type, entity_id,
+                    duration_hours, new_content_count, len(metrics_delta),
+                )
+
+        except Exception as e:
+            logger.error(
+                "Failed to save analysis period for %s %s: %s",
+                entity_type, entity_id, e, exc_info=True,
+            )
 
     async def _rotate_chat_period(entity_type: str, entity_id: str) -> str:
         """Archive chat messages and extract insights for the analysis cycle."""
@@ -268,10 +459,6 @@ def make_skill_executor(
 
     async def _update_attached_user_stats(user_ids: list[str]) -> None:
         """Update last_crawl_at and total_contents for attached users."""
-        from sqlalchemy import func
-
-        from shared.db.models import ContentRow, UserRow
-
         try:
             async with session_factory() as session:
                 for uid in user_ids:

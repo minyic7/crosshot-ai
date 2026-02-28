@@ -1,21 +1,30 @@
-"""Tool: save_note — persistent analyst notes that survive summary rewrites."""
+"""Tool: save_note — persistent analyst notes tracked as temporal events."""
 
 import json
 import logging
+from datetime import datetime, timezone
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from shared.db.models import AnalysisNoteRow
+from shared.db.models import TemporalEventRow
 from shared.tools.base import Tool
 
 logger = logging.getLogger(__name__)
+
+# Map note categories to temporal event types
+_CATEGORY_TO_EVENT_TYPE = {
+    "observation": "observation",
+    "trend": "trend_shift",
+    "anomaly": "anomaly",
+    "strategy": "milestone",
+    "follow_up": "risk",
+}
 
 
 def make_notes_tool(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> Tool:
-    """Create the save_note tool."""
+    """Create the save_note tool (backed by temporal_events)."""
 
     async def save_note(
         entity_type: str,
@@ -23,16 +32,24 @@ def make_notes_tool(
         note: str,
         category: str = "observation",
     ) -> str:
-        """Save an analysis note. Notes persist across summary rewrites.
+        """Save an analysis note as a temporal event. Notes persist across periods.
 
         Categories: observation, trend, anomaly, strategy, follow_up
         """
+        now = datetime.now(timezone.utc)
+        event_type = _CATEGORY_TO_EVENT_TYPE.get(category, "observation")
+
         async with session_factory() as session:
-            row = AnalysisNoteRow(
+            row = TemporalEventRow(
                 entity_type=entity_type,
                 entity_id=entity_id,
-                note=note,
-                category=category,
+                event_type=event_type,
+                severity="info",
+                title=note[:256],
+                description=note,
+                first_detected_at=now,
+                last_updated_at=now,
+                event_metadata={"category": category, "source": "analyst_note"},
             )
             session.add(row)
             await session.commit()
@@ -43,16 +60,16 @@ def make_notes_tool(
             )
             return json.dumps({
                 "status": "saved",
-                "note_id": str(row.id),
+                "event_id": str(row.id),
                 "category": category,
             }, ensure_ascii=False)
 
     return Tool(
         name="save_note",
         description=(
-            "Save a persistent analysis note. Notes survive summary rewrites "
-            "and build long-term memory. Use for observations, trends, anomalies, "
-            "or follow-up items."
+            "Save a persistent analysis note. Notes are tracked as temporal events "
+            "and persist across analysis periods. Use for observations, trends, "
+            "anomalies, or follow-up items."
         ),
         parameters={
             "type": "object",

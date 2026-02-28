@@ -12,10 +12,10 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from shared.db.models import TopicRow, UserRow
+from shared.db.models import AnalysisPeriodRow, TemporalEventRow, TopicRow, UserRow
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +153,12 @@ async def query_entity_overview(
         if entity_last_summary:
             prev_summary = entity_last_summary
 
+        # Temporal context — recent periods + unresolved events
+        temporal_context = await _query_temporal_context(
+            session, entity_type="topic" if topic_id else "user",
+            entity_id=topic_id or user_id,
+        )
+
         # Data status — all-time coverage
         now = datetime.now(timezone.utc)
         coverage_result = await session.execute(
@@ -226,6 +232,7 @@ async def query_entity_overview(
                 "metrics": prev_metrics,
                 "summary": prev_summary[:500] if prev_summary else "",
             },
+            "temporal": temporal_context,
         }
 
 
@@ -453,3 +460,72 @@ async def mark_detail_ready(
         if count:
             logger.info("Upgraded %d contents from detail_pending to detail_ready", count)
         return count
+
+
+async def _query_temporal_context(
+    session: AsyncSession,
+    entity_type: str,
+    entity_id: str,
+) -> dict:
+    """Query recent periods and unresolved events for temporal context.
+
+    Returns a compact summary the LLM can use for temporal reasoning.
+    """
+    # Recent periods (last 5)
+    periods_result = await session.execute(
+        select(AnalysisPeriodRow)
+        .where(
+            AnalysisPeriodRow.entity_type == entity_type,
+            AnalysisPeriodRow.entity_id == entity_id,
+            AnalysisPeriodRow.status == "active",
+        )
+        .order_by(AnalysisPeriodRow.period_number.desc())
+        .limit(5)
+    )
+    periods = periods_result.scalars().all()
+
+    timeline = []
+    for p in periods:
+        entry = {
+            "period": p.period_number,
+            "start": p.period_start.isoformat(),
+            "end": p.period_end.isoformat(),
+            "content_count": p.content_count,
+            "summary_short": (p.summary_short or p.summary[:200]) if p.summary else "",
+        }
+        if p.metrics:
+            entry["metrics"] = p.metrics
+        timeline.append(entry)
+
+    # Unresolved events
+    events_result = await session.execute(
+        select(TemporalEventRow)
+        .where(
+            TemporalEventRow.entity_type == entity_type,
+            TemporalEventRow.entity_id == entity_id,
+            TemporalEventRow.resolved_at.is_(None),
+        )
+        .order_by(TemporalEventRow.first_detected_at.desc())
+        .limit(10)
+    )
+    events = events_result.scalars().all()
+
+    unresolved = [
+        {
+            "id": str(e.id),
+            "type": e.event_type,
+            "severity": e.severity,
+            "title": e.title,
+            "detected_at": e.first_detected_at.isoformat(),
+        }
+        for e in events
+    ]
+
+    current_period = periods[0].period_number if periods else -1
+
+    return {
+        "current_period_number": current_period,
+        "total_periods": len(timeline),
+        "timeline": timeline,
+        "unresolved_events": unresolved,
+    }

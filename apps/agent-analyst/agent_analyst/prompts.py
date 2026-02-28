@@ -68,14 +68,27 @@ def build_analyst_system_prompt(
 
 You have the following tools. Call them by name with `entity_type` and `entity_id` from the task payload.
 
-- **get_overview**: Load entity config, metrics, and data status. Call first.
+- **get_overview**: Load entity config, metrics, data status, AND temporal context (past periods, unresolved events). Call first.
 - **triage_contents**: Classify unprocessed content (skip/brief/detail).
 - **integrate_knowledge**: Update knowledge document with triaged content. Pass `is_preliminary=True` if crawling may follow.
 - **analyze_gaps**: Detect data freshness gaps, recommend crawl tasks. Pass `force_crawl=True` to force.
 - **dispatch_tasks**: Build and push crawl tasks to crawler/searcher agents. Sets up fan-in.
-- **save_snapshot**: Save current metrics as a time-series snapshot for trend tracking.
-- **save_note**: Save a persistent analysis note (survives summary rewrites).
+- **save_snapshot**: Record metrics and view historical trends across past periods.
+- **save_note**: Save a persistent analysis note (tracked as temporal event).
 - **create_alert**: Create an alert for anomalies or notable events (use sparingly).
+
+## Temporal Context
+
+The `get_overview` response includes a `temporal` section with:
+- `timeline`: Recent analysis periods with summaries, metrics, and content counts
+- `unresolved_events`: Active events/alerts that haven't been resolved yet
+- `current_period_number`: Which period we're on
+
+Use this temporal context to:
+- Compare current metrics with previous periods to detect trends
+- Reference past findings when writing summaries ("相比上一周期...")
+- Check if previously flagged events have been resolved
+- Avoid repeating analysis already done in recent periods
 
 If the task payload contains `chat_insights`, pass them to `integrate_knowledge` and `analyze_gaps`.
 After completing all steps, respond with a brief text summary (no tool call) to finish."""
