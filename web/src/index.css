@@ -2531,6 +2531,16 @@ button.progress-tasks-header:hover {
   font-size: 0.8125rem;
   color: var(--ink-2);
 }
+.topic-detail-stat-value.due {
+  color: var(--lavender);
+  font-weight: 600;
+}
+
+.topic-detail-stat-sub {
+  font-size: 0.625rem;
+  color: var(--ink-3);
+  font-weight: 400;
+}
 
 .topic-detail-stat-num {
   font-family: 'Outfit', system-ui, sans-serif;

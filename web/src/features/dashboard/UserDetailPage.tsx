@@ -588,6 +588,26 @@ export function UserDetailPage() {
           <span className="topic-detail-stat-value">{fmt(user.last_crawl_at)}</span>
         </div>
         <div className="topic-detail-stat-sep" />
+        {(() => {
+          const interval = Number((user.config as Record<string, unknown>)?.schedule_interval_hours) || 6
+          const nextAt = user.last_crawl_at ? new Date(new Date(user.last_crawl_at).getTime() + interval * 3600_000) : null
+          const diff = nextAt ? nextAt.getTime() - Date.now() : null
+          const due = diff != null && diff <= 0
+          const dueText = diff == null ? 'Pending'
+            : due ? 'Due now'
+            : diff < 3600_000 ? `${Math.ceil(diff / 60_000)}m`
+            : `${Math.round(diff / 3600_000)}h`
+          return (
+            <div className="topic-detail-stat" title={`Crawls every ${interval}h${user.status === 'paused' ? ' (paused)' : ''}`}>
+              <span className="topic-detail-stat-label">Next</span>
+              <span className={`topic-detail-stat-value${due ? ' due' : ''}`}>
+                {user.status === 'paused' ? 'Paused' : dueText}
+              </span>
+              <span className="topic-detail-stat-sub">every {interval}h</span>
+            </div>
+          )
+        })()}
+        <div className="topic-detail-stat-sep" />
         <div className="topic-detail-stat">
           <span className="topic-detail-stat-label">Platform</span>
           <span className="topic-tag platform">{(user.platform ?? '').toUpperCase()}</span>
