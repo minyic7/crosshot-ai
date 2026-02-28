@@ -6,8 +6,10 @@ from uuid import uuid4
 from sqlalchemy import (
     ARRAY,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -17,6 +19,7 @@ from sqlalchemy import (
     Text,
     Uuid,
 )
+import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -45,6 +48,15 @@ class TaskRow(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # Temporal context fields
+    period_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="SET NULL"), nullable=True
+    )
+    effectiveness_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("crawl_effectiveness.id", ondelete="SET NULL"), nullable=True
+    )
+    duration_seconds: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+
     # Relationships
     contents: Mapped[list["ContentRow"]] = relationship(back_populates="task")
 
@@ -53,6 +65,8 @@ class TaskRow(Base):
         Index("ix_tasks_label_status", "label", "status"),
         Index("ix_tasks_parent_job_id", "parent_job_id"),
         Index("ix_tasks_created_at", "created_at", postgresql_using="btree"),
+        Index("ix_tasks_period", "period_id"),
+        Index("ix_tasks_effectiveness", "effectiveness_id"),
     )
 
 
@@ -91,6 +105,16 @@ class ContentRow(Base):
     processing_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     key_points: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # Temporal context fields
+    analysis_period_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="SET NULL"), nullable=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    discovered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=lambda: datetime.now(timezone.utc)
+    )
+    relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Platform-specific (JSONB)
     metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -118,6 +142,10 @@ class ContentRow(Base):
         Index("ix_contents_processing_status", "processing_status"),
         Index("ix_contents_author_username", "author_username"),
         Index("ix_contents_hashtags", "hashtags", postgresql_using="gin"),
+        Index("ix_contents_period", "analysis_period_id"),
+        Index("ix_contents_published_at", "published_at", postgresql_using="btree"),
+        Index("ix_contents_discovered_at", "discovered_at", postgresql_using="btree"),
+        CheckConstraint("relevance_score >= 0 AND relevance_score <= 1", name="valid_content_relevance"),
     )
 
 
@@ -182,6 +210,15 @@ class TopicRow(Base):
     last_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # Temporal context fields
+    current_period_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_period_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="SET NULL"), nullable=True
+    )
+    total_periods: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    first_analysis_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    avg_period_duration_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
@@ -204,6 +241,7 @@ class TopicRow(Base):
     __table_args__ = (
         Index("ix_topics_status", "status"),
         Index("ix_topics_position", "position"),
+        Index("ix_topics_last_period", "last_period_id"),
     )
 
 
@@ -234,6 +272,15 @@ class UserRow(Base):
     last_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # Temporal context fields
+    current_period_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_period_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="SET NULL"), nullable=True
+    )
+    total_periods: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    first_analysis_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    avg_period_duration_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
@@ -257,67 +304,231 @@ class UserRow(Base):
         Index("ix_users_status", "status"),
         Index("ix_users_platform", "platform"),
         Index("ix_users_username", "username"),
+        Index("ix_users_last_period", "last_period_id"),
     )
 
 
-class MetricSnapshotRow(Base):
-    """Time-series metric snapshots for trend analysis."""
+class AnalysisPeriodRow(Base):
+    """Complete analysis cycle record — the central timeline spine."""
 
-    __tablename__ = "metric_snapshots"
+    __tablename__ = "analysis_periods"
 
     id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    entity_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
     entity_id: Mapped[str] = mapped_column(Uuid, nullable=False)
-    captured_at: Mapped[datetime] = mapped_column(
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    analyzed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+    period_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_hours: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Lifecycle management
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    superseded_by: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="SET NULL"), nullable=True
+    )
+    supersession_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Core analysis outputs
+    content_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_short: Mapped[str | None] = mapped_column(Text, nullable=True)
+    insights: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    metrics_delta: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Task tracking
+    tasks_dispatched: Mapped[list[str]] = mapped_column(
+        ARRAY(Uuid), nullable=False, default=list
+    )
+    tasks_summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Chat integration
+    chat_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Knowledge evolution
+    knowledge_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    knowledge_doc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    knowledge_diff: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Quality tracking
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Debugging & operations
+    execution_log: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     __table_args__ = (
-        Index("ix_metric_snapshots_entity", "entity_type", "entity_id", "captured_at"),
+        CheckConstraint("entity_type IN ('topic', 'user')", name="valid_entity_type"),
+        CheckConstraint(
+            "status IN ('active', 'draft', 'superseded', 'failed', 'archived')",
+            name="valid_status",
+        ),
+        CheckConstraint("period_end > period_start", name="valid_period"),
+        CheckConstraint(
+            "quality_score >= 0 AND quality_score <= 1", name="valid_quality_score"
+        ),
+        CheckConstraint(
+            "completeness_score >= 0 AND completeness_score <= 1",
+            name="valid_completeness_score",
+        ),
+        Index("idx_periods_analyzed_at", "analyzed_at", postgresql_using="btree"),
+        Index("idx_periods_status", "status"),
     )
 
 
-class AnalysisNoteRow(Base):
-    """Persistent analyst notes that survive summary rewrites."""
+class PeriodContentSnapshotRow(Base):
+    """Junction table + snapshot: which contents belong to which period."""
 
-    __tablename__ = "analysis_notes"
+    __tablename__ = "period_content_snapshots"
 
     id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    entity_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    entity_id: Mapped[str] = mapped_column(Uuid, nullable=False)
-    note: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(String(32), nullable=False, default="observation")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    period_id: Mapped[str] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="CASCADE"), nullable=False
+    )
+    content_id: Mapped[str] = mapped_column(
+        Uuid, ForeignKey("contents.id", ondelete="CASCADE"), nullable=False
+    )
+    contribution_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="general"
+    )
+    relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    text_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    key_points_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (
-        Index("ix_analysis_notes_entity", "entity_type", "entity_id", "is_active"),
+        CheckConstraint(
+            "relevance_score >= 0 AND relevance_score <= 1", name="valid_relevance_score"
+        ),
+        Index("idx_snapshot_content", "content_id"),
+        Index("unique_period_content", "period_id", "content_id", unique=True),
     )
 
 
-class AlertRow(Base):
-    """Proactive alerts generated by analyst skills."""
+class TemporalEventRow(Base):
+    """Significant events tracked across periods (controversies, trends, anomalies)."""
 
-    __tablename__ = "alerts"
+    __tablename__ = "temporal_events"
 
     id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    entity_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    period_id: Mapped[str] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="CASCADE"), nullable=False
+    )
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
     entity_id: Mapped[str] = mapped_column(Uuid, nullable=False)
-    level: Mapped[str] = mapped_column(String(16), nullable=False, default="info")
-    message: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="info")
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    first_detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
     resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_metadata: Mapped[dict] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
 
     __table_args__ = (
-        Index("ix_alerts_entity", "entity_type", "entity_id"),
-        Index("ix_alerts_unresolved", "entity_type", "entity_id", "resolved_at"),
+        CheckConstraint("entity_type IN ('topic', 'user')", name="valid_event_entity_type"),
+        CheckConstraint(
+            "severity IN ('info', 'warning', 'critical')", name="valid_severity"
+        ),
+        Index("idx_events_period", "period_id"),
+        Index("idx_events_entity", "entity_type", "entity_id", "first_detected_at"),
+        Index("idx_events_type", "event_type"),
+    )
+
+
+class EventContentRow(Base):
+    """Junction table: which contents are related to which events."""
+
+    __tablename__ = "event_contents"
+
+    event_id: Mapped[str] = mapped_column(
+        Uuid, ForeignKey("temporal_events.id", ondelete="CASCADE"), primary_key=True
+    )
+    content_id: Mapped[str] = mapped_column(
+        Uuid, ForeignKey("contents.id", ondelete="CASCADE"), primary_key=True
+    )
+    relevance_to_event: Mapped[float | None] = mapped_column(Float, nullable=True)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "relevance_to_event >= 0 AND relevance_to_event <= 1",
+            name="valid_event_relevance",
+        ),
+    )
+
+
+class CrawlEffectivenessRow(Base):
+    """Track effectiveness of crawl queries over time — learn what works."""
+
+    __tablename__ = "crawl_effectiveness"
+
+    id: Mapped[str] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    period_id: Mapped[str] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="CASCADE"), nullable=False
+    )
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[str] = mapped_column(Uuid, nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    total_found: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    relevant_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    high_value_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    effectiveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_relevance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coverage_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    recommendations: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('topic', 'user')", name="valid_crawl_entity_type"),
+        CheckConstraint(
+            "effectiveness_score >= 0 AND effectiveness_score <= 1",
+            name="valid_effectiveness_score",
+        ),
+        CheckConstraint(
+            "avg_relevance >= 0 AND avg_relevance <= 1", name="valid_avg_relevance"
+        ),
+        CheckConstraint(
+            "coverage_ratio >= 0 AND coverage_ratio <= 1", name="valid_coverage_ratio"
+        ),
+        Index("idx_effectiveness_period", "period_id"),
+        Index("idx_effectiveness_entity", "entity_type", "entity_id", "created_at"),
+        Index("idx_effectiveness_platform", "platform"),
     )
 
 
@@ -336,6 +547,12 @@ class ChatMessageRow(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
+    # Temporal context field
+    period_id: Mapped[str | None] = mapped_column(
+        Uuid, ForeignKey("analysis_periods.id", ondelete="SET NULL"), nullable=True
+    )
+
     __table_args__ = (
         Index("ix_chat_messages_entity", "entity_type", "entity_id", "is_archived"),
+        Index("ix_chat_messages_period", "period_id"),
     )
