@@ -288,10 +288,10 @@ function ProgressTasks({ entityId, onRetry }: { entityId: string; onRetry?: () =
   // Show brief "done" badge
   if (data.progress.phase === 'done') {
     return (
-      <div className="progress-tasks-section pop progress-done" style={{ animationDelay: '120ms' }}>
+      <div className="progress-tasks-section pop progress-done done" style={{ animationDelay: '120ms' }}>
         <div className="progress-tasks-header">
           <div className="progress-tasks-header-left">
-            <CheckCircle size={14} style={{ color: 'var(--positive)' }} />
+            <CheckCircle size={14} />
             <span className="progress-tasks-phase">Analysis complete</span>
           </div>
         </div>
@@ -308,7 +308,7 @@ function ProgressTasks({ entityId, onRetry }: { entityId: string; onRetry?: () =
   const step = data.progress.step
 
   return (
-    <div className="progress-tasks-section pop" style={{ animationDelay: '120ms' }}>
+    <div className={`progress-tasks-section pop ${phase}`} style={{ animationDelay: '120ms' }}>
       <button className="progress-tasks-header" onClick={() => setExpanded((p) => !p)}>
         <div className="progress-tasks-header-left">
           {phase === 'analyzing' && <Loader2 size={14} className="progress-spin" />}

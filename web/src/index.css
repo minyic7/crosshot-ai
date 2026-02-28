@@ -1866,6 +1866,52 @@ h3 {
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   overflow: hidden;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.3s, background 0.3s;
+}
+
+.progress-tasks-section.analyzing {
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.06);
+}
+.progress-tasks-section.analyzing .progress-tasks-phase,
+.progress-tasks-section.analyzing .progress-spin {
+  color: var(--lavender);
+}
+
+.progress-tasks-section.crawling {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.06);
+}
+.progress-tasks-section.crawling .progress-tasks-phase,
+.progress-tasks-section.crawling .progress-spin {
+  color: var(--accent-light);
+}
+
+.progress-tasks-section.summarizing {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.06);
+}
+.progress-tasks-section.summarizing .progress-tasks-phase,
+.progress-tasks-section.summarizing .progress-spin {
+  color: var(--warning);
+}
+
+.progress-tasks-section.error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
+}
+.progress-tasks-section.error .progress-tasks-phase {
+  color: var(--negative);
+}
+
+.progress-tasks-section.done {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.06);
+}
+.progress-tasks-section.done .progress-tasks-phase,
+.progress-tasks-section.done svg {
+  color: var(--positive);
 }
 
 .progress-tasks-header {
