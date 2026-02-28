@@ -1,13 +1,20 @@
-"""LLM prompt templates for the incremental knowledge pipeline.
+"""LLM prompt templates for the analyst agent.
 
-Three prompt types:
-1. Triage — fast model classifies content: skip | brief | detail
-2. Knowledge integration — reasoning model updates the knowledge document
-3. Gap analysis — reasoning model decides crawl tasks
+Prompt types:
+1. Analyst system prompt — composed per-task with skills + tool guidance
+2. Triage — fast model classifies content: skip | brief | detail
+3. Knowledge integration — reasoning model updates the knowledge document
+4. Gap analysis — reasoning model decides crawl tasks
 """
+
+from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from shared.skills.models import Skill
 
 
 def build_system_prompt() -> str:
@@ -42,6 +49,76 @@ When constructing crawl queries for X (Twitter), you can use:
 - Use Chinese keywords only
 - Short, specific phrases work best (e.g., "科技股分析" not "technology stock analysis")
 """
+
+
+def build_analyst_system_prompt(
+    skills: list[Skill],
+    task_label: str,
+) -> str:
+    """Build a per-task system prompt for the analyst ReAct loop.
+
+    Composes: base analyst identity + tool usage guidance + task-specific
+    instructions + loaded skills as reference material.
+    """
+    base = build_system_prompt()
+
+    # Tool usage guidance
+    tool_section = """\
+## Available Tools
+
+You have the following tools. Call them by name with `entity_type` and `entity_id` from the task payload.
+
+- **get_overview**: Load entity config, metrics, and data status. Call first.
+- **triage_contents**: Classify unprocessed content (skip/brief/detail).
+- **integrate_knowledge**: Update knowledge document with triaged content. Pass `is_preliminary=True` if crawling may follow.
+- **analyze_gaps**: Detect data freshness gaps, recommend crawl tasks. Pass `force_crawl=True` to force.
+- **dispatch_tasks**: Build and push crawl tasks to crawler/searcher agents. Sets up fan-in.
+
+If the task payload contains `chat_insights`, pass them to `integrate_knowledge` and `analyze_gaps`.
+After completing all steps, respond with a brief text summary (no tool call) to finish."""
+
+    # Task-specific instructions
+    if task_label == "analyst:summarize":
+        task_section = """\
+## Current Task: Summarize (post-crawl)
+
+All dispatched crawlers have completed. Process their results:
+
+1. Call `get_overview` to see current data status
+2. Call `triage_contents` with `downgrade_detail=True` — no more detail tasks will run
+3. Call `integrate_knowledge` with `is_preliminary=False` — this is the final summary
+4. Respond with a brief summary of what was integrated"""
+    else:
+        task_section = """\
+## Current Task: Analyze
+
+Start a new analysis cycle for this entity:
+
+1. Call `get_overview` to understand current state
+2. Call `triage_contents` to classify unprocessed content
+3. Call `integrate_knowledge` with `is_preliminary=True` (crawling may follow)
+4. Unless `skip_crawl` is set in the payload, call `analyze_gaps` to detect data gaps
+5. If gaps found with crawl_tasks, call `dispatch_tasks` with the results
+   - Pass `crawl_tasks` from analyze_gaps output
+   - Pass `detail_content_ids` from triage_contents output (if any)
+   - Set `include_timelines=True` to also crawl attached user timelines
+6. Respond with a brief summary of what you did"""
+
+    # Skills reference
+    skills_parts = []
+    for s in skills:
+        if s.prompt_text:
+            skills_parts.append(f"### {s.name}: {s.description}\n{s.prompt_text}")
+    skills_section = "\n\n".join(skills_parts) if skills_parts else "(no skills loaded)"
+
+    return f"""{base}
+
+{tool_section}
+
+{task_section}
+
+## Skills Reference
+{skills_section}"""
 
 
 def _build_entity_header(entity: dict) -> str:

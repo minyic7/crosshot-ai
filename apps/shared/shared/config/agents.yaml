@@ -42,11 +42,11 @@ agents:
     labels:
       - "analyst:analyze"
       - "analyst:summarize"
-    system_prompt: "Deterministic pipeline — system prompt is in prompts.py"
-    ai_enabled: false
+    system_prompt: "Built dynamically per-task by build_analyst_system_prompt()"
+    ai_enabled: true
     parent: null
     children: [crawler, searcher]
-    skills: []
+    skills: [triage, integrate, gap_analysis, summarize]
 
   searcher:
     labels:

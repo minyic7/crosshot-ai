@@ -1,16 +1,18 @@
-"""Analyst agent entry point — deterministic pipeline with targeted LLM calls."""
+"""Analyst agent entry point — skill-based ReAct loop with autonomous tool usage."""
 
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from openai import AsyncOpenAI
 
 from shared.agent.base import BaseAgent
 from shared.config.settings import get_settings
 from shared.db.engine import get_session_factory
+from shared.skills.loader import SkillLoader
 
-from agent_analyst.pipeline import make_pipeline
+from agent_analyst.executor import make_analyst_tools, make_skill_executor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,17 +30,32 @@ async def main() -> None:
     settings = get_settings()
     session_factory = get_session_factory()
     redis_client = agent._redis  # reuse agent's redis connection
+    queue = agent._queue  # reuse agent's task queue
     llm_client = AsyncOpenAI(
         api_key=settings.grok_api_key,
         base_url=settings.grok_base_url,
     )
 
-    # Override execute with deterministic pipeline (bypasses ReAct loop)
-    agent.execute = make_pipeline(
+    # Load skills from markdown files
+    skills_dir = Path(__file__).parent / "skills"
+    skills = SkillLoader.load(skills_dir)
+    logger.info("Loaded %d skills: %s", len(skills), [s.name for s in skills])
+
+    # Create tools and skill-based executor
+    agent.tools = make_analyst_tools(
+        session_factory=session_factory,
+        redis_client=redis_client,
+        queue=queue,
+        llm_client=llm_client,
+        model=settings.grok_model,
+        fast_model=settings.grok_fast_model,
+    )
+    agent.execute = make_skill_executor(
+        agent=agent,
+        skills=skills,
         session_factory=session_factory,
         redis_client=redis_client,
         llm_client=llm_client,
-        model=settings.grok_model,
         fast_model=settings.grok_fast_model,
     )
 
