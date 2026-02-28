@@ -220,21 +220,40 @@ function TrendTooltip({ active, payload, label, metricLabel }: { active?: boolea
 function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint & { day: string })[]; metricKey: TrendKey; anchorLeft: number }) {
   const meta = TREND_META[metricKey]
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const BAR_WIDTH = 40
+  const CONTAINER_WIDTH = 280
+  const chartWidth = Math.max(CONTAINER_WIDTH - 32, chartData.length * BAR_WIDTH)
+  const isScrollable = chartWidth > CONTAINER_WIDTH - 32
+  const showLabels = chartData.length <= 10
+
+  // Auto-scroll to the right (newest data) on mount
+  useEffect(() => {
+    if (scrollRef.current && isScrollable) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+    }
+  }, [metricKey, isScrollable])
 
   return (
     <div className="trend-sparkline" style={{ marginLeft: Math.max(0, anchorLeft - 120) }}>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={chartData} margin={{ top: 20, right: 8, left: 8, bottom: 0 }}>
-          <XAxis
-            dataKey="day"
-            tick={{ fill: 'var(--ink-3)', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip content={<TrendTooltip metricLabel={metricKey} />} />
-          <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} label={{ position: 'top', fill: 'var(--ink-2)', fontSize: 11, formatter: fmtNum }} />
-        </BarChart>
-      </ResponsiveContainer>
+      <div ref={scrollRef} className={`trend-sparkline-scroll${isScrollable ? ' scrollable' : ''}`}>
+        <div style={{ width: isScrollable ? chartWidth : '100%', height: 200 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 20, right: 8, left: 8, bottom: 0 }}>
+              <XAxis
+                dataKey="day"
+                tick={{ fill: 'var(--ink-3)', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+              />
+              <Tooltip content={<TrendTooltip metricLabel={metricKey} />} />
+              <Bar dataKey={metricKey} fill={meta.color} opacity={0.7} radius={[4, 4, 0, 0]} label={showLabels ? { position: 'top', fill: 'var(--ink-2)', fontSize: 11, formatter: fmtNum } : false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   )
 }
