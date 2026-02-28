@@ -309,7 +309,6 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
                   stroke: 'var(--lavender)',
                   strokeWidth: 2,
                   strokeDasharray: '4 4',
-                  radius: [4, 4, 0, 0],
                 }}
               />
             </BarChart>
