@@ -47,37 +47,14 @@ services:
   # ──────────────────────────────────────
   # Agents
   # ──────────────────────────────────────
-  crawler-xhs:
+  crawler:
     image: ghcr.io/minyic7/crosshot-ai-crawler:latest
     build:
       context: .
       dockerfile: apps/agent-crawler/Dockerfile
     restart: unless-stopped
     environment:
-      AGENT_NAME: crawler-xhs
-      REDIS_URL: redis://redis:6379/0
-      DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
-      OPENSEARCH_URL: http://opensearch:9200
-      MEDIA_BASE_PATH: /data/media
-    volumes:
-      - ${DATA_DIR:-./data}/media:/data/media
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    mem_limit: 1g
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  crawler-x:
-    image: ghcr.io/minyic7/crosshot-ai-crawler:latest
-    restart: unless-stopped
-    environment:
-      AGENT_NAME: crawler-x
+      AGENT_NAME: crawler
       REDIS_URL: redis://redis:6379/0
       DB_URL: postgresql://${DB_USER:-crosshot}:${DB_PASSWORD:-crosshot}@postgres:5432/crosshot
       OPENSEARCH_URL: http://opensearch:9200

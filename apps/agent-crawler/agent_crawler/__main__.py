@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    agent_name = os.environ.get("AGENT_NAME", "crawler-x")
+    agent_name = os.environ.get("AGENT_NAME", "crawler")
     settings = get_settings()
 
     logger.info("Starting crawler agent: %s", agent_name)

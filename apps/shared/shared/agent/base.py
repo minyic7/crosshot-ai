@@ -71,6 +71,11 @@ class BaseAgent:
         self.fan_in_enabled = fan_in_enabled
         self.llm_config = llm_config or {}
 
+        # Hierarchy metadata (populated by from_config)
+        self.parent: str | None = None
+        self.children: list[str] = []
+        self.skill_names: list[str] = []
+
         self._shutdown_event = asyncio.Event()
         self._settings = get_settings()
         self._queue = TaskQueue(self._settings.redis_url)
@@ -104,7 +109,7 @@ class BaseAgent:
                 f"Available: {list(config['agents'].keys())}"
             )
 
-        return cls(
+        agent = cls(
             name=agent_name,
             labels=agent_config["labels"],
             system_prompt=agent_config.get("system_prompt", ""),
@@ -112,6 +117,13 @@ class BaseAgent:
             fan_in_enabled=agent_config.get("fan_in", False),
             llm_config=agent_config.get("llm", {}),
         )
+
+        # Hierarchy metadata
+        agent.parent = agent_config.get("parent")
+        agent.children = agent_config.get("children", [])
+        agent.skill_names = agent_config.get("skills", [])
+
+        return agent
 
     # ──────────────────────────────────────────────
     # Heartbeat
@@ -333,19 +345,30 @@ class BaseAgent:
     # ReAct loop
     # ──────────────────────────────────────────────
 
-    async def react(self, task: Task, max_steps: int = 10) -> Result:
+    async def react(
+        self,
+        task: Task,
+        max_steps: int = 10,
+        system_prompt: str | None = None,
+    ) -> Result:
         """ReAct (Reasoning + Acting) loop using LLM function calling.
 
         1. Send system prompt + task description to LLM with available tools
         2. If LLM returns tool_calls → execute tools → append observations → continue
         3. If LLM returns text (no tool_calls) → parse as final result
         4. Repeat until done or max_steps exceeded
+
+        Args:
+            task: The task to process.
+            max_steps: Max tool-calling iterations before timeout.
+            system_prompt: Override the agent's default system prompt (e.g., for
+                per-task dynamic prompts with entity context + skills).
         """
         llm = self._get_llm()
         tools_schema = [t.to_openai_schema() for t in self.tools] or None
 
         messages = [
-            {"role": "system", "content": self.system_prompt},
+            {"role": "system", "content": system_prompt or self.system_prompt},
             {
                 "role": "user",
                 "content": (

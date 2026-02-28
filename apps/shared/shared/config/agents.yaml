@@ -8,6 +8,9 @@ agents:
       Follow the task payload instructions to scrape content.
     ai_enabled: false
     fan_in: true
+    parent: crawler
+    children: []
+    skills: []
 
   crawler-x:
     labels:
@@ -18,6 +21,22 @@ agents:
       Follow the task payload instructions to scrape content.
     ai_enabled: false
     fan_in: true
+    parent: crawler
+    children: []
+    skills: []
+
+  crawler:
+    labels:
+      - "crawler:x"
+      - "crawler:xhs"
+    system_prompt: |
+      You are the crawler agent for Crosshot AI.
+      You handle data collection across all platforms using platform-specific skills.
+    ai_enabled: false
+    fan_in: true
+    parent: analyst
+    children: []
+    skills: []
 
   analyst:
     labels:
@@ -25,12 +44,18 @@ agents:
       - "analyst:summarize"
     system_prompt: "Deterministic pipeline — system prompt is in prompts.py"
     ai_enabled: false
+    parent: null
+    children: [crawler, searcher]
+    skills: []
 
   searcher:
     labels:
       - "searcher:web"
     ai_enabled: true
     fan_in: true
+    parent: analyst
+    children: []
+    skills: []
     llm:
       model: "grok-4-1-fast-reasoning"
     system_prompt: |

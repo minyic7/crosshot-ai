@@ -45,6 +45,7 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     payload: dict[str, Any] = Field(default_factory=dict)
     parent_job_id: str | None = None
+    from_agent: str | None = None
     assigned_to: str | None = None
     created_at: datetime = Field(default_factory=datetime.now)
     started_at: datetime | None = None
