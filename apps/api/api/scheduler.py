@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_INTERVAL_HOURS = 6
 CHECK_INTERVAL_SECONDS = 60
+PIPELINE_STALE_HOURS = 1  # Reset stuck pipelines after this duration
 
 
 async def scheduler_loop(queue: TaskQueue) -> None:
@@ -69,7 +70,17 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
 
             pipeline = await redis_client.hgetall(f"topic:{topic.id}:pipeline")
             if pipeline and pipeline.get("phase") not in (None, "", "done"):
-                continue
+                if _is_pipeline_stale(pipeline, now):
+                    logger.warning(
+                        "Resetting stale pipeline for topic '%s' (stuck in '%s')",
+                        topic.name, pipeline.get("phase"),
+                    )
+                    await redis_client.hset(
+                        f"topic:{topic.id}:pipeline", mapping={"phase": "done"}
+                    )
+                    await redis_client.delete(f"topic:{topic.id}:pending")
+                else:
+                    continue
 
             # Include attached users in payload
             users_info = [
@@ -113,7 +124,17 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
 
             pipeline = await redis_client.hgetall(f"user:{user.id}:pipeline")
             if pipeline and pipeline.get("phase") not in (None, "", "done"):
-                continue
+                if _is_pipeline_stale(pipeline, now):
+                    logger.warning(
+                        "Resetting stale pipeline for user '%s' (stuck in '%s')",
+                        user.name, pipeline.get("phase"),
+                    )
+                    await redis_client.hset(
+                        f"user:{user.id}:pipeline", mapping={"phase": "done"}
+                    )
+                    await redis_client.delete(f"user:{user.id}:pending")
+                else:
+                    continue
 
             task = Task(
                 label="analyst:analyze",
@@ -131,3 +152,15 @@ async def _check_and_schedule(queue: TaskQueue) -> None:
             logger.info("Scheduled re-crawl for user '%s' (%s)", user.name, user.id)
     finally:
         await redis_client.aclose()
+
+
+def _is_pipeline_stale(pipeline: dict, now: datetime) -> bool:
+    """Check if a pipeline has been stuck for longer than PIPELINE_STALE_HOURS."""
+    updated_at = pipeline.get("updated_at")
+    if not updated_at:
+        return True
+    try:
+        updated = datetime.fromisoformat(updated_at)
+        return (now - updated) > timedelta(hours=PIPELINE_STALE_HOURS)
+    except (ValueError, TypeError):
+        return True
