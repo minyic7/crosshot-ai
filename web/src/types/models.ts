@@ -198,6 +198,24 @@ export interface ProgressDetail {
   tasks: ProgressTask[]
 }
 
+export interface AnalysisPeriod {
+  id: string
+  period_number: number
+  period_start: string
+  period_end: string
+  analyzed_at: string
+  duration_hours: number
+  status: string
+  content_count: number
+  summary: string
+  summary_short: string | null
+  insights: Record<string, unknown>
+  metrics: Record<string, unknown>
+  metrics_delta: Record<string, unknown>
+  quality_score: number | null
+  knowledge_version: number
+}
+
 export type UserStatus = 'active' | 'paused' | 'cancelled'
 
 /** Slim stub returned by list endpoints for relationship display */

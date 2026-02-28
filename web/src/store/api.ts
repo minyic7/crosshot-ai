@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User, ProgressDetail } from '@/types/models'
+import type { Task, Job, AgentHeartbeat, QueueInfo, Content, BrowserCookie, CookiesPool, ChatMessage, HealthResponse, DashboardStats, Topic, User, ProgressDetail, AnalysisPeriod } from '@/types/models'
 
 export const apiSlice = createApi({
   reducerPath: 'api',
@@ -127,6 +127,9 @@ export const apiSlice = createApi({
     getTopicChatHistory: builder.query<{ messages: { role: string; content: string; created_at: string }[] }, string>({
       query: (id) => `/topics/${id}/chat/history`,
     }),
+    getTopicPeriods: builder.query<{ periods: AnalysisPeriod[]; total: number }, string>({
+      query: (id) => `/topics/${id}/periods`,
+    }),
     reorderTopics: builder.mutation<{ status: string }, { pinned: string[]; unpinned: string[] }>({
       query: ({ pinned, unpinned }) => ({
         url: '/topics/reorder',
@@ -198,6 +201,9 @@ export const apiSlice = createApi({
     getUserChatHistory: builder.query<{ messages: { role: string; content: string; created_at: string }[] }, string>({
       query: (id) => `/users/${id}/chat/history`,
     }),
+    getUserPeriods: builder.query<{ periods: AnalysisPeriod[]; total: number }, string>({
+      query: (id) => `/users/${id}/periods`,
+    }),
 
     // Admin
     resetAllData: builder.mutation<{ status: string }, void>({
@@ -236,6 +242,7 @@ export const {
   useReorderTopicsMutation,
   useGetTopicProgressQuery,
   useGetTopicChatHistoryQuery,
+  useGetTopicPeriodsQuery,
   useListUsersQuery,
   useGetUserQuery,
   useCreateUserMutation,
@@ -248,5 +255,6 @@ export const {
   useGetUserProgressQuery,
   useGetUserTrendQuery,
   useGetUserChatHistoryQuery,
+  useGetUserPeriodsQuery,
   useResetAllDataMutation,
 } = apiSlice

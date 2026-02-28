@@ -20,6 +20,7 @@ import type { TopicInsight, ProgressTask } from '@/types/models'
 import { useTimezone } from '@/hooks/useTimezone'
 import { useSSEChat } from '@/hooks/useSSEChat'
 import { CreateEditModal } from './CreateEditModal'
+import { AnalysisTimeline } from './AnalysisTimeline'
 
 function normalizeInsights(data: { alerts?: unknown[]; insights?: unknown[] } | null): TopicInsight[] {
   const result: TopicInsight[] = []
@@ -907,6 +908,9 @@ export function UserDetailPage() {
 
       {/* Active Progress Tasks */}
       <UserProgressTasks entityId={user.id} onRetry={() => reanalyzeUser(user.id)} />
+
+      {/* Analysis Timeline */}
+      <AnalysisTimeline entityType="user" entityId={user.id} />
 
       {/* Summary + Chat */}
       {user.last_summary && (
