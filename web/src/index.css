@@ -1809,6 +1809,37 @@ h3 {
   border-left: 2px solid var(--negative);
 }
 
+.progress-badge.done {
+  background: var(--positive-surface);
+  color: var(--positive);
+  border-left: 2px solid var(--positive);
+}
+
+.progress-done {
+  opacity: 0.85;
+}
+
+.progress-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--negative);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--negative);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.progress-retry-btn:hover {
+  background: var(--negative-surface);
+}
+
 .progress-spin {
   animation: spin 1.5s linear infinite;
 }
@@ -1863,6 +1894,13 @@ h3 {
 
 .progress-tasks-phase {
   font-weight: 600;
+}
+
+.progress-tasks-step {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-left: 8px;
 }
 
 .progress-tasks-overall-bar {
@@ -6729,4 +6767,65 @@ h3 {
 .content-card-time {
   font-size: 0.6875rem;
   color: var(--ink-4);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Toast Notifications
+   ═══════════════════════════════════════════════════════════════ */
+
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--frost);
+  color: var(--ink-1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  animation: toast-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 360px;
+}
+
+.toast-success .toast-icon { color: var(--positive); }
+.toast-error .toast-icon { color: var(--negative); }
+.toast-info .toast-icon { color: var(--blue); }
+
+.toast-message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.toast-close:hover { opacity: 1; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }

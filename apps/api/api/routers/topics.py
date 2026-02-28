@@ -214,9 +214,6 @@ async def list_topics(status: str | None = None, include_users: bool = False) ->
         for i, t in enumerate(topics):
             d = _topic_to_dict(t, include_users=include_users)
             stage = stages[i] if stages[i] else None
-            # Filter out 'done' — no need to show completed progress
-            if stage and stage.get("phase") == "done":
-                stage = None
             d["progress"] = stage
             topic_list.append(d)
 
@@ -321,15 +318,20 @@ async def update_topic(topic_id: str, body: TopicUpdate) -> dict:
         # Auto-dispatch reanalysis if platforms or keywords changed
         new_platforms = set(topic.platforms or [])
         new_keywords = set(topic.keywords or [])
+        reanalysis_triggered = False
         if new_platforms != old_platforms or new_keywords != old_keywords:
             force = bool(new_platforms - old_platforms)  # force crawl if new platforms added
             task_id = await _dispatch_analyze(topic, force_crawl=force)
+            reanalysis_triggered = True
             logger.info(
                 "Auto-dispatched reanalysis for topic %s (platforms: %s→%s, keywords: %s→%s, task=%s)",
                 topic_id, old_platforms, new_platforms, old_keywords, new_keywords, task_id,
             )
 
-        return _topic_to_dict(topic)
+        result = _topic_to_dict(topic)
+        if reanalysis_triggered:
+            result["reanalysis_triggered"] = True
+        return result
 
 
 @router.delete("/topics/{topic_id}")

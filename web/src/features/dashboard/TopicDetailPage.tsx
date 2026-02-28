@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, Pencil, X, Check } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Trash2, Pause, Play, Send, Languages, Loader2, Heart, Eye, Repeat2, MessageSquare, BarChart3, Image, Pencil, X, Check, CheckCircle } from 'lucide-react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -252,6 +252,7 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
 }
 
 function getTaskIcon(task: ProgressTask): string {
+  if (task.label?.startsWith('searcher:')) return '🌐'
   const action = task.payload?.action || task.progress?.action
   if (action === 'timeline') return '📋'
   if (action === 'search') return '🔍'
@@ -261,6 +262,7 @@ function getTaskIcon(task: ProgressTask): string {
 
 function getTaskLabel(task: ProgressTask): string {
   const action = task.payload?.action
+  if (task.label?.startsWith('searcher:') && task.payload?.query) return `Web: ${task.payload.query}`
   if (action === 'timeline' && task.payload?.username) return `Timeline @${task.payload.username}`
   if (action === 'search' && task.payload?.query) return `Search: ${task.payload.query}`
   if (action === 'tweet') return `Tweet detail`
@@ -277,17 +279,33 @@ function getTaskProgressPct(task: ProgressTask): number | null {
   return null
 }
 
-function ProgressTasks({ entityId }: { entityId: string }) {
+function ProgressTasks({ entityId, onRetry }: { entityId: string; onRetry?: () => void }) {
   const { data } = useGetTopicProgressQuery(entityId, { pollingInterval: 2000 })
   const [expanded, setExpanded] = useState(true)
 
-  if (!data?.progress || data.progress.phase === 'done') return null
+  if (!data?.progress) return null
+
+  // Show brief "done" badge
+  if (data.progress.phase === 'done') {
+    return (
+      <div className="progress-tasks-section pop progress-done" style={{ animationDelay: '120ms' }}>
+        <div className="progress-tasks-header">
+          <div className="progress-tasks-header-left">
+            <CheckCircle size={14} style={{ color: 'var(--positive)' }} />
+            <span className="progress-tasks-phase">Analysis complete</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (data.tasks.length === 0 && data.progress.phase !== 'crawling') return null
 
   const phase = data.progress.phase
   const total = Number(data.progress.total) || 0
   const done = Number(data.progress.done) || 0
   const overallPct = total > 0 ? Math.round((done / total) * 100) : 0
+  const step = data.progress.step
 
   return (
     <div className="progress-tasks-section pop" style={{ animationDelay: '120ms' }}>
@@ -303,6 +321,17 @@ function ProgressTasks({ entityId }: { entityId: string }) {
             {phase === 'summarizing' && 'Summarizing...'}
             {phase === 'error' && `Error: ${data.progress.error_msg || 'Unknown'}`}
           </span>
+          {step && (phase === 'analyzing' || phase === 'summarizing') && (
+            <span className="progress-tasks-step">{step}</span>
+          )}
+          {phase === 'error' && onRetry && (
+            <button
+              className="progress-retry-btn"
+              onClick={(e) => { e.stopPropagation(); onRetry() }}
+            >
+              <RefreshCw size={10} /> Retry
+            </button>
+          )}
         </div>
         {phase === 'crawling' && total > 0 && (
           <div className="progress-tasks-overall-bar">
@@ -764,7 +793,7 @@ export function TopicDetailPage() {
       )}
 
       {/* Active Progress Tasks */}
-      <ProgressTasks entityId={topic.id} />
+      <ProgressTasks entityId={topic.id} onRetry={() => reanalyzeTopic(topic.id)} />
 
       {/* Summary + Chat (integrated) */}
       {topic.last_summary && (

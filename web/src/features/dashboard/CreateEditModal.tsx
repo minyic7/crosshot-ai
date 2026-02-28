@@ -16,6 +16,7 @@ import {
   useUpdateUserMutation,
   useAttachUserMutation,
 } from '@/store/api'
+import { useToast } from '@/components/ui/Toast'
 import type { Topic, User as UserType } from '@/types/models'
 
 // ─── Constants ────────────────────────────────────────────────
@@ -324,6 +325,7 @@ export function CreateEditModal({ open, onClose, editEntity }: CreateEditModalPr
   const [editingId, setEditingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
+  const { toast } = useToast()
 
   const { data: allUsers } = useListUsersQuery({ include_topics: true })
   const { data: allTopics } = useListTopicsQuery({ include_users: true })
@@ -573,9 +575,10 @@ export function CreateEditModal({ open, onClose, editEntity }: CreateEditModalPr
 
       setStatus(p._id, 'creating')
       try {
+        let result: Record<string, unknown> | undefined
         if (p.type === 'create_topic') {
           const tp = p as CreateTopicProposal
-          await updateTopic({
+          result = await updateTopic({
             id: editEntity.id,
             name: tp.name.trim(),
             icon: tp.icon,
@@ -583,19 +586,22 @@ export function CreateEditModal({ open, onClose, editEntity }: CreateEditModalPr
             platforms: tp.platforms,
             keywords: tp.keywords,
             config: { ...((editEntity as Topic).config || {}), schedule_interval_hours: tp.schedule_interval_hours },
-          }).unwrap()
+          }).unwrap() as Record<string, unknown>
         } else if (p.type === 'create_user') {
           const up = p as CreateUserProposal
-          await updateUser({
+          result = await updateUser({
             id: editEntity.id,
             name: up.name.trim(),
             platform: up.platform,
             profile_url: up.profile_url.trim(),
             username: up.username || undefined,
             config: { ...((editEntity as UserType).config || {}), schedule_interval_hours: up.schedule_interval_hours },
-          }).unwrap()
+          }).unwrap() as Record<string, unknown>
         }
         setStatus(p._id, 'done')
+        if (result?.reanalysis_triggered) {
+          toast('Reanalysis started — new data will be collected shortly', 'success')
+        }
       } catch (e) {
         setStatus(p._id, 'error', String(e))
       }

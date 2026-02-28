@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { TimezoneProvider } from '@/hooks/useTimezone'
+import { ToastProvider } from '@/components/ui/Toast'
 import { Layout } from '@/components/layout/Layout'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { DatabasePage } from '@/features/database/DatabasePage'
@@ -13,6 +14,7 @@ import { UserDetailPage } from '@/features/dashboard/UserDetailPage'
 export function App() {
   return (
     <TimezoneProvider>
+    <ToastProvider>
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
@@ -25,6 +27,7 @@ export function App() {
         <Route path="cookies" element={<CookiesPage />} />
       </Route>
     </Routes>
+    </ToastProvider>
     </TimezoneProvider>
   )
 }

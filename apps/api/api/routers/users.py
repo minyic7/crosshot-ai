@@ -148,8 +148,6 @@ async def list_users(standalone: bool | None = None, status: str | None = None, 
         for i, u in enumerate(users):
             d = _user_to_dict(u, include_topics=include_topics)
             stage = stages[i] if stages[i] else None
-            if stage and stage.get("phase") == "done":
-                stage = None
             d["progress"] = stage
             user_list.append(d)
 
@@ -189,6 +187,7 @@ async def update_user(user_id: str, body: UserUpdate) -> dict:
         await session.refresh(user)
 
         # Auto-dispatch reanalysis if platform or username changed
+        reanalysis_triggered = False
         if user.platform != old_platform or user.username != old_username:
             queue = get_queue()
             payload: dict[str, Any] = {
@@ -214,12 +213,16 @@ async def update_user(user_id: str, body: UserUpdate) -> dict:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             })
             await redis.expire(progress_key, 86400)
+            reanalysis_triggered = True
             logger.info(
                 "Auto-dispatched reanalysis for user %s (platform: %s→%s, username: %s→%s)",
                 user_id, old_platform, user.platform, old_username, user.username,
             )
 
-        return _user_to_dict(user)
+        result = _user_to_dict(user)
+        if reanalysis_triggered:
+            result["reanalysis_triggered"] = True
+        return result
 
 
 @router.delete("/users/{user_id}")

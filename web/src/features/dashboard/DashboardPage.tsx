@@ -26,7 +26,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Plus, Pin, RefreshCw, GripVertical,
   AlertTriangle, Trash2,
-  Sparkles, Loader2,
+  Sparkles, Loader2, CheckCircle,
   Pencil, Users,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -97,14 +97,36 @@ function fmtNum(n: number): string {
 
 // ─── Progress Badge ──────────────────────────────────────────
 
-function ProgressBadge({ progress }: { progress: TopicProgress }) {
+function progressTooltip(progress: TopicProgress): string {
+  const elapsed = progress.updated_at ? timeAgo(progress.updated_at) : ''
+  const time = elapsed ? ` · Started ${elapsed.toLowerCase()}` : ''
+  const step = progress.step ? `\n${progress.step}` : ''
+  switch (progress.phase) {
+    case 'analyzing':
+      return `Reviewing data and planning crawl tasks${time}${step}`
+    case 'crawling': {
+      const t = Number(progress.total) || 0
+      const d = Number(progress.done) || 0
+      return `Fetching content from ${t} sources (${d} done)${time}`
+    }
+    case 'summarizing':
+      return `Generating analysis report${time}${step}`
+    case 'error':
+      return progress.error_msg || 'An error occurred'
+    default:
+      return ''
+  }
+}
+
+function ProgressBadge({ progress, onRetry }: { progress: TopicProgress; onRetry?: () => void }) {
   const { phase, total, done } = progress
+  const tip = progressTooltip(progress)
 
   if (phase === 'analyzing') {
     return (
-      <div className="progress-badge analyzing">
+      <div className="progress-badge analyzing" title={tip}>
         <Loader2 size={12} className="progress-spin" />
-        <span>Analyzing topic data...</span>
+        <span>Analyzing...</span>
       </div>
     )
   }
@@ -114,7 +136,7 @@ function ProgressBadge({ progress }: { progress: TopicProgress }) {
     const d = Number(done) || 0
     const pct = t > 0 ? Math.round((d / t) * 100) : 0
     return (
-      <div className="progress-badge crawling">
+      <div className="progress-badge crawling" title={tip}>
         <RefreshCw size={12} className="progress-spin" />
         <span>Crawling {d}/{t}</span>
         <div className="progress-bar">
@@ -126,18 +148,37 @@ function ProgressBadge({ progress }: { progress: TopicProgress }) {
 
   if (phase === 'summarizing') {
     return (
-      <div className="progress-badge summarizing">
+      <div className="progress-badge summarizing" title={tip}>
         <Sparkles size={12} className="progress-spin" />
-        <span>Analyzing data...</span>
+        <span>Summarizing...</span>
       </div>
     )
   }
 
   if (phase === 'error') {
     return (
-      <div className="progress-badge error">
+      <div className="progress-badge error" title={tip}>
         <AlertTriangle size={12} />
         <span>{progress.error_msg || 'Error'}</span>
+        {onRetry && (
+          <button
+            className="progress-retry-btn"
+            onClick={(e) => { e.stopPropagation(); onRetry() }}
+            title="Retry"
+            data-no-dnd
+          >
+            <RefreshCw size={10} /> Retry
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  if (phase === 'done') {
+    return (
+      <div className="progress-badge done">
+        <CheckCircle size={12} />
+        <span>Analysis complete</span>
       </div>
     )
   }
@@ -237,7 +278,7 @@ function TopicCard({
       </div>
 
       {/* Progress badge */}
-      {topic.progress && <ProgressBadge progress={topic.progress} />}
+      {topic.progress && <ProgressBadge progress={topic.progress} onRetry={() => onRefresh(topic.id)} />}
 
       {/* MIDDLE — description + future per-topic widget slot */}
       <div className="topic-card-middle">

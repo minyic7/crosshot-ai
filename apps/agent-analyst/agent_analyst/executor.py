@@ -33,6 +33,20 @@ from agent_analyst.tools.triage_tool import make_triage_tool
 
 logger = logging.getLogger(__name__)
 
+# Human-friendly tool descriptions for progress UI
+_TOOL_MESSAGES: dict[str, str] = {
+    "query_entity_overview": "Reviewing entity status...",
+    "triage_contents": "Classifying content relevance...",
+    "integrate_contents": "Integrating new findings...",
+    "analyze_gaps": "Detecting coverage gaps...",
+    "dispatch_tasks": "Dispatching crawl tasks...",
+    "query_topic_contents": "Reading collected content...",
+    "save_metric_snapshot": "Recording metrics...",
+    "query_analysis_notes": "Reading analysis notes...",
+    "save_analysis_note": "Saving analysis note...",
+    "manage_alerts": "Managing alerts...",
+}
+
 
 def make_analyst_tools(
     session_factory: async_sessionmaker[AsyncSession],
@@ -112,7 +126,11 @@ def make_skill_executor(
 
         # Build per-task system prompt and run ReAct
         system_prompt = build_analyst_system_prompt(skills, task.label)
-        result = await agent.react(task, system_prompt=system_prompt)
+
+        async def on_step(tool_name: str, tool_args: dict) -> None:
+            await _write_step_progress(entity_type, entity_id, tool_name, tool_args)
+
+        result = await agent.react(task, system_prompt=system_prompt, on_step=on_step)
 
         # Post-processing: check if dispatch happened
         progress_key = f"{entity_type}:{entity_id}:progress"
@@ -152,7 +170,11 @@ def make_skill_executor(
 
         # Build per-task system prompt and run ReAct
         system_prompt = build_analyst_system_prompt(skills, task.label)
-        result = await agent.react(task, system_prompt=system_prompt)
+
+        async def on_step(tool_name: str, tool_args: dict) -> None:
+            await _write_step_progress(entity_type, entity_id, tool_name, tool_args)
+
+        result = await agent.react(task, system_prompt=system_prompt, on_step=on_step)
 
         # Post-processing: update attached user stats, set progress done
         if topic_id:
@@ -172,6 +194,14 @@ def make_skill_executor(
         return result
 
     # ── Helpers ──────────────────────────────────────
+
+    async def _write_step_progress(
+        entity_type: str, entity_id: str, tool_name: str, tool_args: dict,
+    ) -> None:
+        """Write a human-friendly progress message to Redis for the UI."""
+        msg = _TOOL_MESSAGES.get(tool_name, f"Running {tool_name}...")
+        progress_key = f"{entity_type}:{entity_id}:progress"
+        await redis_client.hset(progress_key, "step", msg)
 
     async def _rotate_chat_period(entity_type: str, entity_id: str) -> str:
         """Archive chat messages and extract insights for the analysis cycle."""

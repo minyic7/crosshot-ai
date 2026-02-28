@@ -17,6 +17,7 @@ import signal
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -394,6 +395,7 @@ class BaseAgent:
         task: Task,
         max_steps: int = 10,
         system_prompt: str | None = None,
+        on_step: Callable[[str, dict], Awaitable[None]] | None = None,
     ) -> Result:
         """ReAct (Reasoning + Acting) loop using LLM function calling.
 
@@ -407,6 +409,8 @@ class BaseAgent:
             max_steps: Max tool-calling iterations before timeout.
             system_prompt: Override the agent's default system prompt (e.g., for
                 per-task dynamic prompts with entity context + skills).
+            on_step: Optional async callback invoked before each tool execution
+                with (tool_name, tool_args). Used for progress reporting.
         """
         llm = self._get_llm()
         tools_schema = [t.to_openai_schema() for t in self.tools] or None
@@ -448,6 +452,12 @@ class BaseAgent:
                 logger.info(
                     "ReAct calling tool '%s' with args: %s", tool_name, tool_args
                 )
+
+                if on_step:
+                    try:
+                        await on_step(tool_name, tool_args)
+                    except Exception:
+                        logger.debug("on_step callback failed", exc_info=True)
 
                 try:
                     observation = await self._execute_tool(tool_name, tool_args)

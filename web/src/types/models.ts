@@ -130,6 +130,8 @@ export interface TopicProgress {
   done?: string
   error_msg?: string
   updated_at?: string
+  /** Current tool step message (e.g. "Classifying content relevance...") */
+  step?: string
 }
 
 /** Slim stub returned by list endpoints for relationship display */
