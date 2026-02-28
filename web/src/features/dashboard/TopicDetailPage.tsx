@@ -234,11 +234,11 @@ function TrendSparkline({ trend, metricKey, anchorLeft }: { trend: (TrendPoint &
   const chartData = trend.map(d => ({ ...d, day: formatDay(d.day) }))
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const BAR_WIDTH = 10
+  const BAR_WIDTH = 20
   const CONTAINER_WIDTH = 280
   const chartWidth = Math.max(CONTAINER_WIDTH - 32, chartData.length * BAR_WIDTH)
   const isScrollable = chartWidth > CONTAINER_WIDTH - 32
-  const showLabels = chartData.length <= 20
+  const showLabels = chartData.length <= 15
 
   // Auto-scroll to the right (newest data) on mount
   useEffect(() => {
