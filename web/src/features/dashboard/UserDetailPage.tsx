@@ -296,37 +296,61 @@ function UserProgressTasks({ entityId, onRetry }: { entityId: string; onRetry?: 
 
   return (
     <div className={`progress-tasks-section pop ${phase}`} style={{ animationDelay: '120ms' }}>
-      <button className="progress-tasks-header" onClick={() => setExpanded((p) => !p)}>
-        <div className="progress-tasks-header-left">
-          {phase === 'analyzing' && <Loader2 size={14} className="progress-spin" />}
-          {phase === 'crawling' && <RefreshCw size={14} className="progress-spin" />}
-          {phase === 'summarizing' && <TrendingUp size={14} className="progress-spin" />}
-          {phase === 'error' && <span style={{ color: 'var(--negative)' }}>!</span>}
-          <span className="progress-tasks-phase">
-            {phase === 'analyzing' && 'Analyzing...'}
-            {phase === 'crawling' && `Crawling ${done}/${total}`}
-            {phase === 'summarizing' && 'Summarizing...'}
-            {phase === 'error' && `Error: ${data.progress.error_msg || 'Unknown'}`}
-          </span>
-          {step && (phase === 'analyzing' || phase === 'summarizing') && (
-            <span className="progress-tasks-step">{step}</span>
-          )}
-          {phase === 'error' && onRetry && (
-            <button
-              className="progress-retry-btn"
-              onClick={(e) => { e.stopPropagation(); onRetry() }}
-            >
-              <RefreshCw size={10} /> Retry
-            </button>
-          )}
-        </div>
-        {phase === 'crawling' && total > 0 && (
-          <div className="progress-tasks-overall-bar">
-            <div className="progress-tasks-overall-fill" style={{ width: `${overallPct}%` }} />
+      {data.tasks.length > 0 ? (
+        <button className="progress-tasks-header" onClick={() => setExpanded((p) => !p)}>
+          <div className="progress-tasks-header-left">
+            {phase === 'analyzing' && <Loader2 size={14} className="progress-spin" />}
+            {phase === 'crawling' && <RefreshCw size={14} className="progress-spin" />}
+            {phase === 'summarizing' && <TrendingUp size={14} className="progress-spin" />}
+            {phase === 'error' && <span style={{ color: 'var(--negative)' }}>!</span>}
+            <span className="progress-tasks-phase">
+              {phase === 'analyzing' && 'Analyzing...'}
+              {phase === 'crawling' && `Crawling ${done}/${total}`}
+              {phase === 'summarizing' && 'Summarizing...'}
+              {phase === 'error' && `Error: ${data.progress.error_msg || 'Unknown'}`}
+            </span>
+            {step && (phase === 'analyzing' || phase === 'summarizing') && (
+              <span className="progress-tasks-step">{step}</span>
+            )}
+            {phase === 'error' && onRetry && (
+              <button
+                className="progress-retry-btn"
+                onClick={(e) => { e.stopPropagation(); onRetry() }}
+              >
+                <RefreshCw size={10} /> Retry
+              </button>
+            )}
           </div>
-        )}
-        <span className="progress-tasks-chevron">{expanded ? '▾' : '▸'}</span>
-      </button>
+          {phase === 'crawling' && total > 0 && (
+            <div className="progress-tasks-overall-bar">
+              <div className="progress-tasks-overall-fill" style={{ width: `${overallPct}%` }} />
+            </div>
+          )}
+          <span className="progress-tasks-chevron">{expanded ? '▾' : '▸'}</span>
+        </button>
+      ) : (
+        <div className="progress-tasks-header">
+          <div className="progress-tasks-header-left">
+            {phase === 'analyzing' && <Loader2 size={14} className="progress-spin" />}
+            {phase === 'summarizing' && <TrendingUp size={14} className="progress-spin" />}
+            {phase === 'error' && <span style={{ color: 'var(--negative)' }}>!</span>}
+            <span className="progress-tasks-phase">
+              {phase === 'analyzing' && 'Analyzing...'}
+              {phase === 'summarizing' && 'Summarizing...'}
+              {phase === 'error' && `Error: ${data.progress.error_msg || 'Unknown'}`}
+            </span>
+            {step && <span className="progress-tasks-step">{step}</span>}
+            {phase === 'error' && onRetry && (
+              <button
+                className="progress-retry-btn"
+                onClick={(e) => { e.stopPropagation(); onRetry() }}
+              >
+                <RefreshCw size={10} /> Retry
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {expanded && data.tasks.length > 0 && (
         <div className="progress-tasks-list">
           {data.tasks.map((task) => {
